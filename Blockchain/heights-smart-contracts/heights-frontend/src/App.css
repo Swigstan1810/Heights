@@ -1,0 +1,411 @@
+/* General Styles */
+:root {
+  --primary-color: #5c6ac4;
+  --primary-dark: #4959b9;
+  --primary-light: #7e8ae1;
+  --secondary-color: #5d6c84;
+  --text-color: #333;
+  --light-gray: #f5f7fa;
+  --border-color: #e1e5eb;
+  --success-color: #28a745;
+  --error-color: #dc3545;
+  --warning-color: #ffc107;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--light-gray);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+/* Button Styles */
+button {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.connect-button, .disconnect-button {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.connect-button:hover, .disconnect-button:hover {
+  background-color: var(--primary-dark);
+}
+
+.disconnect-button {
+  background-color: var(--secondary-color);
+}
+
+/* Header Styles */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  margin-bottom: 20px;
+}
+
+.logo-container h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.wallet-info {
+  display: flex;
+  align-items: center;
+}
+
+.account-info {
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+  background-color: white;
+  border-radius: 30px;
+  padding: 8px 16px;
+}
+
+.network-badge {
+  background-color: var(--primary-light);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-right: 10px;
+}
+
+.address {
+  font-family: monospace;
+  font-size: 14px;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  margin-bottom: 24px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.tab-navigation button {
+  flex: 1;
+  padding: 16px;
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-navigation button.active {
+  border-bottom: 2px solid var(--primary-color);
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  margin-bottom: 40px;
+}
+
+/* Form Styles */
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(92, 106, 196, 0.2);
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--secondary-color);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.amount-input {
+  position: relative;
+}
+
+.token-symbol {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  color: var(--secondary-color);
+}
+
+.max-button {
+  background-color: var(--light-gray);
+  font-size: 12px;
+  padding: 5px 8px;
+  margin-top: -10px;
+  float: right;
+}
+
+/* Success and Error Messages */
+.error-message {
+  color: var(--error-color);
+  margin: 16px 0;
+  padding: 10px;
+  background-color: rgba(220, 53, 69, 0.1);
+  border-radius: 4px;
+}
+
+.success-message {
+  color: var(--success-color);
+  margin: 16px 0;
+  padding: 10px;
+  background-color: rgba(40, 167, 69, 0.1);
+  border-radius: 4px;
+}
+
+/* Token Balance Component */
+.balance-display {
+  text-align: center;
+  margin: 24px 0;
+}
+
+.balance-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin: 16px 0;
+}
+
+.balance-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* Transfer Component */
+.transfer-button {
+  background-color: var(--primary-color);
+  color: white;
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  margin-top: 16px;
+}
+
+.transfer-button:hover {
+  background-color: var(--primary-dark);
+}
+
+/* Approval Component */
+.approve-button {
+  background-color: var(--primary-color);
+  color: white;
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  margin-top: 16px;
+}
+
+.approval-note {
+  font-size: 12px;
+  color: var(--secondary-color);
+  padding: 10px;
+  background-color: rgba(255, 193, 7, 0.1);
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+.allowance-checker {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.input-group input {
+  margin-bottom: 0;
+}
+
+/* Transaction History Component */
+.history-tabs {
+  display: flex;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.history-tabs button {
+  padding: 8px 16px;
+  background-color: var(--light-gray);
+  border-radius: 6px;
+}
+
+.history-tabs button.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+thead {
+  background-color: var(--light-gray);
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+tr.received td:first-child {
+  color: var(--success-color);
+}
+
+tr.sent td:first-child {
+  color: var(--error-color);
+}
+
+.tx-link {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.refresh-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.refresh-button {
+  background-color: var(--light-gray);
+  color: var(--secondary-color);
+}
+
+/* Footer Styles */
+.app-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border-color);
+  padding: 20px 0;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-links {
+  display: flex;
+  gap: 20px;
+}
+
+.footer-links a {
+  color: var(--secondary-color);
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: var(--primary-color);
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .wallet-info, .account-info {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .account-info {
+    margin-right: 0;
+    margin-bottom: 10px;
+  }
+  
+  .tab-navigation {
+    flex-wrap: wrap;
+  }
+  
+  .tab-navigation button {
+    flex: 1 0 50%;
+  }
+  
+  .footer-content {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+/* Loading Indicator */
+.loading {
+  position: relative;
+  min-height: 20px;
+  color: var(--secondary-color);
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  color: var(--secondary-color);
+}
