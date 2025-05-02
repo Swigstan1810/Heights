@@ -1,36 +1,51 @@
 import { useState, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { Web3Context } from '../context/Web3Context';
-import { parseTokenAmount, formatTokenAmount } from '../utils/web3Utils';
+import { parseTokenAmount } from '../utils/web3Utils';
 
-export function useHeightsToken() {
+export const useHeightsToken = () => {
   const { contract, account, isConnected } = useContext(Web3Context);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [txHash, setTxHash] = useState('');
 
-  // Get token balance
-  const getBalance = useCallback(async (address = null) => {
-    if (!contract || !isConnected) return null;
+  const getTokenDetails = useCallback(async () => {
+    if (!contract) return null;
+
+    try {
+      const [name, symbol, decimals] = await Promise.all([
+        contract.name(),
+        contract.symbol(),
+        contract.decimals()
+      ]);
+
+      return { name, symbol, decimals: Number(decimals) };
+    } catch (err) {
+      console.error('Error fetching token details:', err);
+      return null;
+    }
+  }, [contract]);
+
+  const getBalance = useCallback(async (addressToCheck = account) => {
+    if (!contract || !addressToCheck) return null;
     
     setLoading(true);
     setError('');
     
     try {
-      const targetAddress = address || account;
-      const balance = await contract.balanceOf(targetAddress);
+      const balance = await contract.balanceOf(addressToCheck);
+      const formattedBalance = ethers.formatUnits(balance, 18);
       setLoading(false);
-      return formatTokenAmount(balance);
+      return formattedBalance;
     } catch (err) {
       console.error('Error fetching balance:', err);
       setError('Failed to fetch balance');
       setLoading(false);
       return null;
     }
-  }, [contract, account, isConnected]);
+  }, [contract, account]);
 
-  // Transfer tokens
-  const transferTokens = useCallback(async (to, amount) => {
+  const transferTokens = useCallback(async (recipient, amount) => {
     if (!contract || !isConnected) return false;
     
     setLoading(true);
@@ -39,20 +54,28 @@ export function useHeightsToken() {
     
     try {
       const parsedAmount = parseTokenAmount(amount);
-      const tx = await contract.transfer(to, parsedAmount);
+      if (!parsedAmount) {
+        setError('Invalid amount');
+        setLoading(false);
+        return false;
+      }
+      
+      const tx = await contract.transfer(recipient, parsedAmount);
       setTxHash(tx.hash);
+      
+      // Wait for transaction to be mined
       await tx.wait();
+      
       setLoading(false);
       return true;
     } catch (err) {
       console.error('Error transferring tokens:', err);
-      setError(err.message || 'Failed to transfer tokens');
+      setError(err.message || 'Transfer failed');
       setLoading(false);
       return false;
     }
   }, [contract, isConnected]);
 
-  // Approve spending
   const approveSpending = useCallback(async (spender, amount) => {
     if (!contract || !isConnected) return false;
     
@@ -62,70 +85,55 @@ export function useHeightsToken() {
     
     try {
       const parsedAmount = parseTokenAmount(amount);
+      if (!parsedAmount) {
+        setError('Invalid amount');
+        setLoading(false);
+        return false;
+      }
+      
       const tx = await contract.approve(spender, parsedAmount);
       setTxHash(tx.hash);
+      
+      // Wait for transaction to be mined
       await tx.wait();
+      
       setLoading(false);
       return true;
     } catch (err) {
       console.error('Error approving tokens:', err);
-      setError(err.message || 'Failed to approve tokens');
+      setError(err.message || 'Approval failed');
       setLoading(false);
       return false;
     }
   }, [contract, isConnected]);
 
-  // Get allowance
   const getAllowance = useCallback(async (owner, spender) => {
-    if (!contract || !isConnected) return null;
+    if (!contract) return null;
     
     setLoading(true);
     setError('');
     
     try {
       const allowance = await contract.allowance(owner, spender);
+      const formattedAllowance = ethers.formatUnits(allowance, 18);
       setLoading(false);
-      return formatTokenAmount(allowance);
+      return formattedAllowance;
     } catch (err) {
-      console.error('Error fetching allowance:', err);
+      console.error('Error getting allowance:', err);
       setError('Failed to fetch allowance');
       setLoading(false);
-      return null;
-    }
-  }, [contract, isConnected]);
-
-  // Get token details
-  const getTokenDetails = useCallback(async () => {
-    if (!contract) return null;
-    
-    try {
-      const [name, symbol, decimals, totalSupply] = await Promise.all([
-        contract.name(),
-        contract.symbol(),
-        contract.decimals(),
-        contract.totalSupply()
-      ]);
-      
-      return {
-        name,
-        symbol,
-        decimals,
-        totalSupply: formatTokenAmount(totalSupply)
-      };
-    } catch (err) {
-      console.error('Error fetching token details:', err);
       return null;
     }
   }, [contract]);
 
   return {
-    loading,
-    error,
-    txHash,
+    getTokenDetails,
     getBalance,
     transferTokens,
     approveSpending,
     getAllowance,
-    getTokenDetails
+    loading,
+    error,
+    txHash
   };
-}
+};

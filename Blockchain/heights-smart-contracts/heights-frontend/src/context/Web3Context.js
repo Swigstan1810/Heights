@@ -1,125 +1,140 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import HeightsTokenABI from '../abis/HeightsToken.json';
-import { CONTRACT_ADDRESS } from '../utils/Constants';
+import { CONTRACT_ADDRESS, CONTRACT_ABI, SUPPORTED_CHAINS } from '../utils/Constants';
 
 export const Web3Context = createContext();
 
 export const Web3Provider = ({ children }) => {
-  const [provider, setProvider] = useState(null);
-  const [signer, setSigner] = useState(null);
-  const [contract, setContract] = useState(null);
   const [account, setAccount] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
   const [chainId, setChainId] = useState(null);
-  const [error, setError] = useState('');
+  const [provider, setProvider] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
+
+  useEffect(() => {
+    checkIfWalletIsConnected();
+    
+    if (window.ethereum) {
+      // Listen for account changes
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+        } else {
+          disconnectWallet();
+        }
+      });
+      
+      // Listen for chain changes
+      window.ethereum.on('chainChanged', (chainIdHex) => {
+        const newChainId = parseInt(chainIdHex, 16);
+        setChainId(newChainId);
+        setupProviderAndContract(newChainId);
+      });
+    }
+    
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', () => {});
+        window.ethereum.removeListener('chainChanged', () => {});
+      }
+    };
+  }, []);
+
+  const checkIfWalletIsConnected = async () => {
+    try {
+      if (!window.ethereum) {
+        setConnectionError('Please install MetaMask or another Ethereum wallet');
+        return;
+      }
+      
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      
+      if (accounts.length > 0) {
+        setAccount(accounts[0]);
+        
+        // Get the current chain ID
+        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+        const currentChainId = parseInt(chainIdHex, 16);
+        setChainId(currentChainId);
+        
+        await setupProviderAndContract(currentChainId);
+        setIsConnected(true);
+      }
+    } catch (error) {
+      console.error("Error checking if wallet is connected:", error);
+      setConnectionError('Error connecting to wallet');
+    }
+  };
+
+  const setupProviderAndContract = async (currentChainId) => {
+    try {
+      // Reset the connection error
+      setConnectionError('');
+      
+      // Check if the chain is supported
+      if (!SUPPORTED_CHAINS.includes(currentChainId)) {
+        setConnectionError(`Network not supported. Please switch to Sepolia testnet.`);
+        setIsConnected(false);
+        return;
+      }
+      
+      // Setup provider and contract
+      const ethProvider = new ethers.BrowserProvider(window.ethereum);
+      setProvider(ethProvider);
+      
+      const signer = await ethProvider.getSigner();
+      const tokenContract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      setContract(tokenContract);
+      
+      setIsConnected(true);
+    } catch (error) {
+      console.error("Error setting up provider and contract:", error);
+      setConnectionError('Error connecting to blockchain');
+      setIsConnected(false);
+    }
+  };
 
   const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        setProvider(provider);
-        
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts'
-        });
-        
-        const signer = await provider.getSigner();
-        setSigner(signer);
-        
-        const contract = new ethers.Contract(
-          CONTRACT_ADDRESS,
-          HeightsTokenABI.abi,
-          signer
-        );
-        setContract(contract);
-        
-        setAccount(accounts[0]);
-        setIsConnected(true);
-        
-        const { chainId } = await provider.getNetwork();
-        setChainId(chainId);
-        
-        // Event listeners
-        window.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.ethereum.on('chainChanged', handleChainChanged);
-        
-        return true;
-      } catch (error) {
-        console.error('Error connecting to wallet:', error);
-        setError('Failed to connect wallet. Please try again.');
-        return false;
+    try {
+      if (!window.ethereum) {
+        setConnectionError('Please install MetaMask or another Ethereum wallet');
+        return;
       }
-    } else {
-      setError('Ethereum wallet not detected. Please install MetaMask.');
-      return false;
+      
+      // Request accounts
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      setAccount(accounts[0]);
+      
+      // Get the current chain ID
+      const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+      const currentChainId = parseInt(chainIdHex, 16);
+      setChainId(currentChainId);
+      
+      await setupProviderAndContract(currentChainId);
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      setConnectionError('Error connecting to wallet');
     }
   };
 
   const disconnectWallet = () => {
     setAccount('');
-    setIsConnected(false);
+    setChainId(null);
     setProvider(null);
-    setSigner(null);
     setContract(null);
-    
-    // Remove event listeners
-    if (window.ethereum) {
-      window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-      window.ethereum.removeListener('chainChanged', handleChainChanged);
-    }
+    setIsConnected(false);
   };
-
-  const handleAccountsChanged = (accounts) => {
-    if (accounts.length === 0) {
-      disconnectWallet();
-    } else {
-      setAccount(accounts[0]);
-    }
-  };
-
-  const handleChainChanged = (chainIdHex) => {
-    window.location.reload();
-  };
-
-  useEffect(() => {
-    // Check if wallet was previously connected
-    const checkConnection = async () => {
-      if (window.ethereum) {
-        try {
-          const accounts = await window.ethereum.request({
-            method: 'eth_accounts'
-          });
-          
-          if (accounts.length > 0) {
-            connectWallet();
-          }
-        } catch (error) {
-          console.error('Error checking connection:', error);
-        }
-      }
-    };
-    
-    checkConnection();
-    
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-      }
-    };
-  }, []); // Empty dependency array ensures it runs only once on mount
 
   return (
     <Web3Context.Provider
       value={{
-        provider,
-        signer,
-        contract,
         account,
-        isConnected,
         chainId,
-        error,
+        provider,
+        contract,
+        isConnected,
+        connectionError,
         connectWallet,
         disconnectWallet
       }}

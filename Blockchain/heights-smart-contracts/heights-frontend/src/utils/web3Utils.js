@@ -1,38 +1,49 @@
 import { ethers } from 'ethers';
-import { TOKEN_DECIMALS } from './Constants';
+import { EXPLORER_TX_URLS, EXPLORER_ADDRESS_URLS } from './Constants';
 
-// Format token amount from smallest unit (wei) to human-readable
-export function formatTokenAmount(amount) {
-  return ethers.formatUnits(amount, TOKEN_DECIMALS);
-}
+// Validate if address is a valid Ethereum address
+export const isValidAddress = (address) => {
+  try {
+    return ethers.isAddress(address);
+  } catch (error) {
+    return false;
+  }
+};
 
-// Parse human-readable token amount to smallest unit (wei)
-export function parseTokenAmount(amount) {
-  return ethers.parseUnits(amount.toString(), TOKEN_DECIMALS);
-}
+// Shorten address for display (0x1234...5678)
+export const shortenAddress = (address) => {
+  if (!address) return '';
+  return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+};
 
-// Shorten address for display
-export function shortenAddress(address, chars = 4) {
-  return `${address.substring(0, chars + 2)}...${address.substring(42 - chars)}`;
-}
+// Format transaction link based on chain ID
+export const formatTxLink = (txHash, chainId) => {
+  const baseUrl = EXPLORER_TX_URLS[chainId] || 'https://etherscan.io/tx/';
+  return `${baseUrl}${txHash}`;
+};
 
-// Format transaction hash link for explorer
-export function formatTxLink(txHash, chainId) {
-  const baseUrl = getExplorerUrl(chainId);
-  return baseUrl ? `${baseUrl}/tx/${txHash}` : '#';
-}
+// Format address link based on chain ID
+export const formatAddressLink = (address, chainId) => {
+  const baseUrl = EXPLORER_ADDRESS_URLS[chainId] || 'https://etherscan.io/address/';
+  return `${baseUrl}${address}`;
+};
 
-// Get explorer URL for the current network
-export function getExplorerUrl(chainId) {
-  const explorers = {
-    1: 'https://etherscan.io',              // Ethereum Mainnet
-    11155111: 'https://sepolia.etherscan.io', // Sepolia Testnet
-  };
-  
-  return explorers[chainId] || '';
-}
+// Format token amount with proper decimals
+export const formatTokenAmount = (amount, decimals = 18) => {
+  try {
+    return ethers.formatUnits(amount, decimals);
+  } catch (error) {
+    console.error("Error formatting token amount:", error);
+    return '0';
+  }
+};
 
-// Check if address is valid
-export function isValidAddress(address) {
-  return ethers.isAddress(address);
-}
+// Parse token amount from user input to wei
+export const parseTokenAmount = (amount, decimals = 18) => {
+  try {
+    return ethers.parseUnits(amount.toString(), decimals);
+  } catch (error) {
+    console.error("Error parsing token amount:", error);
+    return null;
+  }
+};

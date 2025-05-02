@@ -7,7 +7,7 @@ function Footer() {
         <p>© {new Date().getFullYear()} Heights Token Interface</p>
         <div className="footer-links">
           <a 
-            href="https://github.com/your-repo/heights-token"
+            href="https://github.com/Swigstan1810/Heights"
             target="_blank" 
             rel="noopener noreferrer"
           >
@@ -17,7 +17,7 @@ function Footer() {
             href="#" 
             onClick={(e) => {
               e.preventDefault();
-              window.open('https://sepolia.etherscan.io/address/YOUR_CONTRACT_ADDRESS', '_blank');
+              window.open('https://sepolia.etherscan.io/address/0x51cDdeBb33814F660415dF040Afd6d6124670682', '_blank');
             }}
           >
             Contract
