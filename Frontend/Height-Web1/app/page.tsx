@@ -1,7 +1,6 @@
 import { Navbar } from "@/components/navbar";
 import { SplashScreen } from "@/components/splash-screen";
 import { ProgressBar } from "@/components/ui/progress-bar";
-//import { LiveTicker } from "@/components/live-ticker";
 import { HeroSection } from "@/components/hero-section";
 import { MarketSection } from "@/components/market-section";
 import { FeaturesSection } from "@/components/features-section";

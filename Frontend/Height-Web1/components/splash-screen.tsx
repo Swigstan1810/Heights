@@ -1,122 +1,86 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useAnimate, stagger } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function SplashScreen() {
   const [isVisible, setIsVisible] = useState(true);
-  const [scope, animate] = useAnimate();
   
   useEffect(() => {
-    if (!scope.current) return; // <- ensure DOM is ready
-  
-    const sequence = async () => {
-      try {
-        await animate(
-          ".logo-path-1",
-          { pathLength: [0, 1], opacity: [0, 1] },
-          { duration: 1, ease: "easeInOut" }
-        );
-  
-        await animate(
-          ".logo-path-2",
-          { pathLength: [0, 1], opacity: [0, 1] },
-          { duration: 1, ease: "easeInOut" }
-        );
-  
-        await animate(
-          ".logo-text",
-          { opacity: [0, 1], y: [20, 0] },
-          { duration: 0.5, delay: stagger(0.1) }
-        );
-  
-        await animate(
-          ".tagline",
-          { opacity: [0, 1] },
-          { duration: 0.5 }
-        );
-  
-        await new Promise(resolve => setTimeout(resolve, 600));
-  
-        await animate(
-          ".logo-container",
-          { opacity: [1, 0], scale: [1, 0.95], y: [0, -10] },
-          { duration: 0.5 }
-        );
-  
-        await animate(
-          ".tagline",
-          { opacity: [1, 0], scale: [1, 0.95], y: [0, -10] },
-          { duration: 0.5 }
-        );
-  
-        setIsVisible(false);
-      } catch (err) {
-        console.error("Animation error:", err);
-      }
-    };
-  
-    sequence();
-  
-    const timer = setTimeout(() => setIsVisible(false), 3500);
+    // Check if splash screen has been shown before
+    const hasShownSplash = localStorage.getItem("heights-splash-shown");
+    
+    if (hasShownSplash) {
+      setIsVisible(false);
+      return;
+    }
+    
+    // Hide splash screen after 2.5 seconds
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      localStorage.setItem("heights-splash-shown", "true");
+    }, 2500);
+    
     return () => clearTimeout(timer);
-  }, [animate, scope]);
-  
-  
-  
-  if (!isVisible) return null;
+  }, []);
   
   return (
-    <motion.div
-      ref={scope}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background"
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div className="logo-container flex flex-col items-center">
-        <motion.div className="relative w-32 h-32">
-          <svg
-            viewBox="0 0 100 100"
-            className="w-full h-full"
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background"
+        >
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 1.2, opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col items-center"
           >
-            <motion.path
-              className="logo-path-1"
-              d="M30,20 L30,80"
-              stroke="currentColor"
-              strokeWidth="16"
-              strokeLinecap="square"
-              fill="none"
-              initial={{ pathLength: 0, opacity: 0 }}
-            />
-            <motion.path
-              className="logo-path-2"
-              d="M30,20 L80,20"
-              stroke="currentColor"
-              strokeWidth="16"
-              strokeLinecap="square"
-              fill="none"
-              initial={{ pathLength: 0, opacity: 0 }}
-            />
-          </svg>
+            <div className="relative flex items-center justify-center h-20 w-20 mb-4">
+              <motion.svg 
+                viewBox="0 0 100 100" 
+                className="h-full w-full"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 1, ease: "easeInOut" }}
+              >
+                <motion.path
+                  d="M30,20 L30,80"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="16"
+                  strokeLinecap="square"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 1, ease: "easeInOut" }}
+                />
+                <motion.path
+                  d="M30,20 L80,20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="16"
+                  strokeLinecap="square"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 1, ease: "easeInOut", delay: 0.3 }}
+                />
+              </motion.svg>
+            </div>
+            <motion.h1
+              className="text-3xl font-bold"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6, duration: 0.5 }}
+            >
+              Heights
+            </motion.h1>
+          </motion.div>
         </motion.div>
-        
-        <div className="mt-6 flex items-center">
-          <motion.span className="logo-text text-4xl font-bold">H</motion.span>
-          <motion.span className="logo-text text-4xl font-bold">e</motion.span>
-          <motion.span className="logo-text text-4xl font-bold">i</motion.span>
-          <motion.span className="logo-text text-4xl font-bold">g</motion.span>
-          <motion.span className="logo-text text-4xl font-bold">h</motion.span>
-          <motion.span className="logo-text text-4xl font-bold">t</motion.span>
-          <motion.span className="logo-text text-4xl font-bold">s</motion.span>
-        </div>
-      </div>
-      
-      <motion.p 
-        className="tagline mt-4 text-muted-foreground text-sm font-medium"
-        initial={{ opacity: 0 }}
-      >
-        Elevate Your Trading Experience
-      </motion.p>
-    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

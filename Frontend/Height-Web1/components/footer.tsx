@@ -1,81 +1,145 @@
+"use client";
+
+import Link from "next/link";
+import { Facebook, Twitter, Instagram, Linkedin, Github } from "lucide-react";
+
 export function Footer() {
+  const currentYear = new Date().getFullYear();
+  
   return (
-    <footer className="bg-card/30 border-t border-border">
-      <div className="max-w-7xl mx-auto py-12 px-4 md:px-8 lg:px-16">
+    <footer className="border-t">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-16 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div>
-            <div className="flex items-center">
-              <svg viewBox="0 0 24 24" className="h-6 w-6 mr-2">
-                <path
-                  d="M4,12 L8,8 L12,12 L16,8 L20,12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M4,16 L8,12 L12,16 L16,12 L20,16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+          <div className="md:col-span-1">
+            <Link href="/" className="flex items-center mb-4">
+              <div className="relative flex items-center justify-center h-8 w-8 mr-2">
+                <svg viewBox="0 0 100 100" className="h-6 w-6">
+                  <path
+                    d="M30,20 L30,80"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="16"
+                    strokeLinecap="square"
+                  />
+                  <path
+                    d="M30,20 L80,20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="16"
+                    strokeLinecap="square"
+                  />
+                </svg>
+              </div>
               <span className="text-xl font-bold">Heights</span>
-            </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Elevate your trading experience with Heights, the next generation trading platform for global markets and cryptocurrency.
+            </Link>
+            <p className="text-muted-foreground mb-4">
+              Trade with confidence across global markets and crypto all from one unified platform.
             </p>
+            <div className="flex space-x-4">
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <Facebook className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <Twitter className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <Instagram className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <Linkedin className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <Github className="h-5 w-5" />
+              </a>
+            </div>
           </div>
           
           <div>
-            <h3 className="font-medium mb-4">Products</h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-colors">Crypto Trading</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Stock Trading</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Portfolio Management</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Market Insights</a></li>
+            <h3 className="font-bold mb-4">Company</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors">
+                  About Us
+                </Link>
+              </li>
+              <li>
+                <Link href="/careers" className="text-muted-foreground hover:text-primary transition-colors">
+                  Careers
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="text-muted-foreground hover:text-primary transition-colors">
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors">
+                  Blog
+                </Link>
+              </li>
             </ul>
           </div>
           
           <div>
-            <h3 className="font-medium mb-4">Resources</h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-colors">Blog</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Learning Center</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Market Analysis</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">API Documentation</a></li>
+            <h3 className="font-bold mb-4">Products</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/crypto" className="text-muted-foreground hover:text-primary transition-colors">
+                  Cryptocurrency
+                </Link>
+              </li>
+              <li>
+                <Link href="/stocks" className="text-muted-foreground hover:text-primary transition-colors">
+                  Stocks
+                </Link>
+              </li>
+              <li>
+                <Link href="/indices" className="text-muted-foreground hover:text-primary transition-colors">
+                  Indices
+                </Link>
+              </li>
+              <li>
+                <Link href="/research" className="text-muted-foreground hover:text-primary transition-colors">
+                  Market Research
+                </Link>
+              </li>
             </ul>
           </div>
           
           <div>
-            <h3 className="font-medium mb-4">Company</h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-colors">About Us</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Contact</a></li>
-              <li><a href="#" className="hover:text-foreground transition-colors">Press</a></li>
+            <h3 className="font-bold mb-4">Legal</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/terms" className="text-muted-foreground hover:text-primary transition-colors">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-muted-foreground hover:text-primary transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/cookies" className="text-muted-foreground hover:text-primary transition-colors">
+                  Cookie Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/disclaimer" className="text-muted-foreground hover:text-primary transition-colors">
+                  Risk Disclaimer
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
         
-        <div className="mt-12 pt-8 border-t border-border">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-sm text-muted-foreground">
-              © 2025 Heights Trading. All rights reserved.
-            </p>
-            <div className="flex space-x-6 mt-4 md:mt-0">
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                Terms
-              </a>
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                Privacy
-              </a>
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                Cookies
-              </a>
-            </div>
-          </div>
+        <div className="border-t mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+          <p className="text-sm text-muted-foreground mb-4 md:mb-0">
+            &copy; {currentYear} Heights Trading Platform. All rights reserved.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Trading involves risk. Heights is a demo platform for educational purposes only.
+          </p>
         </div>
       </div>
     </footer>
