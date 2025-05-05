@@ -1,44 +1,44 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useRef } from "react";
-import { Globe, BarChart3, Shield, Wallet } from "lucide-react";
-
-const features = [
-  {
-    icon: <Globe className="h-10 w-10" />,
-    title: "Global Markets",
-    description: "Access to over 24 markets across the globe, from US equities to Asian indices, all from a single account.",
-    color: "hsl(var(--chart-1))",
-  },
-  {
-    icon: <BarChart3 className="h-10 w-10" />,
-    title: "Advanced Analytics",
-    description: "Powerful charting tools, technical indicators, and AI-powered insights to make informed trading decisions.",
-    color: "hsl(var(--chart-2))",
-  },
-  {
-    icon: <Shield className="h-10 w-10" />,
-    title: "Bank-Grade Security",
-    description: "Your assets are protected with industry-leading security measures and multi-factor authentication.",
-    color: "hsl(var(--chart-3))",
-  },
-  {
-    icon: <Wallet className="h-10 w-10" />,
-    title: "Unified Portfolio",
-    description: "Manage your traditional investments and cryptocurrency holdings from one integrated dashboard.",
-    color: "hsl(var(--chart-4))",
-  },
-];
+import { Activity, Globe, Shield, LineChart, DollarSign, Clock } from "lucide-react";
 
 export function FeaturesSection() {
-  const containerRef = useRef(null);
+  const features = [
+    {
+      icon: <Activity className="h-10 w-10" />,
+      title: "Real-Time Market Data",
+      description: "Stay informed with lightning-fast updates across all markets, ensuring you never miss an opportunity."
+    },
+    {
+      icon: <Globe className="h-10 w-10" />,
+      title: "Multi-Market Access",
+      description: "Trade seamlessly across Indian stocks, global indices, and cryptocurrencies from one unified platform."
+    },
+    {
+      icon: <Shield className="h-10 w-10" />,
+      title: "Bank-Grade Security",
+      description: "Rest easy knowing your investments are protected by state-of-the-art encryption and security protocols."
+    },
+    {
+      icon: <LineChart className="h-10 w-10" />,
+      title: "Advanced Analytics",
+      description: "Make informed decisions with powerful technical analysis tools and customizable chart indicators."
+    },
+    {
+      icon: <DollarSign className="h-10 w-10" />,
+      title: "Competitive Pricing",
+      description: "Enjoy low transaction fees and zero hidden charges, maximizing your investment returns."
+    },
+    {
+      icon: <Clock className="h-10 w-10" />,
+      title: "24/7 Support",
+      description: "Our dedicated support team is available around the clock to assist with any questions or concerns."
+    }
+  ];
   
   return (
-    <section 
-      ref={containerRef}
-      className="py-20 px-4 md:px-8 lg:px-16 relative bg-secondary/50"
-    >
+    <section className="py-24 px-4 md:px-8 lg:px-16 bg-muted/30">
       <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -47,28 +47,24 @@ export function FeaturesSection() {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <h2 className="text-3xl font-bold tracking-tight">Why Choose Heights</h2>
-          <p className="mt-4 text-xl text-muted-foreground max-w-2xl mx-auto">
-            Experience the future of trading with our innovative platform that combines the best of traditional and digital markets.
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Choose Heights?</h2>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Our platform is designed to provide you with the best trading experience,
+            combining cutting-edge technology with user-friendly features.
           </p>
         </motion.div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
+              viewport={{ once: true, margin: "-50px" }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="relative p-6 rounded-lg bg-card border border-border/50 hover:border-primary/20 transition-all duration-300"
+              className="p-6 rounded-lg border border-border bg-card/60 backdrop-blur-sm"
             >
-              <div 
-                className="h-16 w-16 rounded-full flex items-center justify-center mb-4"
-                style={{ backgroundColor: `${feature.color}10` }}
-              >
-                <div style={{ color: feature.color }}>{feature.icon}</div>
-              </div>
+              <div className="mb-4 text-primary">{feature.icon}</div>
               <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
               <p className="text-muted-foreground">{feature.description}</p>
             </motion.div>
