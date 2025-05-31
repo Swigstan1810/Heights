@@ -1,3 +1,4 @@
+// components/ai-dashboard.tsx
 "use client";
 
 import { useState } from "react";
@@ -6,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContai
 import { Bot, BarChart2, ArrowUpRight, ArrowDownRight, AlertCircle, BrainCircuit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { TradingAssistant } from "@/components/ai-assistant";
+import { EnhancedAIAssistant } from "@/components/ai-assistant";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -29,6 +30,14 @@ const accuracyData = [
 ];
 
 export default function AIDashboard() {
+  const [selectedTab, setSelectedTab] = useState("assistant");
+
+  const handleTradeRecommendation = (recommendation: any) => {
+    console.log('Trade recommendation received:', recommendation);
+    // Handle trade recommendations from the AI assistant
+    // You could show a notification, open a trade modal, etc.
+  };
+
   return (
     <div className="container mx-auto px-4 pt-24 pb-16">
       <motion.div
@@ -40,11 +49,11 @@ export default function AIDashboard() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">AI Trading Assistant</h1>
-            <p className="text-muted-foreground mt-2">Market insights and predictions powered by machine learning</p>
+            <p className="text-muted-foreground mt-2">Market insights and predictions powered by Claude AI</p>
           </div>
         </div>
 
-        <Tabs defaultValue="assistant" className="space-y-6">
+        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
           <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:w-[600px]">
             <TabsTrigger value="assistant" className="flex items-center gap-2">
               <Bot className="h-4 w-4" />
@@ -66,14 +75,14 @@ export default function AIDashboard() {
           
           <TabsContent value="assistant">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* AI Assistant Panel */}
+              {/* Enhanced AI Assistant Panel */}
               <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>AI Assistant</CardTitle>
-                  <CardDescription>Get trading insights and assistance</CardDescription>
+                  <CardTitle>Claude-Powered AI Assistant</CardTitle>
+                  <CardDescription>Get real-time trading insights and market analysis</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <TradingAssistant />
+                <CardContent className="p-0">
+                  <EnhancedAIAssistant onTradeRecommendation={handleTradeRecommendation} />
                 </CardContent>
               </Card>
 
@@ -253,21 +262,21 @@ export default function AIDashboard() {
                         </thead>
                         <tbody>
                           <tr className="border-b border-border">
-                            <td className="py-3 px-4">gradient_boosting</td>
+                            <td className="py-3 px-4">claude-3-opus</td>
                             <td className="py-3 px-4">82%</td>
                             <td className="py-3 px-4">0.86</td>
                             <td className="py-3 px-4">523</td>
                             <td className="py-3 px-4">Today</td>
                           </tr>
                           <tr className="border-b border-border">
-                            <td className="py-3 px-4">random_forest</td>
+                            <td className="py-3 px-4">gradient_boosting</td>
                             <td className="py-3 px-4">78%</td>
                             <td className="py-3 px-4">1.24</td>
                             <td className="py-3 px-4">489</td>
                             <td className="py-3 px-4">Yesterday</td>
                           </tr>
                           <tr className="border-b border-border">
-                            <td className="py-3 px-4">linear_regression</td>
+                            <td className="py-3 px-4">random_forest</td>
                             <td className="py-3 px-4">68%</td>
                             <td className="py-3 px-4">2.36</td>
                             <td className="py-3 px-4">236</td>
@@ -309,7 +318,7 @@ export default function AIDashboard() {
                           <td className="py-3 px-4">$178.42</td>
                           <td className="py-3 px-4">$182.58</td>
                           <td className="py-3 px-4 text-green-600">97.7%</td>
-                          <td className="py-3 px-4">gradient_boosting</td>
+                          <td className="py-3 px-4">claude-3-opus</td>
                         </tr>
                         <tr className="border-b border-border">
                           <td className="py-3 px-4">2024-04-28</td>
@@ -317,7 +326,7 @@ export default function AIDashboard() {
                           <td className="py-3 px-4">$415.20</td>
                           <td className="py-3 px-4">$404.21</td>
                           <td className="py-3 px-4 text-yellow-600">92.7%</td>
-                          <td className="py-3 px-4">gradient_boosting</td>
+                          <td className="py-3 px-4">claude-3-opus</td>
                         </tr>
                         <tr className="border-b border-border">
                           <td className="py-3 px-4">2024-04-27</td>
@@ -341,7 +350,7 @@ export default function AIDashboard() {
                           <td className="py-3 px-4">$168.89</td>
                           <td className="py-3 px-4">$170.18</td>
                           <td className="py-3 px-4 text-green-600">99.2%</td>
-                          <td className="py-3 px-4">gradient_boosting</td>
+                          <td className="py-3 px-4">claude-3-opus</td>
                         </tr>
                       </tbody>
                     </table>
