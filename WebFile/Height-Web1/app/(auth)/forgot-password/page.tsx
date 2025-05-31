@@ -16,7 +16,7 @@ export default function ForgotPassword() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
-  const handlePasswordReset = async (e: React.FormEvent) => {
+  const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     

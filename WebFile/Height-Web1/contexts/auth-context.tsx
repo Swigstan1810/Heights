@@ -1,159 +1,199 @@
 "use client";
 
-import { 
-  createContext, 
-  useContext, 
-  useState, 
-  useEffect, 
-  ReactNode 
-} from 'react';
-import { 
-  User, 
-  Session, 
-  AuthChangeEvent 
-} from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
+import { User, Session, AuthError } from "@supabase/supabase-js";
 
-type AuthContextType = {
+interface AuthContextType {
   user: User | null;
   session: Session | null;
-  isLoading: boolean;
-  signUp: (email: string, password: string) => Promise<{ 
-    error: any; 
-    data: any;
-  }>;
-  signIn: (email: string, password: string) => Promise<{
-    error: any;
-    data: any;
-  }>;
-  signOut: () => Promise<void>;
+  loading: boolean;
   kycCompleted: boolean;
-  setKycCompleted: (completed: boolean) => void;
-};
+  kycSubmitted: boolean; // New property for tracking KYC submission status
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signOut: () => Promise<void>;
+  setKycCompleted: (value: boolean) => void;
+  setKycSubmitted: (value: boolean) => void; // New method for updating KYC submission status
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [kycCompleted, setKycCompleted] = useState(false);
-  const router = useRouter();
+  const [kycSubmitted, setKycSubmitted] = useState(false); // New state for tracking KYC submission
 
   useEffect(() => {
-    // Check active session
-    const getSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      // Check KYC status if user is logged in
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('kyc_completed')
-          .eq('id', session.user.id)
-          .single();
-        
-        setKycCompleted(profile?.kyc_completed || false);
-      }
-      
-      setIsLoading(false);
-    };
-
-    getSession();
-
-    // Set up auth state listener
+    // Set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, currentSession: Session | null) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+      async (event, session) => {
+        console.log("Auth state changed:", event);
+        setSession(session);
+        setUser(session?.user || null);
         
-        // Check KYC status on auth change
-        if (currentSession?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('kyc_completed')
-            .eq('id', currentSession.user.id)
-            .single();
-          
-          setKycCompleted(profile?.kyc_completed || false);
+        if (session?.user) {
+          // Fetch KYC status
+          try {
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('kyc_completed')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (error) {
+              console.error("Error fetching profile:", error);
+            } else {
+              setKycCompleted(profile?.kyc_completed || false);
+            }
+            
+            // Check if KYC has been submitted but not yet approved
+            const { data: kycDetails, error: kycError } = await supabase
+              .from('kyc_details')
+              .select('created_at')
+              .eq('user_id', session.user.id)
+              .single();
+              
+            if (kycError && kycError.code !== 'PGRST116') { // PGRST116 is "not found" error
+              console.error("Error checking KYC submission:", kycError);
+            } else {
+              // Set kycSubmitted to true if we found a record
+              setKycSubmitted(!!kycDetails);
+            }
+          } catch (error) {
+            console.error("Error in KYC status check:", error);
+          }
         } else {
           setKycCompleted(false);
+          setKycSubmitted(false);
         }
         
-        setIsLoading(false);
-        
-        // Force refresh to update UI based on auth state
-        router.refresh();
+        setLoading(false);
       }
     );
+
+    // Initial session check
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        setSession(session);
+        setUser(session.user);
+        
+        // Fetch KYC status
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('kyc_completed')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error) {
+            console.error("Error fetching profile:", error);
+          } else {
+            setKycCompleted(profile?.kyc_completed || false);
+          }
+          
+          // Check if KYC has been submitted but not yet approved
+          const { data: kycDetails, error: kycError } = await supabase
+            .from('kyc_details')
+            .select('created_at')
+            .eq('user_id', session.user.id)
+            .single();
+            
+          if (kycError && kycError.code !== 'PGRST116') { // PGRST116 is "not found" error
+            console.error("Error checking KYC submission:", kycError);
+          } else {
+            // Set kycSubmitted to true if we found a record
+            setKycSubmitted(!!kycDetails);
+          }
+        } catch (error) {
+          console.error("Error in KYC status check:", error);
+        }
+      }
+      
+      setLoading(false);
+    };
+
+    initializeAuth();
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
-  // Sign up function
-  const signUp = async (email: string, password: string) => {
-    const response = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    
-    // If successful registration, create a profile record
-    if (response.data.user) {
-      await supabase.from('profiles').insert({
-        id: response.data.user.id,
-        email: email,
-        created_at: new Date().toISOString(),
-        kyc_completed: false
-      });
-    }
-    
-    return response;
-  };
-
-  // Sign in function
   const signIn = async (email: string, password: string) => {
-    return await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      // Note: We don't need to set user and session here because the onAuthStateChange listener will handle it
+      
+      return { error };
+    } catch (error) {
+      console.error("Error in signIn:", error);
+      return { error: error as AuthError };
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Sign out function
+  const signUp = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`,
+        }
+      });
+      
+      return { error };
+    } catch (error) {
+      console.error("Error in signUp:", error);
+      return { error: error as AuthError };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
-  };
-
-  const value = {
-    user,
-    session,
-    isLoading,
-    signUp,
-    signIn,
-    signOut,
-    kycCompleted,
-    setKycCompleted
+    setLoading(true);
+    try {
+      await supabase.auth.signOut();
+      // The onAuthStateChange listener will handle setting user and session to null
+    } catch (error) {
+      console.error("Error in signOut:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session,
+      loading,
+      kycCompleted,
+      kycSubmitted,
+      signIn, 
+      signUp, 
+      signOut,
+      setKycCompleted,
+      setKycSubmitted
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-};
+}
