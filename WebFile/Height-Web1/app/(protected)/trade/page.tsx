@@ -1,46 +1,63 @@
+// app/(protected)/trade/page.tsx
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Navbar } from "@/components/navbar";
-import { generateMockMarketData, formatCurrency } from "@/lib/utils";
+import TradingViewWidget from "@/components/trading/tradingview-widget";
+import { OrderBook } from "@/components/trading/order-book";
+import { TradeForm } from "@/components/trading/trade-form";
+import { MarketStats } from "@/components/trading/market-stats";
+import { RecentTrades } from "@/components/trading/recent-trades";
+import { marketDataService, MarketData } from "@/lib/market-data";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  DollarSign,
-  ArrowUp,
-  ArrowDown,
+import { 
+  Activity, 
+  TrendingUp, 
+  TrendingDown,
+  BarChart3,
   Wallet,
-  Lock
+  History,
+  BookOpen
 } from "lucide-react";
 
 export default function TradePage() {
-  const { user, isLoading, kycCompleted } = useAuth();
+  const { user, loading, kycCompleted } = useAuth();
   const router = useRouter();
+  const [selectedSymbol, setSelectedSymbol] = useState("CRYPTO:BTC");
+  const [marketData, setMarketData] = useState<MarketData | null>(null);
+  const [activeTab, setActiveTab] = useState("chart");
   
   useEffect(() => {
-    if (!isLoading) {
-      // If user not logged in, redirect to login
+    if (!loading) {
       if (!user) {
         router.push("/login");
-      }
-      // If KYC not completed, redirect to KYC form
-      else if (!kycCompleted) {
+      } else if (!kycCompleted) {
         router.push("/kyc");
       }
     }
-  }, [user, isLoading, kycCompleted, router]);
-  
-  // Sample market data
-  const marketData = generateMockMarketData(6);
-  const selectedAsset = marketData[0];
-  
-  // Show loading 
-  if (isLoading || !user || !kycCompleted) {
+  }, [user, loading, kycCompleted, router]);
+
+  useEffect(() => {
+    // Connect to market data service
+    marketDataService.connect();
+    
+    // Subscribe to real-time updates
+    const unsubscribe = marketDataService.subscribe(selectedSymbol, (data) => {
+      setMarketData(data);
+    });
+
+    // Fetch initial data
+    marketDataService.getMarketData(selectedSymbol).then(setMarketData);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [selectedSymbol]);
+
+  if (loading || !user || !kycCompleted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -50,179 +67,151 @@ export default function TradePage() {
       </div>
     );
   }
-  
+
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
       
-      <div className="container mx-auto px-4 pt-24 pb-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Trade</h1>
-          <p className="text-muted-foreground">Buy and sell assets instantly</p>
+      <div className="container-fluid px-4 pt-20 pb-8">
+        {/* Market Stats Bar */}
+        <div className="mb-4">
+          <MarketStats symbol={selectedSymbol} marketData={marketData} />
         </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Asset List */}
-          <div className="lg:col-span-1 bg-card rounded-lg border border-border shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <h2 className="font-bold">Available Assets</h2>
-            </div>
-            
-            <div className="divide-y divide-border">
-              {marketData.map((asset) => (
-                <div key={asset.symbol} className="flex items-center justify-between p-4 hover:bg-accent/50 cursor-pointer">
-                  <div>
-                    <p className="font-medium">{asset.symbol}</p>
-                    <p className="text-sm text-muted-foreground">{asset.name}</p>
+
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+          {/* Main Content Area */}
+          <div className="xl:col-span-3">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="chart" className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Chart
+                </TabsTrigger>
+                <TabsTrigger value="orderbook" className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  Order Book
+                </TabsTrigger>
+                <TabsTrigger value="trades" className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  Recent Trades
+                </TabsTrigger>
+                <TabsTrigger value="history" className="flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  My Orders
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="chart" className="mt-4">
+                <div className="bg-card rounded-lg border border-border overflow-hidden">
+                  <TradingViewWidget
+                    symbol={selectedSymbol}
+                    height={600}
+                    theme={undefined}
+                    allowSymbolChange={true}
+                    showIntervalTabs={true}
+                  />
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="orderbook" className="mt-4">
+                <OrderBook symbol={selectedSymbol} />
+              </TabsContent>
+              
+              <TabsContent value="trades" className="mt-4">
+                <RecentTrades symbol={selectedSymbol} />
+              </TabsContent>
+              
+              <TabsContent value="history" className="mt-4">
+                <div className="bg-card rounded-lg border border-border p-6">
+                  <h3 className="text-lg font-semibold mb-4">Order History</h3>
+                  {/* Order history component would go here */}
+                  <p className="text-muted-foreground">Your recent orders will appear here</p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* Trading Panel */}
+          <div className="xl:col-span-1">
+            <div className="bg-card rounded-lg border border-border p-4 sticky top-20">
+              <TradeForm 
+                symbol={selectedSymbol} 
+                currentPrice={marketData?.price || 0}
+                userId={user.id}
+              />
+              
+              {/* Balance Info */}
+              <div className="mt-6 pt-6 border-t border-border">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Available Balance</span>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">{formatCurrency(asset.price)}</p>
-                    <p className={`text-sm ${asset.change24h > 0 ? 'text-green-500' : 'text-red-500'} flex items-center justify-end`}>
-                      {asset.change24h > 0 ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
-                      {Math.abs(asset.change24h).toFixed(2)}%
-                    </p>
+                  <span className="text-sm font-bold">₹1,25,432.00</span>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">In Orders</span>
+                    <span>₹5,000.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Assets</span>
+                    <span className="font-medium">₹1,30,432.00</span>
                   </div>
                 </div>
-              ))}
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full mt-4"
+                  onClick={() => router.push('/wallet')}
+                >
+                  Manage Wallet
+                </Button>
+              </div>
             </div>
           </div>
-          
-          {/* Trade Form */}
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card rounded-lg border border-border shadow-sm p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                <ArrowDown className="h-5 w-5 mr-2 text-green-500" />
-                Buy {selectedAsset.symbol}
-              </h2>
-              
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">Current Price</p>
-                  <p className="font-bold">{formatCurrency(selectedAsset.price)}</p>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Amount to Buy</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-10" placeholder="0.00" />
+        </div>
+
+        {/* Market Watchlist */}
+        <div className="mt-6">
+          <div className="bg-card rounded-lg border border-border p-4">
+            <h3 className="text-lg font-semibold mb-4">Market Watchlist</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {[
+                { symbol: "CRYPTO:BTC", name: "Bitcoin", price: 51234.56, change: 2.34 },
+                { symbol: "CRYPTO:ETH", name: "Ethereum", price: 3456.78, change: -1.23 },
+                { symbol: "NSE:RELIANCE", name: "Reliance", price: 2890.45, change: 0.89 },
+                { symbol: "NSE:TCS", name: "TCS", price: 3567.80, change: 1.45 },
+                { symbol: "CRYPTO:SOL", name: "Solana", price: 123.45, change: 5.67 },
+                { symbol: "NSE:INFY", name: "Infosys", price: 1456.30, change: -0.45 },
+              ].map((item) => (
+                <button
+                  key={item.symbol}
+                  onClick={() => setSelectedSymbol(item.symbol)}
+                  className={`p-3 rounded-lg border transition-all ${
+                    selectedSymbol === item.symbol
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:border-primary/50"
+                  }`}
+                >
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">{item.symbol.split(':')[1]}</p>
+                    <p className="font-bold mt-1">₹{item.price.toLocaleString()}</p>
+                    <p className={`text-xs flex items-center ${
+                      item.change > 0 ? "text-green-500" : "text-red-500"
+                    }`}>
+                      {item.change > 0 ? (
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3 mr-1" />
+                      )}
+                      {item.change > 0 ? "+" : ""}{item.change}%
+                    </p>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Quantity</label>
-                  <Input placeholder="0.00" />
-                </div>
-                
-                <div className="flex justify-between items-center text-sm">
-                  <p className="text-muted-foreground">Trading Fee (0.1%)</p>
-                  <p>{formatCurrency(selectedAsset.price * 0.001)}</p>
-                </div>
-                
-                <div className="flex justify-between items-center text-sm font-medium">
-                  <p>Total</p>
-                  <p>{formatCurrency(selectedAsset.price + selectedAsset.price * 0.001)}</p>
-                </div>
-                
-                <Button className="w-full bg-green-600 hover:bg-green-700">
-                  Buy {selectedAsset.symbol}
-                </Button>
-              </div>
-            </div>
-            
-            <div className="bg-card rounded-lg border border-border shadow-sm p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                <ArrowUp className="h-5 w-5 mr-2 text-red-500" />
-                Sell {selectedAsset.symbol}
-              </h2>
-              
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">Current Price</p>
-                  <p className="font-bold">{formatCurrency(selectedAsset.price)}</p>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Amount to Sell</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-10" placeholder="0.00" />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Quantity</label>
-                  <Input placeholder="0.00" />
-                </div>
-                
-                <div className="flex justify-between items-center text-sm">
-                  <p className="text-muted-foreground">Trading Fee (0.1%)</p>
-                  <p>{formatCurrency(selectedAsset.price * 0.001)}</p>
-                </div>
-                
-                <div className="flex justify-between items-center text-sm font-medium">
-                  <p>Total</p>
-                  <p>{formatCurrency(selectedAsset.price - selectedAsset.price * 0.001)}</p>
-                </div>
-                
-                <Button className="w-full bg-red-600 hover:bg-red-700">
-                  Sell {selectedAsset.symbol}
-                </Button>
-              </div>
-            </div>
-            
-            <div className="md:col-span-2 bg-card rounded-lg border border-border shadow-sm p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Your Portfolio</h2>
-                <div className="flex items-center text-muted-foreground text-sm">
-                  <Clock className="h-4 w-4 mr-1" /> Updated just now
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <Wallet className="h-5 w-5 mr-2 text-primary" />
-                    <div>
-                      <p className="font-medium">Available Balance</p>
-                      <p className="text-sm text-muted-foreground">For trading</p>
-                    </div>
-                  </div>
-                  <p className="font-bold">{formatCurrency(125432)}</p>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <Lock className="h-5 w-5 mr-2 text-primary" />
-                    <div>
-                      <p className="font-medium">Locked Balance</p>
-                      <p className="text-sm text-muted-foreground">In open orders</p>
-                    </div>
-                  </div>
-                  <p className="font-bold">{formatCurrency(5000)}</p>
-                </div>
-              </div>
-              
-              <div className="mt-6 pt-6 border-t border-border">
-                <h3 className="font-medium mb-4">Your Assets</h3>
-                
-                <div className="space-y-2">
-                  {marketData.slice(0, 3).map((asset) => (
-                    <div key={`holding-${asset.symbol}`} className="flex justify-between items-center p-3 rounded-md bg-accent/30">
-                      <div>
-                        <p className="font-medium">{asset.symbol}</p>
-                        <p className="text-sm text-muted-foreground">{(Math.random() * 2).toFixed(5)} {asset.symbol}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{formatCurrency(asset.price * Math.random() * 2)}</p>
-                        <p className={`text-sm ${asset.change24h > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {asset.change24h > 0 ? '+' : ''}{asset.change24h.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -79,7 +79,7 @@ export function KycForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
-  const { user, setKycCompleted } = useAuth();
+  const { user, setKycCompleted, setKycSubmitted } = useAuth();
   
   const form = useForm<KycFormValues>({
     resolver: zodResolver(kycFormSchema),
@@ -128,29 +128,21 @@ export function KycForm() {
           bank_ifsc_code: data.bankIfscCode,
           bank_name: data.bankName,
           income_bracket: data.incomeBracket,
+          status: 'pending', // Add this status field to track verification
         });
       
       if (kycError) {
         throw new Error(kycError.message);
       }
       
-      // Update profile to mark KYC as completed
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ kyc_completed: true })
-        .eq('id', user.id);
+      // Mark KYC as submitted but pending verification
+      // Update local state first
+      setKycSubmitted(true);
       
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-      
-      // Update local state
-      setKycCompleted(true);
-      
-      setSuccess("KYC verification completed successfully!");
+      setSuccess("KYC verification submitted successfully! Your information will be reviewed within 1-3 business days.");
       setTimeout(() => {
         router.push('/dashboard');
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       setError(err.message || "An error occurred while submitting KYC details");
     } finally {

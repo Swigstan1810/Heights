@@ -14,7 +14,8 @@ import {
   User, 
   LogOut, 
   BarChart2, 
-  ChevronDown 
+  ChevronDown,
+  BrainCircuit // Added Brain icon for AI section
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -88,7 +89,7 @@ export function Navbar() {
           </div>
           
           <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/#crypto" className="text-sm font-medium hover:text-primary transition-colors">Crypto</Link>
+            <Link href="/crypto" className="text-sm font-medium hover:text-primary transition-colors">Crypto</Link>
             <Link href="/#stocks" className="text-sm font-medium hover:text-primary transition-colors">Stocks</Link>
             
             {/* Conditionally render protected links */}
@@ -99,6 +100,14 @@ export function Navbar() {
                 <Link href="/portfolio" className="text-sm font-medium hover:text-primary transition-colors">Portfolio</Link>
               </>
             )}
+            
+            {/* Added AI Assistant link */}
+            <Link href="/ai" className="text-sm font-medium hover:text-primary transition-colors">
+              <span className="flex items-center">
+                <BrainCircuit className="h-4 w-4 mr-1.5" />
+                AI Assistant
+              </span>
+            </Link>
             
             <Link href="/#learn" className="text-sm font-medium hover:text-primary transition-colors">Learn</Link>
           </nav>
@@ -177,7 +186,7 @@ export function Navbar() {
       >
         {isOpen && (
           <div className="px-4 pt-2 pb-5 bg-background/95 backdrop-blur-md border-b border-border/50 space-y-1">
-            <Link href="/#crypto" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Crypto</Link>
+            <Link href="/crypto" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Crypto</Link>
             <Link href="/#stocks" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Stocks</Link>
             
             {/* Conditionally render protected links for mobile */}
@@ -189,6 +198,14 @@ export function Navbar() {
               </>
             )}
             
+            {/* Added AI Assistant link to mobile menu */}
+            <Link href="/ai" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>
+              <span className="flex items-center">
+                <BrainCircuit className="h-5 w-5 mr-2" />
+                AI Assistant
+              </span>
+            </Link>
+            
             <Link href="/#learn" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Learn</Link>
             
             <div className="pt-4 flex flex-col space-y-2">
@@ -198,8 +215,7 @@ export function Navbar() {
                     <Sun className="mr-2 h-4 w-4" /> Light Mode
                   </>
                 ) : (
-                  <>
-                    <Moon className="mr-2 h-4 w-4" /> Dark Mode
+                  <><Moon className="mr-2 h-4 w-4" /> Dark Mode
                   </>
                 )}
               </Button>
