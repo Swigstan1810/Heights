@@ -57,9 +57,9 @@ export default function SignUp() {
       if (signUpError) {
         setError(signUpError.message);
       } else {
-        setSuccess("Registration successful! Please check your email to confirm your account.");
+        setSuccess("Registration successful! Please check your email to confirm your account, then you can start trading.");
         setTimeout(() => {
-          router.push("/kyc");
+          router.push("/dashboard");
         }, 3000);
       }
     } catch (err: any) {

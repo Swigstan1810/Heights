@@ -9,28 +9,21 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 import { ArrowUpRight, ArrowDownRight, PieChart, BarChart2, RefreshCw } from "lucide-react";
 
 export default function PortfolioPage() {
-  const { user, isLoading, kycCompleted } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   
   useEffect(() => {
-    if (!isLoading) {
-      // If user not logged in, redirect to login
-      if (!user) {
-        router.push("/login");
-      }
-      // If KYC not completed, redirect to KYC form
-      else if (!kycCompleted) {
-        router.push("/kyc");
-      }
+    if (!loading && !user) {
+      router.push("/login");
     }
-  }, [user, isLoading, kycCompleted, router]);
+  }, [user, loading, router]);
   
   // Sample portfolio data
   const marketData = generateMockMarketData(8);
   const chartData = generateChartData(30, 'up');
   
   // Show loading 
-  if (isLoading || !user || !kycCompleted) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

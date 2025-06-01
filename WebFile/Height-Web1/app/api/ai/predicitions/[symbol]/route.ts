@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // app/api/ai/predictions/[symbol]/route.ts
 import { NextResponse } from 'next/server';
 import { anthropic } from '@/lib/claude-api';
@@ -94,52 +93,6 @@ Format your response as valid JSON with this structure:
 Base your analysis on the provided data, technical indicators, and market conditions. Be specific and actionable.
 `;
 
-=======
-// app/api/ai/predictions/[symbol]/route.ts (with Claude integration)
-
-import { NextResponse } from 'next/server';
-import { anthropic } from '@/lib/claude-api';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execPromise = promisify(exec);
-
-// Claude prompt for stock predictions
-const PREDICTION_PROMPT = `
-You are a financial analyst assistant for Heights trading platform. 
-I need you to analyze the following financial data for the stock symbol: {SYMBOL}.
-
-Based on this data, generate a price prediction for tomorrow.
-Your analysis should include:
-1. A predicted price (be precise with a number)
-2. Confidence level (as a percentage)
-3. Brief justification for your prediction
-
-Format your response as valid JSON with these fields:
-- symbol: the stock symbol
-- current_price: the current price from the data
-- predicted_price: your prediction for tomorrow's price
-- change: the calculated difference between current and predicted
-- percent_change: the percentage change
-- confidence: your confidence level as a decimal (0.0-1.0)
-- prediction_date: tomorrow's date in ISO format
-- model_used: "claude-analysis"
-- prediction_type: "next_day_close"
-- analysis: brief explanation for the prediction
-
-Only return the JSON object, nothing else.
-`;
-
-interface HistoricalDataPoint {
-  date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
 export async function GET(
   request: Request,
   { params }: { params: { symbol: string } }

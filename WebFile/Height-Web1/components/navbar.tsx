@@ -1,7 +1,7 @@
 "use client";
  
 import { useState, useEffect } from "react";
-import { motion, useScroll } from "framer-motion";
+import { motion, useScroll, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -15,7 +15,9 @@ import {
   LogOut, 
   BarChart2, 
   ChevronDown,
-  BrainCircuit // Added Brain icon for AI section
+  BrainCircuit,
+  Sparkles,
+  Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,9 +35,10 @@ import {
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showPlusAnimation, setShowPlusAnimation] = useState(false);
   const { theme, toggleTheme } = useHeightsTheme();
   const { scrollY } = useScroll();
-  const { user, signOut, kycCompleted } = useAuth();
+  const { user, signOut } = useAuth();
   const router = useRouter();
   
   useEffect(() => {
@@ -46,6 +49,15 @@ export function Navbar() {
     const unsubscribe = scrollY.on("change", updateScrollState);
     return () => unsubscribe();
   }, [scrollY]);
+
+  // Animate the Heights+ on hover
+  const handleAIHover = () => {
+    setShowPlusAnimation(true);
+  };
+
+  const handleAILeave = () => {
+    setShowPlusAnimation(false);
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -89,27 +101,54 @@ export function Navbar() {
           </div>
           
           <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/crypto" className="text-sm font-medium hover:text-primary transition-colors">Crypto</Link>
-            <Link href="/#stocks" className="text-sm font-medium hover:text-primary transition-colors">Stocks</Link>
+            <Link href="/dashboard?tab=crypto" className="text-sm font-medium hover:text-primary transition-colors">Crypto</Link>
+            <Link href="/dashboard?tab=stocks" className="text-sm font-medium hover:text-primary transition-colors">Stocks</Link>
+            <Link href="/dashboard?tab=mutual-funds" className="text-sm font-medium hover:text-primary transition-colors">Mutual Funds</Link>
             
             {/* Conditionally render protected links */}
-            {isAuthenticated && kycCompleted && (
+            {isAuthenticated && (
               <>
-                <Link href="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">Dashboard</Link>
                 <Link href="/trade" className="text-sm font-medium hover:text-primary transition-colors">Trade</Link>
                 <Link href="/portfolio" className="text-sm font-medium hover:text-primary transition-colors">Portfolio</Link>
               </>
             )}
             
-            {/* Added AI Assistant link */}
-            <Link href="/ai" className="text-sm font-medium hover:text-primary transition-colors">
-              <span className="flex items-center">
+            {/* Updated AI Assistant link with Heights+ animation */}
+            <Link 
+              href="/ai" 
+              className="text-sm font-medium hover:text-primary transition-colors"
+              onMouseEnter={handleAIHover}
+              onMouseLeave={handleAILeave}
+            >
+              <span className="relative flex items-center">
                 <BrainCircuit className="h-4 w-4 mr-1.5" />
-                AI Assistant
+                <span className="relative">
+                  Heights
+                  <AnimatePresence>
+                    {showPlusAnimation && (
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0, rotate: -180 }}
+                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                        exit={{ opacity: 0, scale: 0, rotate: 180 }}
+                        transition={{ duration: 0.3, type: "spring", stiffness: 200 }}
+                        className="absolute -right-3 -top-0.5 text-primary"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                  <motion.span
+                    animate={{ opacity: showPlusAnimation ? 0 : 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute -right-3 -top-1"
+                  >
+                    <Sparkles className="h-3 w-3 text-primary/50" />
+                  </motion.span>
+                </span>
               </span>
             </Link>
             
-            <Link href="/#learn" className="text-sm font-medium hover:text-primary transition-colors">Learn</Link>
+            <Link href="/learn" className="text-sm font-medium hover:text-primary transition-colors">Learn</Link>
           </nav>
           
           <div className="flex items-center space-x-2">
@@ -186,27 +225,28 @@ export function Navbar() {
       >
         {isOpen && (
           <div className="px-4 pt-2 pb-5 bg-background/95 backdrop-blur-md border-b border-border/50 space-y-1">
-            <Link href="/crypto" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Crypto</Link>
-            <Link href="/#stocks" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Stocks</Link>
+            <Link href="/dashboard?tab=crypto" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Crypto</Link>
+            <Link href="/dashboard?tab=stocks" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Stocks</Link>
+            <Link href="/dashboard?tab=mutual-funds" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Mutual Funds</Link>
             
             {/* Conditionally render protected links for mobile */}
-            {isAuthenticated && kycCompleted && (
+            {isAuthenticated && (
               <>
-                <Link href="/dashboard" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Dashboard</Link>
                 <Link href="/trade" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Trade</Link>
                 <Link href="/portfolio" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Portfolio</Link>
               </>
             )}
             
-            {/* Added AI Assistant link to mobile menu */}
+            {/* Updated AI Assistant link for mobile */}
             <Link href="/ai" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>
               <span className="flex items-center">
                 <BrainCircuit className="h-5 w-5 mr-2" />
-                AI Assistant
+                Heights+
+                <Sparkles className="h-3 w-3 ml-1 text-primary" />
               </span>
             </Link>
             
-            <Link href="/#learn" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Learn</Link>
+            <Link href="/learn" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Learn</Link>
             
             <div className="pt-4 flex flex-col space-y-2">
               <Button onClick={toggleTheme} variant="outline" className="justify-start">
@@ -215,7 +255,8 @@ export function Navbar() {
                     <Sun className="mr-2 h-4 w-4" /> Light Mode
                   </>
                 ) : (
-                  <><Moon className="mr-2 h-4 w-4" /> Dark Mode
+                  <>
+                    <Moon className="mr-2 h-4 w-4" /> Dark Mode
                   </>
                 )}
               </Button>

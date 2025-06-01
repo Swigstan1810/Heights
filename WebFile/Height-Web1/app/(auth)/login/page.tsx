@@ -16,26 +16,21 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
   const router = useRouter();
-  const { signIn, user, kycCompleted, loading: authLoading } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   
   useEffect(() => {
-    // Debug logging
-    console.log("Auth state:", { user, kycCompleted, authLoading });
-    
-    // If user is already logged in, redirect appropriately
+    // If user is already logged in, redirect to dashboard
     if (user && !authLoading) {
-      console.log("User already logged in, redirecting...");
-      router.push(kycCompleted ? "/dashboard" : "/kyc");
+      console.log("User already logged in, redirecting to dashboard");
+      router.push("/dashboard");
     }
-  }, [user, kycCompleted, authLoading, router]);
+  }, [user, authLoading, router]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setDebugInfo(null);
     
     if (!email || !password) {
       setError("Email and password are required");
@@ -51,16 +46,13 @@ export default function Login() {
       if (signInError) {
         console.error("Sign in error:", signInError);
         setError(signInError.message);
-        setDebugInfo(`Error code: ${signInError.status || 'unknown'}`);
       } else {
-        console.log("Sign in successful, user should be set by auth listener");
-        // The redirection will be handled by the useEffect above
-        // when the user state is updated by the auth listener
+        console.log("Sign in successful, redirecting to dashboard");
+        router.push("/dashboard");
       }
     } catch (err: any) {
       console.error("Unexpected error during login:", err);
       setError(err.message || "An error occurred during login");
-      setDebugInfo(JSON.stringify(err, null, 2));
     } finally {
       setLoading(false);
     }
@@ -106,18 +98,6 @@ export default function Login() {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4 mr-2" />
             <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        {debugInfo && (
-          <Alert className="bg-yellow-100 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-900">
-            <AlertCircle className="h-4 w-4 mr-2 text-yellow-600 dark:text-yellow-400" />
-            <AlertDescription className="text-yellow-800 dark:text-yellow-400">
-              <details>
-                <summary>Debug Info</summary>
-                <pre className="mt-2 text-xs">{debugInfo}</pre>
-              </details>
-            </AlertDescription>
           </Alert>
         )}
         

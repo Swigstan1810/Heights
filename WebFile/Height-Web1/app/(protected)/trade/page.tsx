@@ -24,21 +24,17 @@ import {
 } from "lucide-react";
 
 export default function TradePage() {
-  const { user, loading, kycCompleted } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [selectedSymbol, setSelectedSymbol] = useState("CRYPTO:BTC");
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [activeTab, setActiveTab] = useState("chart");
   
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.push("/login");
-      } else if (!kycCompleted) {
-        router.push("/kyc");
-      }
+    if (!loading && !user) {
+      router.push("/login");
     }
-  }, [user, loading, kycCompleted, router]);
+  }, [user, loading, router]);
 
   useEffect(() => {
     // Connect to market data service
@@ -57,7 +53,7 @@ export default function TradePage() {
     };
   }, [selectedSymbol]);
 
-  if (loading || !user || !kycCompleted) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

@@ -18,44 +18,15 @@ export async function middleware(request: NextRequest) {
   const authRoute = request.nextUrl.pathname.startsWith('/login') || 
                    request.nextUrl.pathname.startsWith('/signup');
   
-  // Check if this is the KYC route
-  const kycRoute = request.nextUrl.pathname.startsWith('/kyc');
-  
-  // Handle KYC completion status (if user is logged in)
-  let kycCompleted = false;
-  if (session?.user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('kyc_completed')
-      .eq('id', session.user.id)
-      .single();
-    
-    kycCompleted = profile?.kyc_completed || false;
-  }
-
-  // Redirect logic
+  // Redirect logic (KYC completely disabled)
   if (protectedRoute && !session) {
     // If trying to access protected route without being logged in
     return NextResponse.redirect(new URL('/login', request.url));
   }
   
   if (authRoute && session) {
-    // If trying to access auth routes while logged in
-    if (!kycCompleted) {
-      return NextResponse.redirect(new URL('/kyc', request.url));
-    } else {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-  }
-  
-  if (kycRoute && session && kycCompleted) {
-    // If KYC is completed and trying to access KYC page
+    // If trying to access auth routes while logged in, go straight to dashboard
     return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-  
-  if (protectedRoute && session && !kycCompleted && !kycRoute) {
-    // If user is logged in but hasn't completed KYC and tries to access protected routes
-    return NextResponse.redirect(new URL('/kyc', request.url));
   }
   
   return response;
