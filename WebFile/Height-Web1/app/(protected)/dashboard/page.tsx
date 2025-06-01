@@ -44,7 +44,7 @@ const TRACKED_CRYPTOS = [
 ];
 
 export default function Dashboard() {
-  const { user, loading, kycCompleted } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [portfolio, setPortfolio] = useState<any[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState('CRYPTO:BTC');
