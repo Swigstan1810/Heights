@@ -7,7 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { placeOrder } from "@/lib/market-data";
+<<<<<<< HEAD
 import { useToast } from "@/components/ui/use-toast";
+=======
+import { useToast } from "@/hooks/use-toast";
+>>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
 import { Calculator, ArrowUp, ArrowDown } from "lucide-react";
 
 interface TradeFormProps {
