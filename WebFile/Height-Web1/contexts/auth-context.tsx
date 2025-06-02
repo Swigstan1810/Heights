@@ -32,14 +32,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkKycStatus(session.user.id);
       }
       setLoading(false);
+      console.log('[AuthProvider] getSession:', session);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
         checkKycStatus(session.user.id);
       }
+      console.log('[AuthProvider] onAuthStateChange:', event, session);
     });
 
     return () => subscription.unsubscribe();
@@ -58,11 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    return await supabase.auth.signInWithPassword({ email, password });
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    console.log('[AuthProvider] signIn result:', result);
+    return result;
   };
 
   const signUp = async (email: string, password: string) => {
-    return await supabase.auth.signUp({ email, password });
+    const result = await supabase.auth.signUp({ email, password });
+    console.log('[AuthProvider] signUp result:', result);
+    return result;
   };
 
   const signOut = async () => {

@@ -42,7 +42,7 @@ export function MarketStats({ symbol, marketData }: MarketStatsProps) {
             </span>
           </h2>
           <p className="text-3xl font-bold mt-1">
-            ₹{marketData.price.toLocaleString(undefined, {
+            ${marketData.price.toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -52,23 +52,23 @@ export function MarketStats({ symbol, marketData }: MarketStatsProps) {
         <div className="flex gap-6">
           <div>
             <p className="text-sm text-muted-foreground">24h High</p>
-            <p className="font-medium">₹{marketData.high24h.toLocaleString()}</p>
+            <p className="font-medium">${marketData.high24h.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">24h Low</p>
-            <p className="font-medium">₹{marketData.low24h.toLocaleString()}</p>
+            <p className="font-medium">${marketData.low24h.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">24h Volume</p>
             <p className="font-medium">
-              ₹{(marketData.volume24h / 1000000).toFixed(2)}M
+              ${(marketData.volume24h / 1000000).toFixed(2)}M
             </p>
           </div>
           {marketData.marketCap && (
             <div>
               <p className="text-sm text-muted-foreground">Market Cap</p>
               <p className="font-medium">
-                ₹{(marketData.marketCap / 1000000000).toFixed(2)}B
+                ${(marketData.marketCap / 1000000000).toFixed(2)}B
               </p>
             </div>
           )}

@@ -27,7 +27,7 @@ import {
   Plus
 } from "lucide-react";
 import { AssistantButton } from '@/components/ai-assistant';
-import TradingViewWidget from '@/components/trading/tradingview-widget';
+import LightweightChartWidget from '@/components/trading/lightweight-chart-widget';
 import { Input } from "@/components/ui/input";
 
 export default function Dashboard() {
@@ -40,6 +40,9 @@ export default function Dashboard() {
   const [selectedCrypto, setSelectedCrypto] = useState('CRYPTO:BTC');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['CRYPTO:BTC', 'CRYPTO:ETH']));
+
+  // Debug log for auth state
+  console.log('[Dashboard] user:', user, 'loading:', loading);
 
   // Extended list of cryptocurrencies (like CoinSpot)
   const CRYPTO_LIST = [
@@ -150,10 +153,10 @@ export default function Dashboard() {
           
           {/* Crypto Tab - CoinSpot Style */}
           <TabsContent value="crypto" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
               {/* Crypto List */}
               <div className="lg:col-span-1">
-                <Card className="h-full">
+                <Card className="h-full w-full min-w-0">
                   <CardHeader>
                     <CardTitle>Cryptocurrency Markets</CardTitle>
                     <div className="mt-3">
@@ -370,10 +373,12 @@ export default function Dashboard() {
                     <CardTitle>Price Chart</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <TradingViewWidget 
-                      symbol={selectedCrypto.replace('CRYPTO:', 'COINBASE:') + 'USD'} 
+                    <LightweightChartWidget
+                      symbol={selectedCrypto}
                       height={400}
                       showIntervalTabs={true}
+                      showVolume={true}
+                      className="p-4 w-full"
                     />
                   </CardContent>
                 </Card>

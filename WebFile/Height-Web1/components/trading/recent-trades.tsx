@@ -20,16 +20,8 @@ export function RecentTrades({ symbol }: RecentTradesProps) {
   const [trades, setTrades] = useState<Trade[]>([]);
 
   useEffect(() => {
-    // Generate mock trades for demo
-    const mockTrades: Trade[] = Array.from({ length: 50 }, (_, i) => ({
-      id: `trade-${i}`,
-      price: 51234.56 + (Math.random() - 0.5) * 100,
-      quantity: Math.random() * 2,
-      side: Math.random() > 0.5 ? "buy" : "sell",
-      timestamp: Date.now() - i * 1000 * Math.random() * 60,
-    }));
-
-    setTrades(mockTrades);
+    // Clear trades for empty history
+    setTrades([]);
   }, [symbol]);
 
   return (
@@ -59,7 +51,7 @@ export function RecentTrades({ symbol }: RecentTradesProps) {
                     ) : (
                       <ArrowDown className="h-3 w-3 mr-1" />
                     )}
-                    ₹{trade.price.toFixed(2)}
+                    ${trade.price.toFixed(2)}
                   </span>
                 </td>
                 <td className="text-right p-2">

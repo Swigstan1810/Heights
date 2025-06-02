@@ -2,14 +2,20 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function CryptoPage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    // Redirect to home page with crypto tab selected
-    router.push('/?tab=crypto');
-  }, [router]);
+    if (!loading && !user) {
+      router.push('/login');
+    } else if (!loading && user) {
+      // Redirect to home page with crypto tab selected
+      router.push('/?tab=crypto');
+    }
+  }, [router, user, loading]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">

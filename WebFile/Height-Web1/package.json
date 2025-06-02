@@ -60,6 +60,7 @@
     "ethers": "^6.14.0",
     "framer-motion": "^12.9.7",
     "input-otp": "^1.2.4",
+    "lightweight-charts": "^5.0.7",
     "lucide-react": "^0.446.0",
     "next": "13.5.1",
     "next-auth": "^4.24.11",

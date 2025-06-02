@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/navbar";
 import { marketDataService, type MarketData } from '@/lib/market-data';
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,62 @@ import {
   Shield,
   Zap,
   Users,
-  Award
+  Award,
+  Star,
+  DollarSign,
+  Lock,
+  LineChart,
+  Wallet
 } from "lucide-react";
 import Link from 'next/link';
+
+// Animated number component
+function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: { 
+  value: number; 
+  prefix?: string; 
+  suffix?: string; 
+  decimals?: number;
+}) {
+  const [displayValue, setDisplayValue] = useState(0);
+  
+  useEffect(() => {
+    const duration = 2000;
+    const steps = 60;
+    const stepValue = value / steps;
+    let current = 0;
+    
+    const timer = setInterval(() => {
+      current += stepValue;
+      if (current >= value) {
+        setDisplayValue(value);
+        clearInterval(timer);
+      } else {
+        setDisplayValue(current);
+      }
+    }, duration / steps);
+    
+    return () => clearInterval(timer);
+  }, [value]);
+  
+  return (
+    <span>
+      {prefix}{displayValue.toFixed(decimals)}{suffix}
+    </span>
+  );
+}
+
+// Floating animation variants
+const floatingAnimation = {
+  initial: { y: 0 },
+  animate: {
+    y: [-10, 10, -10],
+    transition: {
+      duration: 6,
+      repeat: Infinity,
+      ease: "easeInOut"
+    }
+  }
+};
 
 // Define the main asset categories
 const ASSET_CATEGORIES = [
@@ -62,11 +115,58 @@ const ASSET_CATEGORIES = [
   }
 ];
 
+const features = [
+  {
+    icon: Shield,
+    title: "Bank-Grade Security",
+    description: "Your funds are protected with industry-leading security measures",
+    color: "from-green-500 to-emerald-500"
+  },
+  {
+    icon: Zap,
+    title: "Lightning Fast",
+    description: "Execute trades in milliseconds with our high-performance engine",
+    color: "from-yellow-500 to-orange-500"
+  },
+  {
+    icon: Award,
+    title: "AI-Powered Insights",
+    description: "Get intelligent trading recommendations with Heights+ AI",
+    color: "from-purple-500 to-pink-500"
+  },
+  {
+    icon: Globe,
+    title: "Global Markets",
+    description: "Access international markets and diverse investment options",
+    color: "from-blue-500 to-cyan-500"
+  },
+  {
+    icon: Users,
+    title: "Expert Support",
+    description: "24/7 customer support from trading professionals",
+    color: "from-red-500 to-rose-500"
+  },
+  {
+    icon: Lock,
+    title: "Secure Wallet",
+    description: "Multi-signature wallet with cold storage protection",
+    color: "from-indigo-500 to-purple-500"
+  }
+];
+
 export default function Home() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
   const [loadingCrypto, setLoadingCrypto] = useState(true);
+  const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
+  const { scrollY } = useScroll();
+  
+  // Parallax transforms
+  const heroY = useTransform(scrollY, [0, 500], [0, -50]);
+  const heroOpacity = useTransform(scrollY, [0, 300], [1, 0]);
+  const bgY1 = useTransform(scrollY, [0, 500], [0, -100]);
+  const bgY2 = useTransform(scrollY, [0, 500], [0, -200]);
   
   // Real-time crypto prices from Coinbase
   useEffect(() => {
@@ -95,53 +195,195 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background relative overflow-hidden">
       <Navbar />
       
-      {/* Hero Section - TradingView Style */}
-      <section className="relative pt-24 pb-16 px-4 md:px-8 lg:px-16 overflow-hidden">
+      {/* Animated background elements */}
+      <div className="fixed inset-0 -z-10">
+        <motion.div
+          className="absolute top-20 left-[10%] w-96 h-96 bg-gradient-to-r from-primary/20 to-blue-600/20 rounded-full blur-3xl"
+          style={{ y: bgY1 }}
+          animate={{
+            scale: [1, 1.2, 1],
+            rotate: [0, 180, 360],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        />
+        <motion.div
+          className="absolute bottom-20 right-[10%] w-80 h-80 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"
+          style={{ y: bgY2 }}
+          animate={{
+            scale: [1.2, 1, 1.2],
+            rotate: [360, 180, 0],
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        />
+        
+        {/* Floating particles */}
+        {[...Array(20)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-1 h-1 bg-primary/30 rounded-full"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+            }}
+            animate={{
+              y: [-20, 20, -20],
+              x: [-10, 10, -10],
+              opacity: [0.3, 0.8, 0.3],
+            }}
+            transition={{
+              duration: 3 + Math.random() * 4,
+              repeat: Infinity,
+              delay: Math.random() * 2,
+              ease: "easeInOut"
+            }}
+          />
+        ))}
+      </div>
+      
+      {/* Hero Section with Parallax */}
+      <motion.section 
+        className="relative pt-24 pb-16 px-4 md:px-8 lg:px-16"
+      >
         <div className="max-w-7xl mx-auto">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            style={{ y: heroY, opacity: heroOpacity }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
             className="text-center mb-12"
           >
-            <h1 className="text-5xl md:text-6xl font-bold mb-4">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Trusted by over 100,000+ traders
+            </motion.div>
+            
+            <motion.h1 
+              className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.3 }}
+            >
               Trading at New{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">
+              <motion.span 
+                className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600 inline-block"
+                animate={{
+                  backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                }}
+                transition={{
+                  duration: 5,
+                  repeat: Infinity,
+                  ease: "linear"
+                }}
+                style={{
+                  backgroundSize: "200% 200%",
+                }}
+              >
                 Heights
-              </span>
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+              </motion.span>
+            </motion.h1>
+            
+            <motion.p 
+              className="text-xl text-muted-foreground max-w-3xl mx-auto"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.5 }}
+            >
               Professional trading platform with real-time data from global markets. 
               Trade crypto, stocks, and mutual funds all in one place.
-            </p>
+            </motion.p>
+            
+            {/* Animated stats */}
+            <motion.div 
+              className="flex flex-wrap justify-center gap-8 mt-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.7 }}
+            >
+              <div className="text-center">
+                <div className="text-3xl font-bold text-primary">
+                  <AnimatedNumber value={24} suffix="+" />
+                </div>
+                <div className="text-sm text-muted-foreground">Global Markets</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-primary">
+                  <AnimatedNumber value={100} suffix="K+" />
+                </div>
+                <div className="text-sm text-muted-foreground">Active Traders</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-primary">
+                  ₹<AnimatedNumber value={10} suffix="B+" />
+                </div>
+                <div className="text-sm text-muted-foreground">Daily Volume</div>
+              </div>
+            </motion.div>
           </motion.div>
 
-          {/* Asset Categories Grid */}
+          {/* Asset Categories Grid with Enhanced Animations */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
             {ASSET_CATEGORIES.map((category, index) => (
               <motion.div
                 key={category.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 50 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
+                transition={{ 
+                  duration: 0.6, 
+                  delay: index * 0.2,
+                  ease: "easeOut" 
+                }}
+                whileHover={{ 
+                  scale: 1.05,
+                  transition: { duration: 0.2 }
+                }}
                 className="relative group cursor-pointer"
                 onClick={() => handleCategoryClick(category)}
               >
-                <Card className={`relative overflow-hidden transition-all duration-300 ${category.borderColor} border-2 hover:shadow-xl ${
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg blur-xl"
+                  style={{
+                    backgroundImage: `linear-gradient(to right, var(--tw-gradient-stops))`,
+                    '--tw-gradient-from': category.color.split(' ')[1],
+                    '--tw-gradient-to': category.color.split(' ')[3],
+                  } as any}
+                />
+                
+                <Card className={`relative overflow-hidden transition-all duration-300 ${category.borderColor} border-2 hover:shadow-2xl ${
                   selectedCategory === category.id ? 'ring-2 ring-primary' : ''
                 }`}>
                   <div className={`absolute inset-0 bg-gradient-to-br ${category.color} opacity-5 group-hover:opacity-10 transition-opacity`} />
                   
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
-                      <div className={`p-3 rounded-lg ${category.bgColor}`}>
+                      <motion.div 
+                        className={`p-3 rounded-lg ${category.bgColor}`}
+                        whileHover={{ rotate: 360 }}
+                        transition={{ duration: 0.5 }}
+                      >
                         <category.icon className={`h-8 w-8 bg-gradient-to-br ${category.color} bg-clip-text text-transparent`} />
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                      </motion.div>
+                      <motion.div
+                        animate={{ x: [0, 5, 0] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </motion.div>
                     </div>
                     <CardTitle className="text-2xl mt-4">{category.title}</CardTitle>
                     <p className="text-muted-foreground mt-2">{category.subtitle}</p>
@@ -149,20 +391,29 @@ export default function Home() {
                   
                   <CardContent>
                     <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
+                      <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        transition={{ type: "spring", stiffness: 400 }}
+                      >
                         <p className="text-muted-foreground">Markets</p>
                         <p className="font-semibold">{category.stats.markets}</p>
-                      </div>
-                      <div>
+                      </motion.div>
+                      <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        transition={{ type: "spring", stiffness: 400 }}
+                      >
                         <p className="text-muted-foreground">Volume</p>
                         <p className="font-semibold">{category.stats.volume}</p>
-                      </div>
-                      <div>
+                      </motion.div>
+                      <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        transition={{ type: "spring", stiffness: 400 }}
+                      >
                         <p className="text-muted-foreground">24h</p>
                         <p className={`font-semibold ${category.stats.change?.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
                           {category.stats.change ?? '--'}
                         </p>
-                      </div>
+                      </motion.div>
                     </div>
                   </CardContent>
                 </Card>
@@ -170,99 +421,244 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Live Crypto Ticker */}
+          {/* Live Crypto Ticker with Enhanced Animation */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
+            transition={{ duration: 0.8, delay: 0.8 }}
             className="mb-16"
           >
-            <h2 className="text-2xl font-bold mb-6">Live Cryptocurrency Prices</h2>
-            <div className="bg-card rounded-lg border p-4">
-              {loadingCrypto ? (
-                <div className="flex items-center justify-center py-8">
-                  <Activity className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">Connecting to Coinbase...</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  {Array.from(cryptoData.entries()).map(([symbol, data]) => (
-                    <div key={symbol} className="text-center p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                         onClick={() => router.push('/dashboard?tab=crypto')}>
-                      <p className="font-semibold">{symbol.split(':')[1]}/USD</p>
-                      <p className="text-xl font-bold">${data.price.toLocaleString()}</p>
-                      <p className={`text-sm flex items-center justify-center ${
-                        data.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'
-                      }`}>
-                        {data.change24hPercent >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                        {Math.abs(data.change24hPercent).toFixed(2)}%
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <motion.h2 
+              className="text-2xl font-bold mb-6 flex items-center gap-2"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <Activity className="h-6 w-6 text-primary" />
+              Live Cryptocurrency Prices
+            </motion.h2>
+            
+            <motion.div 
+              className="bg-card rounded-lg border p-4"
+              initial={{ borderColor: "rgba(0,0,0,0.1)" }}
+              animate={{ borderColor: ["rgba(0,0,0,0.1)", "rgba(var(--primary-rgb),0.3)", "rgba(0,0,0,0.1)"] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            >
+              <AnimatePresence mode="wait">
+                {loadingCrypto ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center justify-center py-8"
+                  >
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <Activity className="h-6 w-6 text-primary" />
+                    </motion.div>
+                    <span className="ml-2 text-muted-foreground">Connecting to Coinbase...</span>
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ staggerChildren: 0.1 }}
+                  >
+                    {Array.from(cryptoData.entries()).map(([symbol, data], index) => (
+                      <motion.div 
+                        key={symbol} 
+                        className="text-center p-3 rounded-lg hover:bg-muted/50 transition-all cursor-pointer relative overflow-hidden group"
+                        onClick={() => router.push('/dashboard?tab=crypto')}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        whileHover={{ scale: 1.05, backgroundColor: "rgba(var(--primary-rgb),0.1)" }}
+                      >
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent"
+                          initial={{ x: "-100%" }}
+                          whileHover={{ x: "100%" }}
+                          transition={{ duration: 0.5 }}
+                        />
+                        
+                        <p className="font-semibold relative z-10">{symbol.split(':')[1]}/USD</p>
+                        <motion.p 
+                          className="text-xl font-bold relative z-10"
+                          animate={{ scale: [1, 1.02, 1] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        >
+                          ${data.price.toLocaleString()}
+                        </motion.p>
+                        <p className={`text-sm flex items-center justify-center relative z-10 ${
+                          data.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'
+                        }`}>
+                          {data.change24hPercent >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                          {Math.abs(data.change24hPercent).toFixed(2)}%
+                        </p>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+
+          {/* Features Section with Card Animations */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 1 }}
+          >
+            <motion.h2 
+              className="text-3xl font-bold mb-8 text-center"
+              initial={{ opacity: 0, y: -20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              Why Choose Heights?
+            </motion.h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {features.map((feature, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 50 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  onMouseEnter={() => setHoveredFeature(index)}
+                  onMouseLeave={() => setHoveredFeature(null)}
+                >
+                  <Card className="text-center h-full relative overflow-hidden group cursor-pointer hover:shadow-xl transition-all duration-300">
+                    <motion.div
+                      className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
+                    />
+                    
+                    <CardContent className="pt-6 relative z-10">
+                      <motion.div
+                        className="relative inline-block"
+                        animate={hoveredFeature === index ? floatingAnimation.animate : {}}
+                        initial={floatingAnimation.initial}
+                      >
+                        <motion.div
+                          className={`absolute inset-0 bg-gradient-to-br ${feature.color} blur-xl opacity-50`}
+                          animate={{
+                            scale: hoveredFeature === index ? [1, 1.5, 1] : 1,
+                          }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        />
+                        <feature.icon className="h-12 w-12 mx-auto mb-4 text-primary relative z-10" />
+                      </motion.div>
+                      
+                      <motion.h3 
+                        className="font-semibold mb-2"
+                        animate={{
+                          scale: hoveredFeature === index ? 1.05 : 1,
+                        }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {feature.title}
+                      </motion.h3>
+                      
+                      <p className="text-sm text-muted-foreground">{feature.description}</p>
+                      
+                      {/* Animated background pattern */}
+                      <motion.div
+                        className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          backgroundImage: `linear-gradient(to right, var(--tw-gradient-stops))`,
+                          '--tw-gradient-from': feature.color.split(' ')[1],
+                          '--tw-gradient-to': feature.color.split(' ')[3],
+                        } as any}
+                        animate={{
+                          scaleX: hoveredFeature === index ? [0, 1] : 0,
+                        }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
 
-          {/* Features Section */}
+          {/* CTA Section with Pulse Animation */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mt-20"
           >
-            <h2 className="text-2xl font-bold mb-6 text-center">Why Choose Heights?</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="text-center">
-                <CardContent className="pt-6">
-                  <Shield className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="font-semibold mb-2">Bank-Grade Security</h3>
-                  <p className="text-sm text-muted-foreground">Your funds are protected with industry-leading security measures</p>
-                </CardContent>
-              </Card>
+            <motion.div
+              className="relative inline-block"
+              whileHover={{ scale: 1.05 }}
+              transition={{ type: "spring", stiffness: 400 }}
+            >
+              <motion.div
+                className="absolute inset-0 bg-primary blur-xl opacity-50"
+                animate={{
+                  scale: [1, 1.2, 1],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                }}
+              />
               
-              <Card className="text-center">
-                <CardContent className="pt-6">
-                  <Zap className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="font-semibold mb-2">Lightning Fast</h3>
-                  <p className="text-sm text-muted-foreground">Execute trades in milliseconds with our high-performance engine</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="text-center">
-                <CardContent className="pt-6">
-                  <Award className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="font-semibold mb-2">AI-Powered Insights</h3>
-                  <p className="text-sm text-muted-foreground">Get intelligent trading recommendations with Heights+ AI</p>
-                </CardContent>
-              </Card>
-            </div>
-          </motion.div>
-
-          {/* CTA Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="text-center mt-16"
-          >
-            <Link href="/signup">
-              <Button size="lg" className="text-lg px-8">
-                Start Trading Now
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
-            <p className="text-sm text-muted-foreground mt-4">
-              Join 100,000+ traders already using Heights
-            </p>
+              <Link href="/signup">
+                <Button size="lg" className="text-lg px-8 relative z-10 group">
+                  <span className="relative z-10">Start Trading Now</span>
+                  <motion.div
+                    className="absolute right-6 top-1/2 -translate-y-1/2"
+                    animate={{ x: [0, 5, 0] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  >
+                    <ArrowRight className="h-5 w-5" />
+                  </motion.div>
+                </Button>
+              </Link>
+            </motion.div>
+            
+            <motion.p 
+              className="text-sm text-muted-foreground mt-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              Join <AnimatedNumber value={100000} prefix="" suffix="+" /> traders already using Heights
+            </motion.p>
+            
+            {/* Trust badges with floating animation */}
+            <motion.div 
+              className="flex justify-center gap-8 mt-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              {[Shield, Lock, Award].map((Icon, index) => (
+                <motion.div
+                  key={index}
+                  className="text-muted-foreground"
+                  animate={{
+                    y: [0, -5, 0],
+                  }}
+                  transition={{
+                    duration: 2,
+                    delay: index * 0.2,
+                    repeat: Infinity,
+                  }}
+                >
+                  <Icon className="h-8 w-8" />
+                </motion.div>
+              ))}
+            </motion.div>
           </motion.div>
         </div>
-
-        {/* Background decoration */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 opacity-30">
-          <div className="absolute top-10 left-[10%] w-64 h-64 bg-primary/20 rounded-full filter blur-3xl" />
-          <div className="absolute bottom-10 right-[10%] w-80 h-80 bg-blue-500/20 rounded-full filter blur-3xl" />
-        </div>
-      </section>
+      </motion.section>
     </main>
   );
 }

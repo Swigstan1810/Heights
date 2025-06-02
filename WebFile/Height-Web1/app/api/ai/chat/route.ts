@@ -1,12 +1,7 @@
-<<<<<<< HEAD
 // app/api/ai/chat/route.ts
 import { NextResponse } from 'next/server';
 import { anthropic, formatConversationForClaude, TRADING_SYSTEM_PROMPT } from '@/lib/claude-api';
 import { marketDataService } from '@/lib/market-data';
-=======
-import { NextResponse } from 'next/server';
-import { anthropic, formatConversationForClaude, TRADING_SYSTEM_PROMPT } from '@/lib/claude-api';
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
 
 export async function POST(request: Request) {
   try {
@@ -17,11 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
     
-<<<<<<< HEAD
     // Format conversation history for Claude
-=======
-    // Format conversation history for Claude - now correctly handling system message
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
     const messages = history || [];
     
     // Add the new user message
@@ -30,11 +21,7 @@ export async function POST(request: Request) {
       content: message
     });
     
-<<<<<<< HEAD
     // Format messages for Claude API
-=======
-    // Format messages for Claude API - this will now filter out system messages
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
     const formattedMessages = formatConversationForClaude(messages);
     
     try {
@@ -42,7 +29,6 @@ export async function POST(request: Request) {
       if (!process.env.ANTHROPIC_API_KEY) {
         throw new Error("ANTHROPIC_API_KEY is not set");
       }
-<<<<<<< HEAD
 
       // Get real-time market data context if available
       let marketContext = '';
@@ -71,20 +57,10 @@ ${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hP
         max_tokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "1500", 10),
         system: enhancedSystemPrompt,
         messages: formattedMessages,
-=======
-      
-      // Call Claude API with the system message as a top-level parameter
-      const completion = await anthropic.messages.create({
-        model: process.env.CLAUDE_MODEL || "claude-3-opus-20240229",
-        max_tokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "1000", 10),
-        system: TRADING_SYSTEM_PROMPT, // System prompt as a top-level parameter
-        messages: formattedMessages, // Only user and assistant messages
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
         temperature: parseFloat(process.env.CLAUDE_TEMPERATURE || "0.7"),
       });
       
       // Extract and return Claude's response
-<<<<<<< HEAD
       const responseText = completion.content[0].type === 'text' ? (completion.content[0] as { text: string }).text : '';
       
       // Analyze response for trading signals
@@ -101,32 +77,17 @@ ${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hP
           usage: completion.usage,
           containsTradingSignal,
           timestamp: new Date().toISOString()
-=======
-      return NextResponse.json({ 
-        message: completion.content[0].type === 'text' ? (completion.content[0] as { text: string }).text : '',
-        metadata: {
-          model: completion.model,
-          usage: completion.usage
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
         }
       });
       
     } catch (apiError: any) {
       console.error('Error calling Claude API:', apiError);
       
-<<<<<<< HEAD
       // Enhanced fallback response with market awareness
       return NextResponse.json({ 
         message: getEnhancedFallbackResponse(message),
         metadata: {
           source: "enhanced_fallback",
-=======
-      // Fallback to simulated response if there's an API error
-      return NextResponse.json({ 
-        message: getSimulatedResponse(message),
-        metadata: {
-          source: "fallback_simulation",
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
           error: apiError.message
         }
       });
@@ -140,7 +101,6 @@ ${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hP
   }
 }
 
-<<<<<<< HEAD
 // Enhanced fallback response function with better trading intelligence
 function getEnhancedFallbackResponse(userMessage: string): string {
   const lowercaseMessage = userMessage.toLowerCase();
@@ -208,36 +168,4 @@ function getEnhancedFallbackResponse(userMessage: string): string {
 • Cryptocurrency and stock market education
 
 Please feel free to ask me anything specific about trading, markets, or using the Heights platform. What would you like to know more about?`;
-=======
-// Simulated response function - fallback when API is unavailable
-function getSimulatedResponse(userMessage: string): string {
-  const lowercaseMessage = userMessage.toLowerCase();
-  
-  if (lowercaseMessage.includes("hello") || lowercaseMessage.includes("hi")) {
-    return "Hello! How can I help with your trading today?";
-  }
-  
-  if (lowercaseMessage.includes("kyc")) {
-    return "KYC (Know Your Customer) verification is required before you can start trading. You can complete this process by navigating to your profile and providing the required documentation.";
-  }
-  
-  if (lowercaseMessage.includes("crypto")) {
-    return "Heights offers cryptocurrency trading with real-time market data. You can access a wide range of cryptocurrencies including Bitcoin, Ethereum, and more. Would you like to see the current market status?";
-  }
-  
-  if (lowercaseMessage.includes("stock")) {
-    return "Heights provides access to Indian stock markets with instant execution and live updates. You can view market trends and place orders directly from your dashboard. Would you like me to guide you through the stock trading interface?";
-  }
-  
-  if (lowercaseMessage.includes("wallet") || lowercaseMessage.includes("connect")) {
-    return "To connect your wallet, navigate to the Crypto page and click on 'Connect Wallet'. Heights currently supports MetaMask and other Ethereum-compatible wallets.";
-  }
-  
-  if (lowercaseMessage.includes("fee") || lowercaseMessage.includes("charge") || lowercaseMessage.includes("commission")) {
-    return "Heights offers competitive pricing with low transaction fees. For cryptocurrency trades, we charge 0.1% per transaction. For stock trades, the fee is ₹20 per executed order or 0.05%, whichever is lower.";
-  }
-  
-  // Default response
-  return "I understand you're asking about \"" + userMessage + "\". As your trading assistant, I'm here to help with questions about cryptocurrency, stocks, account management, and market insights. Could you provide more details so I can assist you better?";
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
 }

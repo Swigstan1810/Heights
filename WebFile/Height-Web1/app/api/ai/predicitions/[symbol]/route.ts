@@ -100,7 +100,6 @@ export async function GET(
   const symbol = params.symbol.toUpperCase();
   
   try {
-<<<<<<< HEAD
     // Get real-time market data
     let marketData;
     try {
@@ -167,48 +166,12 @@ export async function GET(
       const completion = await anthropic.messages.create({
         model: "claude-3-opus-20240229",
         max_tokens: 2000,
-=======
-    let stockData;
-    
-    // Try to get real stock data using Python script
-    try {
-      // Uncomment this when you have your Python script ready
-      // const { stdout, stderr } = await execPromise(`python predict.py --symbol ${symbol} --data_only true`);
-      // if (stderr && !stderr.includes('WARNING')) {
-      //   throw new Error(`Error from Python script: ${stderr}`);
-      // }
-      // stockData = JSON.parse(stdout);
-      
-      // For now, we'll use simulated data
-      stockData = getSimulatedStockData(symbol);
-    } catch (execError) {
-      console.warn('Error getting stock data, using simulated data:', execError);
-      stockData = getSimulatedStockData(symbol);
-    }
-    
-    // Check if we have the API key
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error("ANTHROPIC_API_KEY is not set");
-    }
-    
-    try {
-      // Replace placeholders in the prompt
-      const customizedPrompt = PREDICTION_PROMPT
-        .replace('{SYMBOL}', symbol)
-        + '\n\n' + JSON.stringify(stockData, null, 2);
-      
-      // Call Claude API for prediction analysis
-      const completion = await anthropic.messages.create({
-        model: "claude-3-opus-20240229", // Or your preferred Claude model
-        max_tokens: 1000,
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
         messages: [
           {
             role: "user", 
             content: customizedPrompt
           }
         ],
-<<<<<<< HEAD
         temperature: 0.3, // Lower temperature for more consistent predictions
       });
 
@@ -240,60 +203,17 @@ export async function GET(
       console.error('Error calling Claude API:', claudeError);
       // Fall back to basic prediction
       return NextResponse.json(generateBasicPrediction(symbol, marketData));
-=======
-        temperature: 0.2, // Lower temperature for more consistent predictions
-      });
-      
-      // Extract Claude's JSON response
-      let prediction;
-      try {
-        // Try to parse Claude's response as JSON
-        const responseText = completion.content[0].type === 'text' ? (completion.content[0] as { text: string }).text : '';
-        prediction = JSON.parse(responseText);
-        
-        // Ensure all required fields are present
-        const requiredFields = [
-          'symbol', 'current_price', 'predicted_price', 'change', 
-          'percent_change', 'confidence', 'prediction_date'
-        ];
-        
-        for (const field of requiredFields) {
-          if (!(field in prediction)) {
-            throw new Error(`Missing required field: ${field}`);
-          }
-        }
-        
-        return NextResponse.json(prediction);
-      } catch (parseError) {
-        console.error('Error parsing Claude response:', parseError);
-        console.log('Raw Claude response:', completion.content[0].type === 'text' ? (completion.content[0] as { text: string }).text : '');
-        
-        // Fall back to simulated prediction
-        return NextResponse.json(getSimulatedPrediction(symbol));
-      }
-      
-    } catch (claudeError) {
-      console.error('Error calling Claude API for prediction:', claudeError);
-      // Fall back to simulated prediction
-      return NextResponse.json(getSimulatedPrediction(symbol));
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
     }
     
   } catch (error: any) {
     console.error(`Error in prediction API:`, error);
     return NextResponse.json({ 
-<<<<<<< HEAD
       error: 'Failed to generate prediction',
       message: error.message 
-=======
-      error: error.message || 'Failed to generate prediction',
-      fallback: getSimulatedPrediction(symbol)
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
     }, { status: 500 });
   }
 }
 
-<<<<<<< HEAD
 // Generate a basic prediction when Claude is unavailable
 function generateBasicPrediction(symbol: string, marketData: any) {
   const currentPrice = marketData.price;
@@ -360,142 +280,5 @@ function generateBasicPrediction(symbol: string, marketData: any) {
       dataSource: "coinbase",
       analysisType: "simplified"
     }
-=======
-// Helper function to generate simulated stock data
-function getSimulatedStockData(symbol: string) {
-  // Create realistic looking historical data
-  const basePrice = getBasePrice(symbol);
-  const dates = getLast5TradingDays();
-  
-  const historicalData: HistoricalDataPoint[] = dates.map((date, index) => {
-    // Create some random but plausible price movements
-    const volatility = 0.02;  // 2% daily volatility
-    const dayOffset = index === 0 ? 0 : (Math.random() * 2 - 1) * volatility * basePrice;
-    const prevPrice: number = index === 0 ? basePrice : historicalData[index-1].close;
-    const close: number = prevPrice + dayOffset;
-    
-    // Generate intraday range
-    const high: number = close * (1 + Math.random() * 0.01);  // Up to 1% higher
-    const low: number = close * (1 - Math.random() * 0.01);   // Up to 1% lower
-    const open: number = low + Math.random() * (high - low);  // Random opening price within range
-    
-    // Random volume between 100k and 10M
-    const volume: number = Math.floor(100000 + Math.random() * 9900000);
-    
-    return {
-      date,
-      open: parseFloat(open.toFixed(2)),
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      close: parseFloat(close.toFixed(2)),
-      volume
-    };
-  });
-  
-  return {
-    symbol,
-    historical_data: historicalData,
-    market_cap: getMarketCap(symbol, historicalData[historicalData.length-1].close),
-    pe_ratio: 15 + Math.random() * 25,  // Random P/E between 15 and 40
-    sector: getSector(symbol),
-    current_price: historicalData[historicalData.length-1].close
-  };
-}
-
-// Helper to get last 5 trading days
-function getLast5TradingDays() {
-  const dates = [];
-  const today = new Date();
-  let date = new Date(today);
-  
-  // Go back 5 trading days (excluding weekends)
-  while (dates.length < 5) {
-    date = new Date(date.setDate(date.getDate() - 1));
-    // Skip weekends (0 = Sunday, 6 = Saturday)
-    if (date.getDay() !== 0 && date.getDay() !== 6) {
-      dates.unshift(date.toISOString().split('T')[0]);
-    }
-  }
-  
-  return dates;
-}
-
-// Helper to get base price for symbol
-function getBasePrice(symbol: string) {
-  // Return plausible starting prices based on symbol
-  const prices: {[key: string]: number} = {
-    'AAPL': 170,
-    'MSFT': 320,
-    'GOOGL': 130,
-    'AMZN': 140,
-    'META': 280,
-    'TSLA': 200,
-    'NFLX': 550,
-    'NVDA': 400,
-    'PYPL': 70,
-    'INTC': 35
-  };
-  
-  // Return price for symbol or random price
-  return prices[symbol] || 50 + Math.random() * 200;
-}
-
-// Helper to get sector for symbol
-function getSector(symbol: string) {
-  const sectors: {[key: string]: string} = {
-    'AAPL': 'Technology',
-    'MSFT': 'Technology',
-    'GOOGL': 'Technology',
-    'AMZN': 'Consumer Cyclical',
-    'META': 'Technology',
-    'TSLA': 'Automotive',
-    'NFLX': 'Entertainment',
-    'NVDA': 'Technology',
-    'PYPL': 'Financial Services',
-    'INTC': 'Technology'
-  };
-  
-  return sectors[symbol] || 'Technology';
-}
-
-// Helper to calculate market cap
-function getMarketCap(symbol: string, price: number) {
-  const sharesOutstanding: {[key: string]: number} = {
-    'AAPL': 16.5,  // billion
-    'MSFT': 7.4,
-    'GOOGL': 12.5,
-    'AMZN': 10.2,
-    'META': 2.8,
-    'TSLA': 3.2,
-    'NFLX': 0.44,
-    'NVDA': 2.4,
-    'PYPL': 1.1,
-    'INTC': 4.2
-  };
-  
-  const shares = sharesOutstanding[symbol] || 1 + Math.random() * 5;  // 1-6 billion shares
-  return (shares * price).toFixed(2) + "B";
-}
-
-// Function to generate a simulated prediction
-function getSimulatedPrediction(symbol: string) {
-  const currentPrice = getBasePrice(symbol);
-  const direction = Math.random() > 0.5 ? 1 : -1;
-  const percentChange = direction * (Math.random() * 3);  // -3% to +3%
-  const change = currentPrice * (percentChange / 100);
-  const predictedPrice = currentPrice + change;
-  
-  return {
-    symbol,
-    current_price: parseFloat(currentPrice.toFixed(2)),
-    predicted_price: parseFloat(predictedPrice.toFixed(2)),
-    change: parseFloat(change.toFixed(2)),
-    percent_change: parseFloat(percentChange.toFixed(2)),
-    confidence: parseFloat((0.5 + Math.random() * 0.3).toFixed(2)),
-    prediction_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    model_used: "simulated_prediction",
-    prediction_type: "next_day_close",
-    analysis: "This is a simulated prediction based on random data."
->>>>>>> 016f08c0876be523f2a572c92d2c2da6438ff007
   };
 }
