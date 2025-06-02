@@ -5,26 +5,19 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Navbar } from "@/components/navbar";
-import { TradingAssistant } from "@/components/ai-assistant";
 import { marketDataService, type MarketData } from "@/lib/market-data";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { 
-  ArrowUpRight, 
   ArrowDownRight, 
   Wallet, 
   LineChart, 
-  Brain,
   TrendingUp,
-  Sparkles,
   Loader2,
   Bitcoin,
-  Activity,
   Search,
-  Star,
-  Plus
+  Star
 } from "lucide-react";
 import { AssistantButton } from '@/components/ai-assistant';
 import LightweightChartWidget from '@/components/trading/lightweight-chart-widget';
@@ -36,7 +29,6 @@ export default function Dashboard() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'crypto');
   const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
-  const [isLoadingMarketData, setIsLoadingMarketData] = useState(true);
   const [selectedCrypto, setSelectedCrypto] = useState('CRYPTO:BTC');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['CRYPTO:BTC', 'CRYPTO:ETH']));
@@ -59,10 +51,10 @@ export default function Dashboard() {
     { symbol: 'CRYPTO:UNI', name: 'Uniswap', icon: 'U' },
     { symbol: 'CRYPTO:AAVE', name: 'Aave', icon: 'Aa' },
   ];
-
+  
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login");
+        router.push("/login");
     }
   }, [user, loading, router]);
 
@@ -77,7 +69,6 @@ export default function Dashboard() {
       CRYPTO_LIST.forEach(crypto => {
         const unsubscribe = marketDataService.subscribe(crypto.symbol, (data) => {
           setCryptoData(prev => new Map(prev).set(crypto.symbol, data));
-          setIsLoadingMarketData(false);
         });
         unsubscribes.push(unsubscribe);
       });
@@ -87,7 +78,7 @@ export default function Dashboard() {
       };
     }
   }, [user]);
-
+  
   // Filter cryptos based on search
   const filteredCryptos = CRYPTO_LIST.filter(crypto => 
     crypto.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -133,7 +124,7 @@ export default function Dashboard() {
             <AssistantButton />
           </div>
         </div>
-
+        
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
@@ -385,7 +376,7 @@ export default function Dashboard() {
               </div>
             </div>
           </TabsContent>
-
+          
           {/* Stocks Tab */}
           <TabsContent value="stocks">
             <Card>
@@ -404,7 +395,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </TabsContent>
-
+          
           {/* Mutual Funds Tab */}
           <TabsContent value="mutual-funds">
             <Card>

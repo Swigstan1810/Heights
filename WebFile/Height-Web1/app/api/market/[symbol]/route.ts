@@ -24,16 +24,11 @@ export async function GET(
     
     return NextResponse.json(marketData);
     
-  } catch (error: any) {
-    console.error(`Error fetching market data: ${error.message}`);
-    
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to fetch market data',
-        message: error.message 
-      }, 
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    } else {
+      return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    }
   }
 }

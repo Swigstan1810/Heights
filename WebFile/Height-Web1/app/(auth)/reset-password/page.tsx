@@ -25,7 +25,7 @@ export default function ResetPassword() {
       const hash = window.location.hash;
       if (hash && hash.includes('access_token')) {
         // Supabase Auth will handle this automatically if the user is on this page
-        const { data, error } = await supabase.auth.getSession();
+        const { error } = await supabase.auth.getSession();
         
         if (error) {
           setError("Invalid or expired reset token. Please try again.");
@@ -74,8 +74,12 @@ export default function ResetPassword() {
           router.push("/login");
         }, 3000);
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred while resetting your password");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred while resetting your password");
+      }
     } finally {
       setLoading(false);
     }

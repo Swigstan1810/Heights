@@ -12,7 +12,7 @@ export function MainChart() {
   const [mounted, setMounted] = useState(false);
   const [activeRange, setActiveRange] = useState<TimeRange>("1M");
   const [trend, setTrend] = useState<"up" | "down" | "volatile">("up");
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<{ date: string; value: number }[]>([]);
   const [priceChange, setPriceChange] = useState(0);
   const [isPositive, setIsPositive] = useState(true);
   const [minValue, setMinValue] = useState(0);

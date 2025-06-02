@@ -7,19 +7,15 @@ import {
   ColorType, 
   IChartApi, 
   ISeriesApi,
-  Time,
-  UTCTimestamp,
-  BusinessDay,
   CandlestickData,
   HistogramData,
   MouseEventParams,
-  CrosshairMode
+  UTCTimestamp
 } from 'lightweight-charts';
 import { useTheme } from "next-themes";
 import { marketDataService } from '@/lib/market-data';
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
 interface LightweightChartWidgetProps {
   symbol: string;
@@ -27,11 +23,6 @@ interface LightweightChartWidgetProps {
   showIntervalTabs?: boolean;
   showVolume?: boolean;
   className?: string;
-}
-
-interface PriceData {
-  value: number;
-  time: UTCTimestamp;
 }
 
 function LightweightChartWidget({
@@ -68,16 +59,16 @@ function LightweightChartWidget({
             open: data.price,
             high: data.high24h,
             low: data.low24h,
-            close: data.price,
+          close: data.price,
           });
-          
-          // Update volume if we have volume series
+        
+        // Update volume if we have volume series
           if (volumeSeries.current && showVolume) {
-            volumeSeries.current.update({
+          volumeSeries.current.update({
               time: currentTime,
-              value: data.volume24h,
+            value: data.volume24h,
               color: data.change24hPercent >= 0 ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
-            });
+          });
           }
         } catch (err) {
           console.error('Error updating real-time data:', err);
@@ -195,12 +186,12 @@ function LightweightChartWidget({
 
         // Add candlestick series (v5+ API)
         candleSeries.current = newChart.addSeries<'Candlestick'>('Candlestick' as any, {
-          upColor: '#26a69a',
-          downColor: '#ef5350',
-          borderVisible: false,
-          wickUpColor: '#26a69a',
-          wickDownColor: '#ef5350',
-          priceFormat: {
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderVisible: false,
+      wickUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+        priceFormat: {
             type: 'price',
             precision: symbol.includes('BTC') ? 2 : 4,
             minMove: 0.01,
@@ -215,7 +206,7 @@ function LightweightChartWidget({
             // @ts-expect-error: scaleMargins is accepted by lightweight-charts at runtime
             scaleMargins: { top: 0.7, bottom: 0 },
           }) as ISeriesApi<'Histogram'>;
-        }
+    }
 
         // Subscribe to crosshair move
         newChart.subscribeCrosshairMove((param: MouseEventParams) => {
@@ -239,16 +230,16 @@ function LightweightChartWidget({
           }
         });
 
-        // Handle resize
-        const handleResize = () => {
-          if (chart.current && chartContainerRef.current) {
-            chart.current.applyOptions({ 
-              width: chartContainerRef.current.clientWidth 
-            });
-          }
-        };
+    // Handle resize
+    const handleResize = () => {
+      if (chart.current && chartContainerRef.current) {
+        chart.current.applyOptions({ 
+          width: chartContainerRef.current.clientWidth 
+        });
+      }
+    };
 
-        window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize);
 
         // Initial data fetch
         setTimeout(() => {
@@ -293,28 +284,28 @@ function LightweightChartWidget({
     const isDark = theme === 'dark';
     
     try {
-      chart.current.applyOptions({
-        layout: {
-          background: { type: ColorType.Solid, color: isDark ? '#0a0a0a' : '#ffffff' },
-          textColor: isDark ? '#d1d5db' : '#374151',
-        },
-        grid: {
-          vertLines: {
+    chart.current.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: isDark ? '#0a0a0a' : '#ffffff' },
+        textColor: isDark ? '#d1d5db' : '#374151',
+      },
+      grid: {
+        vertLines: {
             color: isDark ? 'rgba(31, 41, 55, 0.5)' : 'rgba(229, 231, 235, 0.5)',
-          },
-          horzLines: {
+        },
+        horzLines: {
             color: isDark ? 'rgba(31, 41, 55, 0.5)' : 'rgba(229, 231, 235, 0.5)',
           },
         },
         crosshair: {
           vertLine: {
             color: isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.5)',
-          },
+      },
           horzLine: {
             color: isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.5)',
-          },
-        },
-      });
+      },
+      },
+    });
     } catch (err) {
       console.error('Error updating theme:', err);
     }
@@ -353,8 +344,8 @@ function LightweightChartWidget({
                 )}
               </div>
             )}
-            <div className="text-sm text-muted-foreground">
-              {symbol.replace('CRYPTO:', '')} / USD
+          <div className="text-sm text-muted-foreground">
+            {symbol.replace('CRYPTO:', '')} / USD
             </div>
           </div>
         </div>

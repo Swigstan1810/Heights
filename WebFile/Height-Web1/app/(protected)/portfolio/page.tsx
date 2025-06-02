@@ -193,7 +193,7 @@ export default function PortfolioPage() {
                 </tr>
               </thead>
               <tbody>
-                {marketData.map((asset, index) => {
+                {marketData.map((asset) => {
                   const quantity = (Math.random() * 10).toFixed(4);
                   const avgBuyPrice = asset.price * (0.8 + Math.random() * 0.4);
                   const value = asset.price * parseFloat(quantity);

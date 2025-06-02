@@ -50,9 +50,12 @@ export default function Login() {
         console.log("Sign in successful, redirecting to dashboard");
         router.push("/dashboard");
       }
-    } catch (err: any) {
-      console.error("Unexpected error during login:", err);
-      setError(err.message || "An error occurred during login");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred during login");
+      }
     } finally {
       setLoading(false);
     }

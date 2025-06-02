@@ -80,7 +80,7 @@ ${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hP
         }
       });
       
-    } catch (apiError: any) {
+    } catch (apiError: unknown) {
       console.error('Error calling Claude API:', apiError);
       
       // Enhanced fallback response with market awareness
@@ -88,15 +88,15 @@ ${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hP
         message: getEnhancedFallbackResponse(message),
         metadata: {
           source: "enhanced_fallback",
-          error: apiError.message
+          error: apiError instanceof Error ? apiError.message : 'An unknown error occurred'
         }
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Error processing request: ${error}`);
     return NextResponse.json({ 
       error: 'Failed to process message',
-      message: error.message 
+      message: error instanceof Error ? error.message : 'An unknown error occurred'
     }, { status: 500 });
   }
 }

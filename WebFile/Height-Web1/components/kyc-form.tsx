@@ -10,7 +10,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   AlertCircle, 
@@ -79,7 +78,7 @@ export function KycForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
-  const { user, setKycCompleted, setKycSubmitted } = useAuth();
+  const { user } = useAuth();
   
   const form = useForm<KycFormValues>({
     resolver: zodResolver(kycFormSchema),
@@ -136,15 +135,12 @@ export function KycForm() {
       }
       
       // Mark KYC as submitted but pending verification
-      // Update local state first
-      setKycSubmitted(true);
-      
       setSuccess("KYC verification submitted successfully! Your information will be reviewed within 1-3 business days.");
       setTimeout(() => {
         router.push('/dashboard');
       }, 3000);
-    } catch (err: any) {
-      setError(err.message || "An error occurred while submitting KYC details");
+    } catch (err: unknown) {
+      setError((err as Error)?.message || "An error occurred while submitting KYC details");
     } finally {
       setLoading(false);
     }

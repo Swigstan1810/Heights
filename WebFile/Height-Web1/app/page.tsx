@@ -419,8 +419,8 @@ export default function Home() {
                 </Card>
               </motion.div>
             ))}
-          </div>
-
+      </div>
+      
           {/* Live Crypto Ticker with Enhanced Animation */}
           <motion.div
             initial={{ opacity: 0, y: 50 }}

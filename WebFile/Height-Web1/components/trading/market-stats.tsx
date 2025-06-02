@@ -1,7 +1,7 @@
 "use client";
 
 import { MarketData } from "@/lib/market-data";
-import { TrendingUp, TrendingDown, Activity, BarChart3 } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface MarketStatsProps {
   symbol: string;

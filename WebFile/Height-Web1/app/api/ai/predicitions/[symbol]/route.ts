@@ -205,12 +205,12 @@ export async function GET(
       return NextResponse.json(generateBasicPrediction(symbol, marketData));
     }
     
-  } catch (error: any) {
-    console.error(`Error in prediction API:`, error);
-    return NextResponse.json({ 
-      error: 'Failed to generate prediction',
-      message: error.message 
-    }, { status: 500 });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    } else {
+      return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    }
   }
 }
 

@@ -10,14 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Send, 
   Brain, 
-  TrendingUp, 
-  TrendingDown,
-  AlertCircle,
-  Loader2,
   ChartBar,
-  DollarSign,
   Activity,
-  RefreshCw
+  Loader2,
 } from 'lucide-react';
 import { marketDataService, type MarketData } from '@/lib/market-data';
 
@@ -27,14 +22,14 @@ interface Message {
   timestamp: Date;
   metadata?: {
     marketData?: MarketData[];
-    predictions?: any;
+    predictions?: unknown;
     confidence?: number;
   };
 }
 
 interface EnhancedAIAssistantProps {
   defaultSymbol?: string;
-  onTradeRecommendation?: (recommendation: any) => void;
+  onTradeRecommendation?: (recommendation: unknown) => void;
 }
 
 export function EnhancedAIAssistant({ 

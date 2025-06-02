@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) {
+        if (session?.user) {
         checkKycStatus(session.user.id);
       }
       setLoading(false);
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         checkKycStatus(session.user.id);
-      }
+            }
       console.log('[AuthProvider] onAuthStateChange:', event, session);
     });
 
@@ -49,14 +49,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkKycStatus = async (userId: string) => {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('kyc_completed')
+            .from('profiles')
+            .select('kyc_completed')
       .eq('id', userId)
-      .single();
-    
+            .single();
+          
     if (data) {
       setKycCompleted(data.kyc_completed || false);
-    }
+        }
   };
 
   const signIn = async (email: string, password: string) => {
@@ -72,18 +72,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+      await supabase.auth.signOut();
     router.push('/');
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
+    <AuthContext.Provider value={{ 
+      user, 
       loading,
       isLoading: loading,
       kycCompleted,
-      signIn,
-      signUp,
+      signIn, 
+      signUp, 
       signOut
     }}>
       {children}

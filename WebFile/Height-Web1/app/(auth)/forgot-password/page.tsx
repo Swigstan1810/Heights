@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle, Mail } from "lucide-react";
+import { FormEvent } from "react";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -16,7 +17,7 @@ export default function ForgotPassword() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
-  const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handlePasswordReset = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     
@@ -44,8 +45,12 @@ export default function ForgotPassword() {
       } else {
         setSuccess("Password reset link has been sent to your email address");
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred during password reset request");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred during password reset request");
+      }
     } finally {
       setLoading(false);
     }

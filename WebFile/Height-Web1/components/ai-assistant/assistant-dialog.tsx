@@ -6,7 +6,6 @@ import { X, MinusCircle, Maximize2, Send, Loader2, User, AlertCircle, RefreshCw 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { useHeightsTheme } from "@/components/theme-provider";
 import { useAssistant } from "./context";
 
 /**
@@ -71,7 +70,6 @@ function HeightsAILogo() {
  * Dialog that displays the AI assistant conversation
  */
 export function AssistantDialog({ onClose }: { onClose: () => void }) {
-  const { theme } = useHeightsTheme();
   const [isMinimized, setIsMinimized] = useState(false);
   const { messages, addMessage, isLoading, assistantName, clearMessages, error } = useAssistant();
   const [input, setInput] = useState("");

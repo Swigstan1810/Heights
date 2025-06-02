@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { AssistantDialog } from "./assistant-dialog";
 

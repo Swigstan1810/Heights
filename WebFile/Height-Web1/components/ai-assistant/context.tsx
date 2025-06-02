@@ -98,18 +98,21 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         };
         
         setMessages((prev) => [...prev, assistantMessage]);
-      } catch (err: any) {
-        console.error("Error getting AI response:", err);
-        setError(err.message || 'Failed to get response');
-        
+      } catch (err: unknown) {
+        let errorMsg = 'Failed to get response';
+        if (err instanceof Error) {
+          setError(err.message);
+          errorMsg = err.message;
+        } else {
+          setError('Failed to get response');
+        }
         // Add error message
         const errorMessage = {
           id: generateId(),
           role: "assistant" as const,
-          content: "I'm sorry, I encountered an error processing your request. Please try again later.",
+          content: "I'm sorry, I encountered an error processing your request. Please try again later.\n" + errorMsg,
           timestamp: new Date(),
         };
-        
         setMessages((prev) => [...prev, errorMessage]);
       } finally {
         setIsLoading(false);
