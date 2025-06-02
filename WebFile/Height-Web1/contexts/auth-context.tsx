@@ -1,100 +1,209 @@
 // contexts/auth-context.tsx
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { User } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useState } from "react";
+import { User } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  isLoading: boolean;
-  kycCompleted: boolean;
-  signIn: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string) => Promise<any>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  updateProfile: (updates: any) => Promise<{ error: Error | null }>;
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
+  signOut: async () => {},
+  updateProfile: async () => ({ error: null }),
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [kycCompleted, setKycCompleted] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    // Check active sessions and sets the user
+    const checkUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+        
+        // Create/update profile if user exists
         if (session?.user) {
-        checkKycStatus(session.user.id);
+          const { error } = await supabase
+            .from('profiles')
+            .upsert({
+              id: session.user.id,
+              email: session.user.email,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: 'id'
+            });
+            
+          if (error && error.code !== '23505') { // Ignore unique constraint errors
+            console.error('Error updating profile:', error);
+          }
+          
+          // Initialize wallet balance if not exists
+          const { error: walletError } = await supabase
+            .from('wallet_balance')
+            .upsert({
+              user_id: session.user.id,
+              balance: 0,
+              locked_balance: 0,
+              currency: 'INR',
+            }, {
+              onConflict: 'user_id',
+              ignoreDuplicates: true
+            });
+            
+          if (walletError && walletError.code !== '23505') {
+            console.error('Error initializing wallet:', walletError);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking user session:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-      console.log('[AuthProvider] getSession:', session);
-    });
+    };
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    checkUser();
+
+    // Listen for changes on auth state (sign in, sign out, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      
       if (session?.user) {
-        checkKycStatus(session.user.id);
-            }
-      console.log('[AuthProvider] onAuthStateChange:', event, session);
+        // Update profile on auth state change
+        await supabase
+          .from('profiles')
+          .upsert({
+            id: session.user.id,
+            email: session.user.email,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'id'
+          });
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkKycStatus = async (userId: string) => {
-    const { data, error } = await supabase
-            .from('profiles')
-            .select('kyc_completed')
-      .eq('id', userId)
-            .single();
-          
-    if (data) {
-      setKycCompleted(data.kyc_completed || false);
-        }
-  };
-
   const signIn = async (email: string, password: string) => {
-    const result = await supabase.auth.signInWithPassword({ email, password });
-    console.log('[AuthProvider] signIn result:', result);
-    return result;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        setUser(data.user);
+        router.push('/dashboard');
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
   };
 
   const signUp = async (email: string, password: string) => {
-    const result = await supabase.auth.signUp({ email, password });
-    console.log('[AuthProvider] signUp result:', result);
-    return result;
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Create profile
+        await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          
+        // Initialize wallet
+        await supabase
+          .from('wallet_balance')
+          .insert({
+            user_id: data.user.id,
+            balance: 0,
+            locked_balance: 0,
+            currency: 'INR',
+          });
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
   };
 
   const signOut = async () => {
-      await supabase.auth.signOut();
-    router.push('/');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      setUser(null);
+      router.push('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
-  return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading,
-      isLoading: loading,
-      kycCompleted,
-      signIn, 
-      signUp, 
-      signOut
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const updateProfile = async (updates: any) => {
+    try {
+      if (!user) throw new Error('No user logged in');
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  };
+
+  const value = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    updateProfile,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

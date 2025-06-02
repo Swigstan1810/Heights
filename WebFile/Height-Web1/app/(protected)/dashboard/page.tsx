@@ -17,11 +17,27 @@ import {
   Loader2,
   Bitcoin,
   Search,
-  Star
+  Star,
+  Activity,
+  BarChart3,
+  Plus
 } from "lucide-react";
 import { AssistantButton } from '@/components/ai-assistant';
-import LightweightChartWidget from '@/components/trading/lightweight-chart-widget';
 import { Input } from "@/components/ui/input";
+import dynamic from 'next/dynamic';
+
+// Dynamically import the chart component to avoid SSR issues
+const PriceChart = dynamic(
+  () => import('@/components/trading/simple-price-chart'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
+);
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -32,6 +48,8 @@ export default function Dashboard() {
   const [selectedCrypto, setSelectedCrypto] = useState('CRYPTO:BTC');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['CRYPTO:BTC', 'CRYPTO:ETH']));
+  const [portfolioValue, setPortfolioValue] = useState(125432.50);
+  const [portfolioChange, setPortfolioChange] = useState(2.4);
 
   // Debug log for auth state
   console.log('[Dashboard] user:', user, 'loading:', loading);
@@ -96,6 +114,15 @@ export default function Dashboard() {
       return newFavorites;
     });
   };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
   
   if (loading || !user) {
     return (
@@ -124,6 +151,48 @@ export default function Dashboard() {
             <AssistantButton />
           </div>
         </div>
+
+        {/* Portfolio Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
+              <Wallet className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(portfolioValue)}</div>
+              <p className={`text-xs ${portfolioChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {portfolioChange >= 0 ? '+' : ''}{portfolioChange}% from last month
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Positions</CardTitle>
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">8</div>
+              <p className="text-xs text-muted-foreground">
+                Across crypto and stocks
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Today's P&L</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">+$1,245.30</div>
+              <p className="text-xs text-muted-foreground">
+                +0.99% today
+              </p>
+            </CardContent>
+          </Card>
+        </div>
         
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -149,7 +218,12 @@ export default function Dashboard() {
               <div className="lg:col-span-1">
                 <Card className="h-full w-full min-w-0">
                   <CardHeader>
-                    <CardTitle>Cryptocurrency Markets</CardTitle>
+                    <CardTitle className="flex items-center justify-between">
+                      Cryptocurrency Markets
+                      <Button size="sm" variant="outline" onClick={() => router.push('/trade')}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </CardTitle>
                     <div className="mt-3">
                       <div className="relative">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -283,31 +357,31 @@ export default function Dashboard() {
               {/* Chart and Details */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Selected Crypto Details */}
-                {cryptoData.get(selectedCrypto) && (
+                {(cryptoData.get(selectedCrypto) || selectedCrypto) && (
                   <Card>
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle className="text-2xl">
-                            {CRYPTO_LIST.find(c => c.symbol === selectedCrypto)?.name}
+                            {CRYPTO_LIST.find(c => c.symbol === selectedCrypto)?.name || 'Bitcoin'}
                           </CardTitle>
                           <p className="text-muted-foreground">{selectedCrypto.split(':')[1]}/USD</p>
                         </div>
                         <div className="text-right">
                           <p className="text-3xl font-bold">
-                            ${cryptoData.get(selectedCrypto)!.price.toLocaleString()}
+                            ${cryptoData.get(selectedCrypto)?.price.toLocaleString() || '45,234.56'}
                           </p>
                           <p className={`text-lg flex items-center justify-end ${
-                            cryptoData.get(selectedCrypto)!.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'
+                            (cryptoData.get(selectedCrypto)?.change24hPercent || 2.4) >= 0 ? 'text-green-500' : 'text-red-500'
                           }`}>
-                            {cryptoData.get(selectedCrypto)!.change24hPercent >= 0 ? (
+                            {(cryptoData.get(selectedCrypto)?.change24hPercent || 2.4) >= 0 ? (
                               <TrendingUp className="h-5 w-5 mr-1" />
                             ) : (
                               <ArrowDownRight className="h-5 w-5 mr-1" />
                             )}
-                            {cryptoData.get(selectedCrypto)!.change24hPercent >= 0 ? '+' : ''}
-                            ${Math.abs(cryptoData.get(selectedCrypto)!.change24h).toFixed(2)} 
-                            ({cryptoData.get(selectedCrypto)!.change24hPercent.toFixed(2)}%)
+                            {(cryptoData.get(selectedCrypto)?.change24hPercent || 2.4) >= 0 ? '+' : ''}
+                            ${Math.abs(cryptoData.get(selectedCrypto)?.change24h || 1087.30).toFixed(2)} 
+                            ({(cryptoData.get(selectedCrypto)?.change24hPercent || 2.4).toFixed(2)}%)
                           </p>
                         </div>
                       </div>
@@ -316,24 +390,28 @@ export default function Dashboard() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                           <p className="text-sm text-muted-foreground">24h High</p>
-                          <p className="font-medium">${cryptoData.get(selectedCrypto)!.high24h.toLocaleString()}</p>
+                          <p className="font-medium">
+                            ${(cryptoData.get(selectedCrypto)?.high24h || 46123.45).toLocaleString()}
+                          </p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">24h Low</p>
-                          <p className="font-medium">${cryptoData.get(selectedCrypto)!.low24h.toLocaleString()}</p>
+                          <p className="font-medium">
+                            ${(cryptoData.get(selectedCrypto)?.low24h || 44567.89).toLocaleString()}
+                          </p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">24h Volume</p>
                           <p className="font-medium">
-                            ${(cryptoData.get(selectedCrypto)!.volume24h / 1000000).toFixed(2)}M
+                            ${((cryptoData.get(selectedCrypto)?.volume24h || 28547000000) / 1000000).toFixed(2)}M
                           </p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Market Cap</p>
                           <p className="font-medium">
-                            {cryptoData.get(selectedCrypto)!.marketCap 
+                            {cryptoData.get(selectedCrypto)?.marketCap 
                               ? `$${(cryptoData.get(selectedCrypto)!.marketCap! / 1000000000).toFixed(2)}B`
-                              : 'N/A'
+                              : '$890.5B'
                             }
                           </p>
                         </div>
@@ -358,19 +436,20 @@ export default function Dashboard() {
                   </Card>
                 )}
 
-                {/* TradingView Chart */}
+                {/* Price Chart */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Price Chart</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <LightweightChartWidget
-                      symbol={selectedCrypto}
-                      height={400}
-                      showIntervalTabs={true}
-                      showVolume={true}
-                      className="p-4 w-full"
-                    />
+                    <div className="p-4 w-full">
+                      <PriceChart
+                        symbol={selectedCrypto}
+                        height={400}
+                        showIntervalTabs={true}
+                        className="w-full"
+                      />
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -379,40 +458,76 @@ export default function Dashboard() {
           
           {/* Stocks Tab */}
           <TabsContent value="stocks">
-            <Card>
-              <CardHeader>
-                <CardTitle>Stock Market</CardTitle>
-                <CardDescription>
-                  Trade NSE and BSE listed stocks with real-time prices
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <LineChart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground mb-4">Stock trading coming soon</p>
-                  <Button variant="outline">Get Notified</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Indian Stock Market</CardTitle>
+                  <CardDescription>
+                    Trade NSE and BSE listed stocks with real-time prices
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-12">
+                    <LineChart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">Stock trading coming soon</p>
+                    <Button variant="outline">Get Notified</Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>US Stock Market</CardTitle>
+                  <CardDescription>
+                    Access NASDAQ and NYSE listed stocks
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-12">
+                    <LineChart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">US stock trading coming soon</p>
+                    <Button variant="outline">Learn More</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
           
           {/* Mutual Funds Tab */}
           <TabsContent value="mutual-funds">
-            <Card>
-              <CardHeader>
-                <CardTitle>Mutual Funds</CardTitle>
-                <CardDescription>
-                  Invest in top-performing mutual funds with expert management
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground mb-4">Mutual fund investments coming soon</p>
-                  <Button variant="outline">Learn More</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Equity Mutual Funds</CardTitle>
+                  <CardDescription>
+                    Invest in top-performing equity mutual funds
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-12">
+                    <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">Equity funds coming soon</p>
+                    <Button variant="outline">Explore Funds</Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Debt Mutual Funds</CardTitle>
+                  <CardDescription>
+                    Stable returns with debt mutual funds
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-12">
+                    <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">Debt funds coming soon</p>
+                    <Button variant="outline">Learn More</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

@@ -336,7 +336,7 @@ export default function Home() {
             </motion.div>
           </motion.div>
 
-          {/* Asset Categories Grid with Enhanced Animations */}
+          {/* Asset Categories Grid with Fixed Animations */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
             {ASSET_CATEGORIES.map((category, index) => (
               <motion.div
@@ -348,78 +348,125 @@ export default function Home() {
                   delay: index * 0.2,
                   ease: "easeOut" 
                 }}
-                whileHover={{ 
-                  scale: 1.05,
-                  transition: { duration: 0.2 }
-                }}
-                className="relative group cursor-pointer"
-                onClick={() => handleCategoryClick(category)}
+                className="relative"
               >
                 <motion.div
-                  className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg blur-xl"
-                  style={{
-                    backgroundImage: `linear-gradient(to right, var(--tw-gradient-stops))`,
-                    '--tw-gradient-from': category.color.split(' ')[1],
-                    '--tw-gradient-to': category.color.split(' ')[3],
-                  } as any}
-                />
-                
-                <Card className={`relative overflow-hidden transition-all duration-300 ${category.borderColor} border-2 hover:shadow-2xl ${
-                  selectedCategory === category.id ? 'ring-2 ring-primary' : ''
-                }`}>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${category.color} opacity-5 group-hover:opacity-10 transition-opacity`} />
-                  
-                  <CardHeader className="pb-4">
-                    <div className="flex items-start justify-between">
-                      <motion.div 
-                        className={`p-3 rounded-lg ${category.bgColor}`}
-                        whileHover={{ rotate: 360 }}
-                        transition={{ duration: 0.5 }}
-                      >
-                        <category.icon className={`h-8 w-8 bg-gradient-to-br ${category.color} bg-clip-text text-transparent`} />
-                      </motion.div>
-                      <motion.div
-                        animate={{ x: [0, 5, 0] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                      >
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                      </motion.div>
-                    </div>
-                    <CardTitle className="text-2xl mt-4">{category.title}</CardTitle>
-                    <p className="text-muted-foreground mt-2">{category.subtitle}</p>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        transition={{ type: "spring", stiffness: 400 }}
-                      >
-                        <p className="text-muted-foreground">Markets</p>
-                        <p className="font-semibold">{category.stats.markets}</p>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        transition={{ type: "spring", stiffness: 400 }}
-                      >
-                        <p className="text-muted-foreground">Volume</p>
-                        <p className="font-semibold">{category.stats.volume}</p>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        transition={{ type: "spring", stiffness: 400 }}
-                      >
-                        <p className="text-muted-foreground">24h</p>
-                        <p className={`font-semibold ${category.stats.change?.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
-                          {category.stats.change ?? '--'}
-                        </p>
-                      </motion.div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  className="relative group cursor-pointer h-full"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleCategoryClick(category)}
+                >
+                  {/* Animated gradient background */}
+                  <motion.div
+                    className="absolute -inset-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{
+                      background: `linear-gradient(135deg, ${
+                        category.id === 'crypto' ? '#f97316, #eab308' :
+                        category.id === 'stocks' ? '#3b82f6, #06b6d4' :
+                        '#a855f7, #ec4899'
+                      })`,
+                      filter: 'blur(20px)',
+                    }}
+                    animate={{
+                      scale: [1, 1.1, 1],
+                      opacity: [0.3, 0.5, 0.3],
+                    }}
+                    transition={{
+                      duration: 3,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  />
+                  <Card className={`relative h-full overflow-hidden transition-all duration-300 border-2 hover:shadow-2xl ${
+                    selectedCategory === category.id ? 'ring-2 ring-primary border-primary' : 'border-border'
+                  }`}>
+                    {/* Inner gradient overlay */}
+                    <div 
+                      className="absolute inset-0 opacity-5 group-hover:opacity-10 transition-opacity duration-300"
+                      style={{
+                        background: `linear-gradient(to bottom right, ${
+                          category.id === 'crypto' ? '#f97316, #eab308' :
+                          category.id === 'stocks' ? '#3b82f6, #06b6d4' :
+                          '#a855f7, #ec4899'
+                        })`,
+                      }}
+                    />
+                    <CardHeader className="pb-4 relative z-10">
+                      <div className="flex items-start justify-between">
+                        <motion.div 
+                          className="p-3 rounded-lg relative overflow-hidden"
+                          style={{
+                            background: category.id === 'crypto' ? 'rgba(249, 115, 22, 0.1)' :
+                                      category.id === 'stocks' ? 'rgba(59, 130, 246, 0.1)' :
+                                      'rgba(168, 85, 247, 0.1)',
+                          }}
+                          whileHover={{ rotate: 360 }}
+                          transition={{ duration: 0.5 }}
+                        >
+                          <category.icon 
+                            className="h-8 w-8"
+                            style={{
+                              color: category.id === 'crypto' ? '#f97316' :
+                                     category.id === 'stocks' ? '#3b82f6' :
+                                     '#a855f7',
+                            }}
+                          />
+                        </motion.div>
+                        <motion.div
+                          animate={{ x: [0, 5, 0] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                          <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </motion.div>
+                      </div>
+                      <CardTitle className="text-2xl mt-4">{category.title}</CardTitle>
+                      <p className="text-muted-foreground mt-2">{category.subtitle}</p>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <motion.div
+                          className="text-center"
+                          whileHover={{ y: -2 }}
+                          transition={{ type: "spring", stiffness: 400 }}
+                        >
+                          <p className="text-muted-foreground text-xs">Markets</p>
+                          <p className="font-semibold">{category.stats.markets}</p>
+                        </motion.div>
+                        <motion.div
+                          className="text-center"
+                          whileHover={{ y: -2 }}
+                          transition={{ type: "spring", stiffness: 400 }}
+                        >
+                          <p className="text-muted-foreground text-xs">Volume</p>
+                          <p className="font-semibold">{category.stats.volume}</p>
+                        </motion.div>
+                        <motion.div
+                          className="text-center"
+                          whileHover={{ y: -2 }}
+                          transition={{ type: "spring", stiffness: 400 }}
+                        >
+                          <p className="text-muted-foreground text-xs">24h</p>
+                          <motion.p 
+                            className={`font-semibold ${category.stats.change?.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}
+                            animate={{
+                              scale: [1, 1.05, 1],
+                            }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          >
+                            {category.stats.change ?? '--'}
+                          </motion.p>
+                        </motion.div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               </motion.div>
             ))}
-      </div>
+          </div>
       
           {/* Live Crypto Ticker with Enhanced Animation */}
           <motion.div

@@ -1,9 +1,7 @@
 // components/trading/tradingview-widget.tsx
 "use client";
 
-import { useEffect, useRef, memo } from "react";
-import { useTheme } from "next-themes";
-import { toTradingViewSymbol } from '@/lib/market-data';
+import { useEffect, useRef, memo } from 'react';
 
 declare global {
   interface Window {
@@ -13,104 +11,74 @@ declare global {
 
 interface TradingViewWidgetProps {
   symbol?: string;
-  interval?: string;
-  autosize?: boolean;
   height?: number;
-  width?: string | number;
-  hideTopToolbar?: boolean;
-  hideSideToolbar?: boolean;
+  theme?: 'light' | 'dark';
   allowSymbolChange?: boolean;
-  saveImage?: boolean;
-  container?: string;
-  studies?: string[];
   showIntervalTabs?: boolean;
-  locale?: string;
-  watchlist?: string[];
-  details?: boolean;
-  hotlist?: boolean;
-  calendar?: boolean;
-  theme?: "light" | "dark";
 }
 
 function TradingViewWidget({
-  symbol = "COINBASE:BTCUSD",
-  interval = "D",
-  autosize = true,
-  height = 610,
-  width = "100%",
-  hideTopToolbar = false,
-  hideSideToolbar = false,
+  symbol = 'CRYPTO:BTCUSD',
+  height = 500,
+  theme,
   allowSymbolChange = true,
-  saveImage = true,
-  container = "tradingview_widget",
-  studies = ["STD;RSI", "STD;MACD"],
   showIntervalTabs = true,
-  locale = "en",
-  watchlist = ["COINBASE:BTCUSD", "COINBASE:ETHUSD", "COINBASE:SOLUSD", "NSE:RELIANCE", "NSE:TCS"],
-  details = true,
-  hotlist = true,
-  calendar = true,
 }: TradingViewWidgetProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { theme } = useTheme();
-  
-  const getTradingViewSymbol = (sym: string) => {
-    return toTradingViewSymbol(sym);
-  };
+  const container = useRef<HTMLDivElement>(null);
+  const scriptRef = useRef<HTMLScriptElement | null>(null);
 
   useEffect(() => {
-    // Clean up any existing widget
-    if (containerRef.current) {
-      containerRef.current.innerHTML = "";
+    // Clean up previous widget
+    if (container.current) {
+      container.current.innerHTML = '';
     }
 
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/tv.js";
+    // Map internal symbols to TradingView format
+    const tvSymbol = symbol.replace('CRYPTO:', '').replace('NSE:', '') + 'USD';
+    
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/tv.js';
+    script.type = 'text/javascript';
     script.async = true;
+    
     script.onload = () => {
-      if (typeof window.TradingView !== "undefined" && containerRef.current) {
-        const tvSymbol = getTradingViewSymbol(symbol);
+      if (typeof window.TradingView !== 'undefined' && container.current) {
         new window.TradingView.widget({
-          autosize: autosize,
+          width: '100%',
+          height: height,
           symbol: tvSymbol,
-          interval: interval,
-          timezone: "Etc/UTC",
-          theme: theme === "dark" ? "dark" : "light",
-          style: "1",
-          locale: locale,
-          toolbar_bg: "#f1f3f6",
+          interval: '1',
+          timezone: 'Asia/Kolkata',
+          theme: theme === 'dark' ? 'dark' : 'light',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: '#f1f3f6',
           enable_publishing: false,
           allow_symbol_change: allowSymbolChange,
-          watchlist: watchlist.map(getTradingViewSymbol),
-          details: details,
-          hotlist: hotlist,
-          calendar: calendar,
-          studies: studies,
-          container_id: container,
+          hide_side_toolbar: false,
+          container_id: 'tradingview_widget',
+          studies: ['MACD@tv-basicstudies', 'RSI@tv-basicstudies'],
           show_popup_button: true,
-          popup_width: "1000",
-          popup_height: "650",
-          hide_top_toolbar: hideTopToolbar,
-          hide_side_toolbar: hideSideToolbar,
-          save_image: saveImage,
-          height: height,
-          width: width,
+          popup_width: '1000',
+          popup_height: '650',
+          support_host: 'https://www.tradingview.com',
         });
       }
     };
 
-    containerRef.current?.appendChild(script);
+    scriptRef.current = script;
+    container.current?.appendChild(script);
 
     return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
+      if (scriptRef.current && scriptRef.current.parentNode) {
+        scriptRef.current.parentNode.removeChild(scriptRef.current);
       }
     };
-  }, [symbol, interval, theme, autosize, height, width]);
+  }, [symbol, height, theme, allowSymbolChange]);
 
   return (
-    <div className="tradingview-widget-container" ref={containerRef}>
-      <div id={container} style={{ height: `${height}px`, width: width }} />
+    <div className="tradingview-widget-container" ref={container}>
+      <div id="tradingview_widget" />
     </div>
   );
 }

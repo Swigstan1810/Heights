@@ -1,21 +1,16 @@
 // components/trading/lightweight-chart-widget.tsx
 "use client";
 
-import { useEffect, useRef, useState, memo } from "react";
-import { 
-  createChart, 
-  ColorType, 
-  IChartApi, 
-  ISeriesApi,
-  CandlestickData,
-  HistogramData,
-  MouseEventParams,
-  UTCTimestamp
-} from 'lightweight-charts';
-import { useTheme } from "next-themes";
-import { marketDataService } from '@/lib/market-data';
-import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef, useState } from 'react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+declare global {
+  interface Window {
+    LightweightCharts: any;
+  }
+}
 
 interface LightweightChartWidgetProps {
   symbol: string;
@@ -29,354 +24,317 @@ function LightweightChartWidget({
   symbol,
   height = 400,
   showIntervalTabs = true,
-  showVolume = true,
-  className = "",
+  showVolume = false,
+  className = '',
 }: LightweightChartWidgetProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi | null>(null);
-  const candleSeries = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const volumeSeries = useRef<ISeriesApi<"Histogram"> | null>(null);
-  const { theme } = useTheme();
-  const [loading, setLoading] = useState(true);
+  const chartRef = useRef<any>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const volumeSeriesRef = useRef<any>(null);
+  const [interval, setInterval] = useState('1H');
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [interval, setInterval] = useState<'1m' | '5m' | '15m' | '1h' | '1d'>('5m');
-  const [crosshairData, setCrosshairData] = useState<{
-    price: number;
-    volume: number;
-    time: string;
-  } | null>(null);
-  
-  // Real-time price subscription
-  useEffect(() => {
-    const unsubscribe = marketDataService.subscribe(symbol, (data) => {
-      if (candleSeries.current && chart.current) {
-        const currentTime = Math.floor(Date.now() / 1000) as UTCTimestamp;
-        
-        try {
-          // Update the last candle
-          candleSeries.current.update({
-            time: currentTime,
-            open: data.price,
-            high: data.high24h,
-            low: data.low24h,
-          close: data.price,
-          });
-        
-        // Update volume if we have volume series
-          if (volumeSeries.current && showVolume) {
-          volumeSeries.current.update({
-              time: currentTime,
-            value: data.volume24h,
-              color: data.change24hPercent >= 0 ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
-          });
-          }
-        } catch (err) {
-          console.error('Error updating real-time data:', err);
-        }
+
+  // Generate mock data for the chart
+  const generateMockData = (interval: string) => {
+    const now = new Date();
+    const data = [];
+    const volumeData = [];
+    let periods = 100;
+    
+    switch (interval) {
+      case '1M': periods = 60; break;
+      case '5M': periods = 100; break;
+      case '15M': periods = 100; break;
+      case '1H': periods = 100; break;
+      case '1D': periods = 100; break;
+      case '1W': periods = 52; break;
+    }
+
+    for (let i = periods; i >= 0; i--) {
+      const time = new Date(now);
+      
+      switch (interval) {
+        case '1M': time.setMinutes(time.getMinutes() - i); break;
+        case '5M': time.setMinutes(time.getMinutes() - i * 5); break;
+        case '15M': time.setMinutes(time.getMinutes() - i * 15); break;
+        case '1H': time.setHours(time.getHours() - i); break;
+        case '1D': time.setDate(time.getDate() - i); break;
+        case '1W': time.setDate(time.getDate() - i * 7); break;
       }
-    });
 
-    return () => unsubscribe();
-  }, [symbol, showVolume]);
-
-  // Fetch historical data from Coinbase
-  const fetchHistoricalData = async () => {
-    if (!chart.current || !candleSeries.current) {
-      console.error('Chart not initialized');
-      return;
+      const basePrice = symbol.includes('BTC') ? 45000 : 
+                       symbol.includes('ETH') ? 3000 : 
+                       symbol.includes('SOL') ? 100 : 50;
+      
+      const volatility = 0.02;
+      const trend = Math.sin(i / 20) * basePrice * 0.1;
+      const randomWalk = (Math.random() - 0.5) * basePrice * volatility;
+      
+      const open = basePrice + trend + randomWalk;
+      const close = open + (Math.random() - 0.5) * basePrice * volatility;
+      const high = Math.max(open, close) + Math.random() * basePrice * volatility * 0.5;
+      const low = Math.min(open, close) - Math.random() * basePrice * volatility * 0.5;
+      
+      data.push({
+        time: Math.floor(time.getTime() / 1000),
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+      });
+      
+      volumeData.push({
+        time: Math.floor(time.getTime() / 1000),
+        value: Math.random() * 1000000,
+        color: close > open ? '#26a69a' : '#ef5350',
+      });
     }
     
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const productId = symbol.replace('CRYPTO:', '') + '-USD';
-      const granularity = interval === '1m' ? 60 : 
-                        interval === '5m' ? 300 : 
-                        interval === '15m' ? 900 : 
-                        interval === '1h' ? 3600 : 86400;
-      
-      // Calculate time range based on interval
-      const now = Math.floor(Date.now() / 1000);
-      const start = interval === '1m' ? now - 3600 : // 1 hour of 1m candles
-                   interval === '5m' ? now - 86400 : // 1 day of 5m candles
-                   interval === '15m' ? now - 259200 : // 3 days of 15m candles
-                   interval === '1h' ? now - 604800 : // 1 week of 1h candles
-                   now - 2592000; // 30 days of daily candles
-      
-      const response = await fetch(
-        `https://api.exchange.coinbase.com/products/${productId}/candles?start=${start}&end=${now}&granularity=${granularity}`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch historical data');
-      }
-      
-      const data = await response.json();
-      
-      // Format data for lightweight charts
-      const candleData: CandlestickData[] = data
-        .map((candle: number[]) => ({
-          time: candle[0] as UTCTimestamp,
-          open: candle[3],
-          high: candle[2],
-          low: candle[1],
-          close: candle[4],
-        }))
-        .sort((a: CandlestickData, b: CandlestickData) => 
-          (a.time as number) - (b.time as number)
-        );
+    return { priceData: data, volumeData };
+  };
 
-      const volumeData: HistogramData[] = data
-        .map((candle: number[]) => ({
-          time: candle[0] as UTCTimestamp,
-          value: candle[5],
-          color: candle[4] >= candle[3] ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
-        }))
-        .sort((a: HistogramData, b: HistogramData) => 
-          (a.time as number) - (b.time as number)
-        );
+  const initializeChart = () => {
+    if (!window.LightweightCharts || !chartContainerRef.current) {
+      setError('Chart library not loaded');
+      return;
+    }
+
+    try {
+      setIsLoading(false);
+      setError(null);
       
-      // Update chart with new data
-      if (candleSeries.current) {
-        candleSeries.current.setData(candleData);
+      // Clear any existing chart
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
       }
       
-      if (volumeSeries.current && showVolume) {
-        volumeSeries.current.setData(volumeData);
+      // Create chart
+      chartRef.current = window.LightweightCharts.createChart(chartContainerRef.current, {
+        width: chartContainerRef.current.clientWidth,
+        height: height,
+        layout: {
+          background: { type: 'solid', color: 'transparent' },
+          textColor: '#333',
+        },
+        grid: {
+          vertLines: { color: 'rgba(197, 203, 206, 0.1)' },
+          horzLines: { color: 'rgba(197, 203, 206, 0.1)' },
+        },
+        rightPriceScale: {
+          borderColor: 'rgba(197, 203, 206, 0.3)',
+          scaleMargins: {
+            top: 0.1,
+            bottom: showVolume ? 0.3 : 0.1,
+          },
+        },
+        timeScale: {
+          borderColor: 'rgba(197, 203, 206, 0.3)',
+          timeVisible: true,
+          secondsVisible: false,
+        },
+        crosshair: {
+          mode: window.LightweightCharts.CrosshairMode.Normal,
+        },
+      });
+
+      // Add candlestick series
+      candleSeriesRef.current = chartRef.current.addCandlestickSeries({
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderVisible: false,
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
+      });
+
+      // Add volume series if requested
+      if (showVolume) {
+        volumeSeriesRef.current = chartRef.current.addHistogramSeries({
+          color: '#26a69a',
+          priceFormat: {
+            type: 'volume',
+          },
+          priceScaleId: '',
+          scaleMargins: {
+            top: 0.8,
+            bottom: 0,
+          },
+        });
       }
-      
-      // Fit content to the chart
-      if (chart.current) {
-        chart.current.timeScale().fitContent();
+
+      // Load initial data
+      const { priceData, volumeData } = generateMockData(interval);
+      candleSeriesRef.current.setData(priceData);
+      if (showVolume && volumeSeriesRef.current) {
+        volumeSeriesRef.current.setData(volumeData);
       }
+
+      // Fit content
+      chartRef.current.timeScale().fitContent();
+
+      // Handle resize
+      const handleResize = () => {
+        if (chartRef.current && chartContainerRef.current) {
+          chartRef.current.applyOptions({
+            width: chartContainerRef.current.clientWidth,
+          });
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
       
-      setLoading(false);
+      // Cleanup function for this specific initialization
+      return () => {
+        window.removeEventListener('resize', handleResize);
+      };
     } catch (err) {
-      console.error('Error fetching historical data:', err);
-      setError('Failed to load chart data');
-      setLoading(false);
+      console.error('Error initializing chart:', err);
+      setError('Failed to initialize chart');
+      setIsLoading(false);
     }
   };
 
-  // Initialize chart
   useEffect(() => {
-    let retryTimeout: NodeJS.Timeout | null = null;
+    let cleanup: (() => void) | undefined;
 
-    function tryInitChart() {
-      const container = chartContainerRef.current;
-      if (!container) {
-        console.log('Chart container not found');
-        return;
-      }
-
-      const width = container.clientWidth;
-      const heightPx = container.clientHeight || height;
-
-      if (width === 0 || heightPx === 0) {
-        console.log('Chart container has zero size, retrying...');
-        retryTimeout = setTimeout(tryInitChart, 100);
-        return;
-      }
-
-      try {
-        console.log('Creating chart with', width, heightPx);
-        const newChart = createChart(container, { width, height: heightPx });
-        chart.current = newChart;
-
-        // Add candlestick series (v5+ API)
-        candleSeries.current = newChart.addSeries<'Candlestick'>('Candlestick' as any, {
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderVisible: false,
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
-        priceFormat: {
-            type: 'price',
-            precision: symbol.includes('BTC') ? 2 : 4,
-            minMove: 0.01,
-          },
-        }) as ISeriesApi<'Candlestick'>;
-
-        // Add volume series if enabled (v5+ API)
-        if (showVolume) {
-          volumeSeries.current = newChart.addSeries<'Histogram'>('Histogram' as any, {
-            priceFormat: { type: 'volume' },
-            priceScaleId: '',
-            // @ts-expect-error: scaleMargins is accepted by lightweight-charts at runtime
-            scaleMargins: { top: 0.7, bottom: 0 },
-          }) as ISeriesApi<'Histogram'>;
+    // Check if library is already loaded
+    if (window.LightweightCharts) {
+      cleanup = initializeChart();
+      return cleanup;
     }
 
-        // Subscribe to crosshair move
-        newChart.subscribeCrosshairMove((param: MouseEventParams) => {
-          if (!param.time || !param.seriesData || param.seriesData.size === 0) {
-            setCrosshairData(null);
-            return;
-          }
-
-          const candleData = param.seriesData.get(candleSeries.current!) as CandlestickData;
-          const volumeData = volumeSeries.current 
-            ? param.seriesData.get(volumeSeries.current) as HistogramData
-            : null;
-
-          if (candleData) {
-            const date = new Date((param.time as number) * 1000);
-            setCrosshairData({
-              price: candleData.close,
-              volume: volumeData?.value || 0,
-              time: date.toLocaleString(),
-            });
-          }
-        });
-
-    // Handle resize
-    const handleResize = () => {
-      if (chart.current && chartContainerRef.current) {
-        chart.current.applyOptions({ 
-          width: chartContainerRef.current.clientWidth 
-        });
-      }
+    // Load TradingView Lightweight Charts library
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js';
+    script.async = true;
+    
+    script.onload = () => {
+      cleanup = initializeChart();
     };
 
-    window.addEventListener('resize', handleResize);
+    script.onerror = () => {
+      setError('Failed to load chart library');
+      setIsLoading(false);
+    };
 
-        // Initial data fetch
-        setTimeout(() => {
-          console.log('Fetching historical data...');
-          fetchHistoricalData();
-        }, 100);
-
-        // Cleanup
-        return () => {
-          window.removeEventListener('resize', handleResize);
-          if (chart.current) {
-            chart.current.remove();
-            chart.current = null;
-            candleSeries.current = null;
-            volumeSeries.current = null;
-          }
-        };
-      } catch (err) {
-        console.error('Error initializing chart:', err);
-        setError('Failed to initialize chart');
-        setLoading(false);
-      }
-    }
-
-    tryInitChart();
+    document.head.appendChild(script);
 
     return () => {
-      if (retryTimeout) clearTimeout(retryTimeout);
-      if (chart.current) {
-        chart.current.remove();
-        chart.current = null;
-        candleSeries.current = null;
-        volumeSeries.current = null;
+      if (cleanup) cleanup();
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
       }
     };
-  }, [height, showVolume, symbol]);
+  }, [height, showVolume]); // Only reinitialize on these critical prop changes
 
-  // Update chart theme when theme changes
+  // Update data when interval or symbol changes
   useEffect(() => {
-    if (!chart.current) return;
-    
-    const isDark = theme === 'dark';
-    
-    try {
-    chart.current.applyOptions({
-      layout: {
-        background: { type: ColorType.Solid, color: isDark ? '#0a0a0a' : '#ffffff' },
-        textColor: isDark ? '#d1d5db' : '#374151',
-      },
-      grid: {
-        vertLines: {
-            color: isDark ? 'rgba(31, 41, 55, 0.5)' : 'rgba(229, 231, 235, 0.5)',
-        },
-        horzLines: {
-            color: isDark ? 'rgba(31, 41, 55, 0.5)' : 'rgba(229, 231, 235, 0.5)',
+    if (candleSeriesRef.current && !isLoading) {
+      try {
+        const { priceData, volumeData } = generateMockData(interval);
+        candleSeriesRef.current.setData(priceData);
+        if (showVolume && volumeSeriesRef.current) {
+          volumeSeriesRef.current.setData(volumeData);
+        }
+        chartRef.current?.timeScale().fitContent();
+      } catch (err) {
+        console.error('Error updating chart data:', err);
+      }
+    }
+  }, [interval, symbol, showVolume, isLoading]);
+
+  // Update theme
+  useEffect(() => {
+    if (chartRef.current && !isLoading) {
+      const isDark = document.documentElement.classList.contains('dark');
+      try {
+        chartRef.current.applyOptions({
+          layout: {
+            background: { type: 'solid', color: 'transparent' },
+            textColor: isDark ? '#d1d5db' : '#333',
           },
-        },
-        crosshair: {
-          vertLine: {
-            color: isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.5)',
-      },
-          horzLine: {
-            color: isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.5)',
-      },
-      },
-    });
-    } catch (err) {
-      console.error('Error updating theme:', err);
+          grid: {
+            vertLines: { color: isDark ? 'rgba(197, 203, 206, 0.1)' : 'rgba(197, 203, 206, 0.1)' },
+            horzLines: { color: isDark ? 'rgba(197, 203, 206, 0.1)' : 'rgba(197, 203, 206, 0.1)' },
+          },
+          rightPriceScale: {
+            borderColor: isDark ? 'rgba(197, 203, 206, 0.3)' : 'rgba(197, 203, 206, 0.3)',
+          },
+          timeScale: {
+            borderColor: isDark ? 'rgba(197, 203, 206, 0.3)' : 'rgba(197, 203, 206, 0.3)',
+          },
+        });
+      } catch (err) {
+        console.error('Error updating chart theme:', err);
+      }
     }
-  }, [theme]);
+  });
 
-  // Fetch data when interval changes
-  useEffect(() => {
-    if (chart.current && candleSeries.current) {
-      fetchHistoricalData();
-    }
-  }, [interval]);
+  if (error) {
+    return (
+      <div className={`relative ${className}`} style={{ height: `${height}px` }}>
+        <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+          <div className="text-center">
+            <p className="text-red-500 mb-2">Chart Error</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`w-full ${className}`}>
+    <div className={`relative ${className}`}>
       {showIntervalTabs && (
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex gap-1">
-            {(['1m', '5m', '15m', '1h', '1d'] as const).map((int) => (
-              <Button
-                key={int}
-                variant={interval === int ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setInterval(int)}
-                disabled={loading}
-              >
-                {int}
-              </Button>
-            ))}
-          </div>
-          <div className="flex items-center gap-4">
-            {crosshairData && (
-              <div className="text-sm text-muted-foreground">
-                <span className="font-medium">${crosshairData.price.toFixed(2)}</span>
-                {showVolume && (
-                  <span className="ml-2">Vol: {crosshairData.volume.toLocaleString()}</span>
-                )}
-              </div>
-            )}
-          <div className="text-sm text-muted-foreground">
-            {symbol.replace('CRYPTO:', '')} / USD
-            </div>
-          </div>
+        <div className="absolute top-2 right-2 z-10">
+          <Tabs value={interval} onValueChange={setInterval}>
+            <TabsList className="h-8">
+              <TabsTrigger value="1M" className="text-xs px-2 h-7">1M</TabsTrigger>
+              <TabsTrigger value="5M" className="text-xs px-2 h-7">5M</TabsTrigger>
+              <TabsTrigger value="15M" className="text-xs px-2 h-7">15M</TabsTrigger>
+              <TabsTrigger value="1H" className="text-xs px-2 h-7">1H</TabsTrigger>
+              <TabsTrigger value="1D" className="text-xs px-2 h-7">1D</TabsTrigger>
+              <TabsTrigger value="1W" className="text-xs px-2 h-7">1W</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       )}
       
-      <div className="relative" style={{ height: `${height}px` }}>
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        )}
-        
-        {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-            <div className="text-center">
-              <p className="text-destructive mb-2">{error}</p>
-              <Button size="sm" onClick={fetchHistoricalData}>
-                Retry
-              </Button>
-            </div>
-          </div>
-        )}
-        
-        <div
-          ref={chartContainerRef}
-          className="w-full h-full min-w-[200px] min-h-[200px]"
-          style={{ minHeight: 200, minWidth: 200 }}
-        />
-      </div>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-20">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      )}
+      
+      <div ref={chartContainerRef} className="w-full" style={{ height: `${height}px` }} />
     </div>
   );
 }
 
-export default memo(LightweightChartWidget);
+// Export with error boundary
+export default function LightweightChartWidgetWithErrorBoundary(props: LightweightChartWidgetProps) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const errorHandler = (event: ErrorEvent) => {
+      if (event.message.includes('addCandlestickSeries') || event.message.includes('LightweightCharts')) {
+        setHasError(true);
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener('error', errorHandler);
+    return () => window.removeEventListener('error', errorHandler);
+  }, []);
+
+  if (hasError) {
+    return <div>Chart failed to load.</div>;
+  }
+
+  return <LightweightChartWidget {...props} />;
+}

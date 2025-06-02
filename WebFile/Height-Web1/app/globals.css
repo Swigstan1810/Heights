@@ -249,3 +249,156 @@
 .dark {
   --primary-rgb: 96, 165, 250; /* Blue-400 RGB values for dark mode */
 }
+
+/* Add this to your app/globals.css file */
+
+/* Asset Category Card Animations */
+.asset-card-gradient {
+  background: linear-gradient(135deg, 
+    rgba(var(--primary-rgb), 0.1) 0%, 
+    rgba(var(--primary-rgb), 0.05) 100%);
+  transition: all 0.3s ease;
+}
+
+.asset-card-gradient:hover {
+  background: linear-gradient(135deg, 
+    rgba(var(--primary-rgb), 0.2) 0%, 
+    rgba(var(--primary-rgb), 0.1) 100%);
+}
+
+/* Icon gradient animation */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.icon-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Card hover effects */
+.asset-card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.asset-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(var(--primary-rgb), 0.1) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.asset-card:hover::before {
+  opacity: 1;
+}
+
+/* Floating animation for icons */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(180deg);
+  }
+}
+
+.float-on-hover:hover {
+  animation: float 2s ease-in-out infinite;
+}
+
+/* Pulse animation for stats */
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+.pulse-on-hover:hover {
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+/* Fix for TradingView container */
+.tradingview-widget-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: var(--background);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.tradingview-widget-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: none;
+}
+
+/* Ensure proper gradient rendering */
+.gradient-text {
+  background: linear-gradient(to right, var(--tw-gradient-stops));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+}
+
+/* Fix for Lightweight Charts container */
+.tv-lightweight-charts {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Card glow effect for categories */
+@keyframes card-glow {
+  0% {
+    box-shadow: 0 0 5px rgba(var(--primary-rgb), 0.2),
+                0 0 10px rgba(var(--primary-rgb), 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.4),
+                0 0 40px rgba(var(--primary-rgb), 0.2);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(var(--primary-rgb), 0.2),
+                0 0 10px rgba(var(--primary-rgb), 0.1);
+  }
+}
+
+.card-glow:hover {
+  animation: card-glow 2s ease-in-out infinite;
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Disable transitions on theme change */
+.no-transitions * {
+  transition: none !important;
+}
