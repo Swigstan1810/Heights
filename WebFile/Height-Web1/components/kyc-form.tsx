@@ -1,3 +1,4 @@
+// components/kyc-form.tsx
 "use client";
 
 import { useState } from "react";
@@ -6,432 +7,495 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from "@/types/supabase";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { 
-  AlertCircle, 
-  CheckCircle, 
-  Calendar, 
-  CreditCard,
-  Building,
-  Home,
+  User, 
+  CreditCard, 
+  Building2, 
+  FileText, 
+  CheckCircle2, 
+  AlertCircle,
+  Calendar,
   Phone,
-  DollarSign,
-  User
+  MapPin,
+  Banknote,
+  Shield
 } from "lucide-react";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
-// Define the form schema with Zod for validation
-const kycFormSchema = z.object({
-  fullName: z.string().min(3, { message: "Full name must be at least 3 characters" }),
-  dateOfBirth: z.string().refine((date) => {
-    const dob = new Date(date);
-    const today = new Date();
-    const age = today.getFullYear() - dob.getFullYear();
-    const monthDiff = today.getMonth() - dob.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-      return age - 1 >= 18;
-    }
-    return age >= 18;
-  }, { message: "You must be at least 18 years old" }),
-  panNumber: z.string()
-    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)" }),
-  aadhaarNumber: z.string()
-    .regex(/^\d{12}$/, { message: "Aadhaar number must be 12 digits" }),
-  address: z.string().min(5, { message: "Address must be at least 5 characters" }),
-  city: z.string().min(2, { message: "City is required" }),
-  state: z.string().min(2, { message: "State is required" }),
-  postalCode: z.string()
-    .regex(/^\d{6}$/, { message: "Postal code must be 6 digits" }),
-  mobileNumber: z.string()
-    .regex(/^[6-9]\d{9}$/, { message: "Enter a valid 10-digit Indian mobile number" }),
-  bankAccountNumber: z.string()
-    .min(9, { message: "Bank account number must be at least 9 digits" })
-    .max(18, { message: "Bank account number cannot exceed 18 digits" }),
-  bankIfscCode: z.string()
-    .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, { message: "Invalid IFSC code format (e.g., SBIN0123456)" }),
-  bankName: z.string().min(3, { message: "Bank name is required" }),
-  incomeBracket: z.string().min(1, { message: "Income bracket is required" }),
+// KYC Form Schema
+const kycSchema = z.object({
+  // Personal Information
+  full_name: z.string().min(3, "Full name must be at least 3 characters"),
+  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+  mobile_number: z.string().regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number"),
+  
+  // Identity Documents
+  pan_number: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"),
+  aadhaar_number: z.string().regex(/^\d{12}$/, "Aadhaar must be 12 digits"),
+  
+  // Address
+  address_line1: z.string().min(5, "Address is required"),
+  address_line2: z.string().optional(),
+  city: z.string().min(2, "City is required"),
+  state: z.string().min(2, "State is required"),
+  pincode: z.string().regex(/^\d{6}$/, "Invalid pincode"),
+  
+  // Bank Details
+  bank_name: z.string().min(3, "Bank name is required"),
+  account_number: z.string().min(8, "Invalid account number"),
+  ifsc_code: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC code"),
+  account_type: z.enum(["savings", "current"]),
+  
+  // Financial Information
+  income_bracket: z.enum(["0-5L", "5-10L", "10-25L", "25L+"]),
 });
 
-type KycFormValues = z.infer<typeof kycFormSchema>;
+type KYCFormData = z.infer<typeof kycSchema>;
 
-export function KycForm() {
-  const [loading, setLoading] = useState(false);
+const steps = [
+  { id: 1, title: "Personal Info", icon: User },
+  { id: 2, title: "Identity", icon: FileText },
+  { id: 3, title: "Address", icon: MapPin },
+  { id: 4, title: "Bank Details", icon: CreditCard },
+  { id: 5, title: "Financial Info", icon: Banknote },
+];
+
+export function KYCForm() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
+  const supabase = createClientComponentClient<Database>();
   
-  const form = useForm<KycFormValues>({
-    resolver: zodResolver(kycFormSchema),
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+  } = useForm<KYCFormData>({
+    resolver: zodResolver(kycSchema),
     defaultValues: {
-      fullName: "",
-      dateOfBirth: "",
-      panNumber: "",
-      aadhaarNumber: "",
-      address: "",
-      city: "",
-      state: "",
-      postalCode: "",
-      mobileNumber: "",
-      bankAccountNumber: "",
-      bankIfscCode: "",
-      bankName: "",
-      incomeBracket: "",
+      account_type: "savings",
+      income_bracket: "0-5L",
     },
   });
   
-  const onSubmit = async (data: KycFormValues) => {
+  const onSubmit = async (data: KYCFormData) => {
     if (!user) {
-      setError("You must be logged in to complete KYC");
+      setError("Please log in to complete KYC");
       return;
     }
     
-    setLoading(true);
+    setSubmitting(true);
     setError(null);
     
     try {
-      // Insert KYC details into the database
+      // Submit KYC details
       const { error: kycError } = await supabase
-        .from('kyc_details')
+        .from("kyc_details")
         .insert({
           user_id: user.id,
-          full_name: data.fullName,
-          date_of_birth: data.dateOfBirth,
-          pan_number: data.panNumber,
-          aadhaar_number: data.aadhaarNumber,
-          address: data.address,
-          city: data.city,
-          state: data.state,
-          postal_code: data.postalCode,
-          mobile_number: data.mobileNumber,
-          bank_account_number: data.bankAccountNumber,
-          bank_ifsc_code: data.bankIfscCode,
-          bank_name: data.bankName,
-          income_bracket: data.incomeBracket,
-          status: 'pending', // Add this status field to track verification
+          ...data,
+          status: "pending",
         });
       
       if (kycError) {
-        throw new Error(kycError.message);
+        if (kycError.code === "23505") {
+          setError("KYC details already submitted");
+        } else {
+          setError(kycError.message);
+        }
+        return;
       }
       
-      // Mark KYC as submitted but pending verification
-      setSuccess("KYC verification submitted successfully! Your information will be reviewed within 1-3 business days.");
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 3000);
-    } catch (err: unknown) {
-      setError((err as Error)?.message || "An error occurred while submitting KYC details");
+      // Update profile
+      await updateProfile({
+        full_name: data.full_name,
+        kyc_completed: true,
+      });
+      
+      // Redirect to dashboard
+      router.push("/dashboard");
+    } catch (err) {
+      setError("Failed to submit KYC details");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
-
+  
+  const nextStep = () => {
+    if (currentStep < steps.length) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+  
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+  
+  const progress = (currentStep / steps.length) * 100;
+  
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="w-full max-w-4xl p-6 md:p-8 bg-card rounded-lg border border-border shadow-xl"
-    >
-      <div className="mb-8 text-center">
-        <h2 className="text-2xl md:text-3xl font-bold">KYC Verification</h2>
-        <p className="mt-2 text-muted-foreground">
-          Complete your KYC details to start trading on Heights
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Complete Your KYC</h1>
+        <p className="text-muted-foreground">
+          Verify your identity to start trading on Heights
         </p>
+      </div>
+      
+      {/* Progress Steps */}
+      <div className="mb-8">
+        <Progress value={progress} className="mb-4" />
+        <div className="flex justify-between">
+          {steps.map((step) => {
+            const Icon = step.icon;
+            const isActive = step.id === currentStep;
+            const isCompleted = step.id < currentStep;
+            
+            return (
+              <div
+                key={step.id}
+                className={`flex flex-col items-center cursor-pointer transition-all ${
+                  isActive ? "text-primary" : isCompleted ? "text-green-600" : "text-muted-foreground"
+                }`}
+                onClick={() => setCurrentStep(step.id)}
+              >
+                <div
+                  className={`p-3 rounded-full mb-2 transition-all ${
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : isCompleted
+                      ? "bg-green-100 dark:bg-green-900/20"
+                      : "bg-muted"
+                  }`}
+                >
+                  {isCompleted ? (
+                    <CheckCircle2 className="h-5 w-5" />
+                  ) : (
+                    <Icon className="h-5 w-5" />
+                  )}
+                </div>
+                <span className="text-xs font-medium">{step.title}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
       
       {error && (
         <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4 mr-2" />
+          <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       
-      {success && (
-        <Alert className="mb-6 bg-green-100 border-green-200 dark:bg-green-900/20 dark:border-green-900">
-          <CheckCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
-          <AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription>
-        </Alert>
-      )}
-      
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Personal Information */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-semibold flex items-center">
-                <User className="mr-2 h-5 w-5" /> Personal Information
-              </h3>
-              
-              <FormField
-                control={form.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name (as per PAN card)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="dateOfBirth"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date of Birth</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input type="date" className="pl-10" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="panNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>PAN Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ABCDE1234F" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Card>
+          <CardHeader>
+            <CardTitle>{steps[currentStep - 1].title}</CardTitle>
+            <CardDescription>
+              Please provide accurate information as per your documents
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Step 1: Personal Information */}
+            {currentStep === 1 && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="full_name">Full Name (as per PAN)</Label>
+                  <Input
+                    id="full_name"
+                    {...register("full_name")}
+                    placeholder="John Doe"
+                  />
+                  {errors.full_name && (
+                    <p className="text-sm text-red-500 mt-1">{errors.full_name.message}</p>
                   )}
-                />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="aadhaarNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Aadhaar Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="123456789012" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <div>
+                  <Label htmlFor="date_of_birth">Date of Birth</Label>
+                  <Input
+                    id="date_of_birth"
+                    type="date"
+                    {...register("date_of_birth")}
+                  />
+                  {errors.date_of_birth && (
+                    <p className="text-sm text-red-500 mt-1">{errors.date_of_birth.message}</p>
                   )}
-                />
-              </div>
-              
-              <FormField
-                control={form.control}
-                name="mobileNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mobile Number</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="9876543210" className="pl-10" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="mobile_number">Mobile Number</Label>
+                  <Input
+                    id="mobile_number"
+                    {...register("mobile_number")}
+                    placeholder="9876543210"
+                    maxLength={10}
+                  />
+                  {errors.mobile_number && (
+                    <p className="text-sm text-red-500 mt-1">{errors.mobile_number.message}</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
             
-            {/* Address Information */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-semibold flex items-center">
-                <Home className="mr-2 h-5 w-5" /> Address Information
-              </h3>
-              
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main Street, Apartment 4B" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="city"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>City</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Mumbai" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+            {/* Step 2: Identity Documents */}
+            {currentStep === 2 && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="pan_number">PAN Number</Label>
+                  <Input
+                    id="pan_number"
+                    {...register("pan_number")}
+                    placeholder="ABCDE1234F"
+                    className="uppercase"
+                    maxLength={10}
+                  />
+                  {errors.pan_number && (
+                    <p className="text-sm text-red-500 mt-1">{errors.pan_number.message}</p>
                   )}
-                />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Maharashtra" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <div>
+                  <Label htmlFor="aadhaar_number">Aadhaar Number</Label>
+                  <Input
+                    id="aadhaar_number"
+                    {...register("aadhaar_number")}
+                    placeholder="123456789012"
+                    maxLength={12}
+                  />
+                  {errors.aadhaar_number && (
+                    <p className="text-sm text-red-500 mt-1">{errors.aadhaar_number.message}</p>
                   )}
-                />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="postalCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Postal Code</FormLabel>
-                      <FormControl>
-                        <Input placeholder="400001" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
+                <Alert>
+                  <Shield className="h-4 w-4" />
+                  <AlertDescription>
+                    Your documents are encrypted and stored securely. We never share your personal information.
+                  </AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
             
-            {/* Bank Information */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-semibold flex items-center">
-                <Building className="mr-2 h-5 w-5" /> Bank Information
-              </h3>
-              
-              <FormField
-                control={form.control}
-                name="bankName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bank Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="State Bank of India" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="bankAccountNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bank Account Number</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input placeholder="123456789012" className="pl-10" {...field} />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+            {/* Step 3: Address */}
+            {currentStep === 3 && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="address_line1">Address Line 1</Label>
+                  <Input
+                    id="address_line1"
+                    {...register("address_line1")}
+                    placeholder="123, Street Name"
+                  />
+                  {errors.address_line1 && (
+                    <p className="text-sm text-red-500 mt-1">{errors.address_line1.message}</p>
                   )}
-                />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="bankIfscCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>IFSC Code</FormLabel>
-                      <FormControl>
-                        <Input placeholder="SBIN0123456" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <div>
+                  <Label htmlFor="address_line2">Address Line 2 (Optional)</Label>
+                  <Input
+                    id="address_line2"
+                    {...register("address_line2")}
+                    placeholder="Apartment, Floor, etc."
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      {...register("city")}
+                      placeholder="Mumbai"
+                    />
+                    {errors.city && (
+                      <p className="text-sm text-red-500 mt-1">{errors.city.message}</p>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      {...register("state")}
+                      placeholder="Maharashtra"
+                    />
+                    {errors.state && (
+                      <p className="text-sm text-red-500 mt-1">{errors.state.message}</p>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="pincode">Pincode</Label>
+                  <Input
+                    id="pincode"
+                    {...register("pincode")}
+                    placeholder="400001"
+                    maxLength={6}
+                  />
+                  {errors.pincode && (
+                    <p className="text-sm text-red-500 mt-1">{errors.pincode.message}</p>
                   )}
-                />
-              </div>
-            </div>
+                </div>
+              </motion.div>
+            )}
             
-            {/* Financial Information */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-semibold flex items-center">
-                <DollarSign className="mr-2 h-5 w-5" /> Financial Information
-              </h3>
-              
-              <FormField
-                control={form.control}
-                name="incomeBracket"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Annual Income</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select annual income range" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Below ₹2.5 Lakhs">Below ₹2.5 Lakhs</SelectItem>
-                        <SelectItem value="₹2.5 Lakhs - ₹5 Lakhs">₹2.5 Lakhs - ₹5 Lakhs</SelectItem>
-                        <SelectItem value="₹5 Lakhs - ₹10 Lakhs">₹5 Lakhs - ₹10 Lakhs</SelectItem>
-                        <SelectItem value="₹10 Lakhs - ₹25 Lakhs">₹10 Lakhs - ₹25 Lakhs</SelectItem>
-                        <SelectItem value="₹25 Lakhs - ₹50 Lakhs">₹25 Lakhs - ₹50 Lakhs</SelectItem>
-                        <SelectItem value="₹50 Lakhs - ₹1 Crore">₹50 Lakhs - ₹1 Crore</SelectItem>
-                        <SelectItem value="Above ₹1 Crore">Above ₹1 Crore</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
+            {/* Step 4: Bank Details */}
+            {currentStep === 4 && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="bank_name">Bank Name</Label>
+                  <Input
+                    id="bank_name"
+                    {...register("bank_name")}
+                    placeholder="State Bank of India"
+                  />
+                  {errors.bank_name && (
+                    <p className="text-sm text-red-500 mt-1">{errors.bank_name.message}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <Label htmlFor="account_number">Account Number</Label>
+                  <Input
+                    id="account_number"
+                    {...register("account_number")}
+                    placeholder="12345678901234"
+                  />
+                  {errors.account_number && (
+                    <p className="text-sm text-red-500 mt-1">{errors.account_number.message}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <Label htmlFor="ifsc_code">IFSC Code</Label>
+                  <Input
+                    id="ifsc_code"
+                    {...register("ifsc_code")}
+                    placeholder="SBIN0001234"
+                    className="uppercase"
+                    maxLength={11}
+                  />
+                  {errors.ifsc_code && (
+                    <p className="text-sm text-red-500 mt-1">{errors.ifsc_code.message}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <Label htmlFor="account_type">Account Type</Label>
+                  <Select onValueChange={(value) => setValue("account_type", value as "savings" | "current")}>
+                    <SelectTrigger id="account_type">
+                      <SelectValue placeholder="Select account type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="savings">Savings</SelectItem>
+                      <SelectItem value="current">Current</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.account_type && (
+                    <p className="text-sm text-red-500 mt-1">{errors.account_type.message}</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+            
+            {/* Step 5: Financial Information */}
+            {currentStep === 5 && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="income_bracket">Annual Income</Label>
+                  <Select onValueChange={(value) => setValue("income_bracket", value as any)}>
+                    <SelectTrigger id="income_bracket">
+                      <SelectValue placeholder="Select income bracket" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0-5L">₹0 - ₹5 Lakhs</SelectItem>
+                      <SelectItem value="5-10L">₹5 Lakhs - ₹10 Lakhs</SelectItem>
+                      <SelectItem value="10-25L">₹10 Lakhs - ₹25 Lakhs</SelectItem>
+                      <SelectItem value="25L+">Above ₹25 Lakhs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.income_bracket && (
+                    <p className="text-sm text-red-500 mt-1">{errors.income_bracket.message}</p>
+                  )}
+                </div>
+                
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    This information helps us comply with regulatory requirements and provide you with appropriate investment options.
+                  </AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Navigation Buttons */}
+        <div className="flex justify-between mt-6">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={prevStep}
+            disabled={currentStep === 1}
+          >
+            Previous
+          </Button>
           
-          <div className="border-t pt-6">
-            <p className="text-sm text-muted-foreground mb-6">
-              By submitting this form, you declare that all the information provided is true and accurate. 
-              Heights Trading Platform may verify your information with appropriate authorities.
-            </p>
-            
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? "Submitting..." : "Submit KYC Details"}
+          {currentStep < steps.length ? (
+            <Button type="button" onClick={nextStep}>
+              Next
             </Button>
-          </div>
-        </form>
-      </Form>
-    </motion.div>
+          ) : (
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Submitting..." : "Submit KYC"}
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }

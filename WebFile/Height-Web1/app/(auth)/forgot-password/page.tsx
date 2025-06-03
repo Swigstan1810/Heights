@@ -1,8 +1,10 @@
+// app/(auth)/forgot-password/page.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from "@/types/supabase";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +18,8 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  const supabase = createClientComponentClient<Database>();
   
   const handlePasswordReset = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

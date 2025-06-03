@@ -9,6 +9,7 @@ import { marketDataService, type MarketData } from "@/lib/market-data";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   ArrowDownRight, 
   Wallet, 
@@ -20,11 +21,16 @@ import {
   Star,
   Activity,
   BarChart3,
-  Plus
+  Plus,
+  Shield,
+  AlertCircle,
+  CheckCircle2
 } from "lucide-react";
 import { AssistantButton } from '@/components/ai-assistant';
 import { Input } from "@/components/ui/input";
 import dynamic from 'next/dynamic';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 
 // Dynamically import the chart component to avoid SSR issues
 const PriceChart = dynamic(
@@ -39,22 +45,38 @@ const PriceChart = dynamic(
   }
 );
 
+interface WalletBalance {
+  balance: number;
+  locked_balance: number;
+  currency: string;
+}
+
+interface Portfolio {
+  symbol: string;
+  quantity: number;
+  average_price: number;
+  current_value: number;
+  profit_loss: number;
+  profit_loss_percent: number;
+}
+
 export default function Dashboard() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading, isAuthenticated, checkSession } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'crypto');
   const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
   const [selectedCrypto, setSelectedCrypto] = useState('CRYPTO:BTC');
   const [searchQuery, setSearchQuery] = useState('');
-  const [favorites, setFavorites] = useState<Set<string>>(new Set(['CRYPTO:BTC', 'CRYPTO:ETH']));
-  const [portfolioValue, setPortfolioValue] = useState(125432.50);
-  const [portfolioChange, setPortfolioChange] = useState(2.4);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(null);
+  const [portfolio, setPortfolio] = useState<Portfolio[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [sessionValid, setSessionValid] = useState(true);
+  
+  const supabase = createClientComponentClient<Database>();
 
-  // Debug log for auth state
-  console.log('[Dashboard] user:', user, 'loading:', loading);
-
-  // Extended list of cryptocurrencies (like CoinSpot)
+  // Extended list of cryptocurrencies
   const CRYPTO_LIST = [
     { symbol: 'CRYPTO:BTC', name: 'Bitcoin', icon: '₿' },
     { symbol: 'CRYPTO:ETH', name: 'Ethereum', icon: 'Ξ' },
@@ -69,19 +91,84 @@ export default function Dashboard() {
     { symbol: 'CRYPTO:UNI', name: 'Uniswap', icon: 'U' },
     { symbol: 'CRYPTO:AAVE', name: 'Aave', icon: 'Aa' },
   ];
-  
-  useEffect(() => {
-    if (!loading && !user) {
-        router.push("/login");
-    }
-  }, [user, loading, router]);
 
+  // Session validation check
   useEffect(() => {
-    if (user) {
-      // Connect to market data
+    const validateSession = async () => {
+      const isValid = await checkSession();
+      setSessionValid(isValid);
+      if (!isValid && !loading) {
+        router.push("/login");
+      }
+    };
+
+    validateSession();
+    // Check session every 5 minutes
+    const interval = setInterval(validateSession, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [checkSession, loading, router]);
+
+  // Fetch user data (wallet, portfolio, watchlist)
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user || !sessionValid) return;
+
+      try {
+        setLoadingData(true);
+
+        // Fetch wallet balance
+        const { data: walletData, error: walletError } = await supabase
+          .from('wallet_balance')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!walletError && walletData) {
+          setWalletBalance(walletData);
+        }
+
+        // Fetch portfolio
+        const { data: portfolioData, error: portfolioError } = await supabase
+          .from('portfolio')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (!portfolioError && portfolioData) {
+          setPortfolio(portfolioData);
+        }
+
+        // Fetch watchlist/favorites
+        const { data: watchlistData, error: watchlistError } = await supabase
+          .from('watchlist')
+          .select('symbol')
+          .eq('user_id', user.id);
+
+        if (!watchlistError && watchlistData) {
+          setFavorites(new Set(watchlistData.map(item => item.symbol)));
+        }
+
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    fetchUserData();
+  }, [user, sessionValid]);
+
+  // Redirect logic for authentication
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, loading, router]);
+
+  // Connect to market data
+  useEffect(() => {
+    if (isAuthenticated && sessionValid) {
       marketDataService.connect();
       
-      // Subscribe to all cryptos
       const unsubscribes: (() => void)[] = [];
       
       CRYPTO_LIST.forEach(crypto => {
@@ -95,25 +182,38 @@ export default function Dashboard() {
         unsubscribes.forEach(unsub => unsub());
       };
     }
-  }, [user]);
-  
+  }, [isAuthenticated, sessionValid]);
+
+  // Toggle favorite with database sync
+  const toggleFavorite = async (symbol: string) => {
+    if (!user) return;
+
+    const newFavorites = new Set(favorites);
+    
+    if (newFavorites.has(symbol)) {
+      newFavorites.delete(symbol);
+      // Remove from database
+      await supabase
+        .from('watchlist')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('symbol', symbol);
+    } else {
+      newFavorites.add(symbol);
+      // Add to database
+      await supabase
+        .from('watchlist')
+        .insert({ user_id: user.id, symbol });
+    }
+    
+    setFavorites(newFavorites);
+  };
+
   // Filter cryptos based on search
   const filteredCryptos = CRYPTO_LIST.filter(crypto => 
     crypto.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     crypto.symbol.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const toggleFavorite = (symbol: string) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(symbol)) {
-        newFavorites.delete(symbol);
-      } else {
-        newFavorites.add(symbol);
-      }
-      return newFavorites;
-    });
-  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -123,28 +223,61 @@ export default function Dashboard() {
       maximumFractionDigits: 2,
     }).format(amount);
   };
-  
-  if (loading || !user) {
+
+  // Calculate portfolio metrics
+  const portfolioMetrics = {
+    totalValue: portfolio.reduce((sum, p) => sum + (p.current_value || 0), 0) + (walletBalance?.balance || 0),
+    totalPL: portfolio.reduce((sum, p) => sum + (p.profit_loss || 0), 0),
+    totalPLPercent: portfolio.length > 0 
+      ? portfolio.reduce((sum, p) => sum + (p.profit_loss_percent || 0), 0) / portfolio.length 
+      : 0,
+  };
+
+  if (loading || !isAuthenticated || !sessionValid) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <p className="mt-4 text-muted-foreground">
+            {!sessionValid ? 'Validating session...' : 'Loading...'}
+          </p>
         </div>
       </div>
     );
   }
-  
+
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
       
       <div className="container mx-auto px-4 pt-24 pb-16">
+        {/* Security Status Alert */}
+        {profile && !profile.kyc_completed && (
+          <Alert className="mb-6 border-yellow-600 bg-yellow-600/10">
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-600">
+              Complete your KYC verification to unlock trading features.
+              <Button 
+                variant="link" 
+                className="text-yellow-600 underline ml-2 p-0 h-auto"
+                onClick={() => router.push('/kyc')}
+              >
+                Complete KYC
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Welcome back, {user.email?.split('@')[0]}</h1>
-            <p className="text-muted-foreground">Manage your portfolio across all asset classes</p>
+            <h1 className="text-3xl font-bold">
+              Welcome back, {profile?.full_name || user?.email?.split('@')[0]}
+            </h1>
+            <p className="text-muted-foreground flex items-center gap-2 mt-2">
+              <Shield className="h-4 w-4 text-green-500" />
+              Secure session active • Last login: {new Date(user?.last_sign_in_at || '').toLocaleString()}
+            </p>
           </div>
           
           <div className="flex gap-2">
@@ -160,22 +293,34 @@ export default function Dashboard() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(portfolioValue)}</div>
-              <p className={`text-xs ${portfolioChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {portfolioChange >= 0 ? '+' : ''}{portfolioChange}% from last month
+              <div className="text-2xl font-bold">
+                {loadingData ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  formatCurrency(portfolioMetrics.totalValue)
+                )}
+              </div>
+              <p className={`text-xs ${portfolioMetrics.totalPLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {portfolioMetrics.totalPLPercent >= 0 ? '+' : ''}{portfolioMetrics.totalPLPercent.toFixed(2)}% all time
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Positions</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">8</div>
+              <div className="text-2xl font-bold">
+                {loadingData ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  formatCurrency(walletBalance?.balance || 0)
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
-                Across crypto and stocks
+                Ready for trading
               </p>
             </CardContent>
           </Card>
@@ -186,14 +331,16 @@ export default function Dashboard() {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">+$1,245.30</div>
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(portfolioMetrics.totalPL)}
+              </div>
               <p className="text-xs text-muted-foreground">
-                +0.99% today
+                {portfolio.length} active positions
               </p>
             </CardContent>
           </Card>
         </div>
-        
+
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
@@ -211,7 +358,7 @@ export default function Dashboard() {
             </TabsTrigger>
           </TabsList>
           
-          {/* Crypto Tab - CoinSpot Style */}
+          {/* Crypto Tab */}
           <TabsContent value="crypto" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
               {/* Crypto List */}
@@ -220,7 +367,12 @@ export default function Dashboard() {
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       Cryptocurrency Markets
-                      <Button size="sm" variant="outline" onClick={() => router.push('/trade')}>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => router.push('/trade')}
+                        disabled={!profile?.kyc_completed}
+                      >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </CardTitle>
@@ -421,15 +573,17 @@ export default function Dashboard() {
                         <Button 
                           className="flex-1" 
                           onClick={() => router.push(`/trade?symbol=${selectedCrypto}`)}
+                          disabled={!profile?.kyc_completed}
                         >
-                          Buy {selectedCrypto.split(':')[1]}
+                          {profile?.kyc_completed ? `Buy ${selectedCrypto.split(':')[1]}` : 'Complete KYC to Trade'}
                         </Button>
                         <Button 
                           variant="outline" 
                           className="flex-1"
                           onClick={() => router.push(`/trade?symbol=${selectedCrypto}`)}
+                          disabled={!profile?.kyc_completed}
                         >
-                          Sell {selectedCrypto.split(':')[1]}
+                          {profile?.kyc_completed ? `Sell ${selectedCrypto.split(':')[1]}` : 'KYC Required'}
                         </Button>
                       </div>
                     </CardContent>

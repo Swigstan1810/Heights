@@ -1,9 +1,11 @@
+// app/(auth)/reset-password/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from "@/types/supabase";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +20,7 @@ export default function ResetPassword() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
+  const supabase = createClientComponentClient<Database>();
   
   // Check if there's an access token in the URL (hash fragment)
   useEffect(() => {
@@ -34,7 +37,7 @@ export default function ResetPassword() {
     };
 
     handleHashChange();
-  }, []);
+  }, [supabase]);
   
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
