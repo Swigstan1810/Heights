@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
 
@@ -26,6 +26,7 @@ export default function SignUp() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     
     // Basic validation
     if (!email || !password || !confirmPassword) {
@@ -54,22 +55,149 @@ export default function SignUp() {
     setLoading(true);
     
     try {
-      // Use the direct Supabase client for sign up
-      const { error: signUpError } = await supabase.auth.signUp({
+      // First, check if email already exists
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .single();
+      
+      if (existingUser) {
+        setError("This email is already registered. Please login instead.");
+        setLoading(false);
+        return;
+      }
+      
+      // Sign up the user
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
       
       if (signUpError) {
-        setError(signUpError.message);
-      } else {
+        console.error('Signup error:', signUpError);
+        
+        // Handle specific error cases
+        if (signUpError.message.includes('rate limit')) {
+          setError("Too many signup attempts. Please wait a few minutes and try again.");
+        } else if (signUpError.message.includes('already registered')) {
+          setError("This email is already registered. Please login instead.");
+        } else if (signUpError.message.includes('Database error')) {
+          // If database error, still show success as the user was created in auth
+          console.log('Database trigger may have failed, but user was created');
+          setSuccess("Registration successful! Please check your email to confirm your account.");
+          
+          // Try to manually ensure profile and wallet exist after a delay
+          if (data?.user) {
+            const user = data.user as { id: string; email: string | null };
+            setTimeout(async () => {
+              try {
+                // Check and create profile if needed
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('id')
+                  .eq('id', user.id)
+                  .single();
+                
+                if (!profile) {
+                  await supabase
+                    .from('profiles')
+                    .insert({
+                      id: user.id,
+                      email: user.email!
+                    });
+                }
+                
+                // Check and create wallet if needed
+                const { data: wallet } = await supabase
+                  .from('wallet_balance')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .single();
+                
+                if (!wallet) {
+                  await supabase
+                    .from('wallet_balance')
+                    .insert({
+                      user_id: user.id,
+                      balance: 0,
+                      locked_balance: 0,
+                      currency: 'INR'
+                    });
+                }
+              } catch (err) {
+                console.log('Manual profile/wallet creation:', err);
+              }
+            }, 3000);
+          }
+          
+          setTimeout(() => {
+            router.push("/dashboard");
+          }, 4000);
+          return;
+        } else {
+          setError(signUpError.message || "An error occurred during signup. Please try again.");
+        }
+      } else if (data?.user) {
+        const user = data.user as { id: string; email: string | null };
+        // Success
         setSuccess("Registration successful! Please check your email to confirm your account.");
+        
+        // Ensure profile and wallet are created after a delay
+        setTimeout(async () => {
+          try {
+            // Check if profile exists
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', user.id)
+              .single();
+            
+            if (!profile) {
+              // Create profile if it doesn't exist
+              await supabase
+                .from('profiles')
+                .insert({
+                  id: user.id,
+                  email: user.email!
+                });
+            }
+            
+            // Check if wallet exists
+            const { data: wallet } = await supabase
+              .from('wallet_balance')
+              .select('id')
+              .eq('user_id', user.id)
+              .single();
+            
+            if (!wallet) {
+              // Create wallet if it doesn't exist
+              await supabase
+                .from('wallet_balance')
+                .insert({
+                  user_id: user.id,
+                  balance: 0,
+                  locked_balance: 0,
+                  currency: 'INR'
+                });
+            }
+          } catch (err) {
+            console.log('Post-signup profile/wallet check:', err);
+          }
+        }, 2000);
+        
         setTimeout(() => {
           router.push("/dashboard");
         }, 3000);
+      } else {
+        setError("Signup failed. Please try again.");
       }
     } catch (err: unknown) {
-      setError("An error occurred during registration");
+      console.error('Unexpected signup error:', err);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -135,7 +263,8 @@ export default function SignUp() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={loading}
+              disabled={loading || !!success}
+              autoComplete="email"
             />
           </div>
           
@@ -148,7 +277,8 @@ export default function SignUp() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={loading}
+              disabled={loading || !!success}
+              autoComplete="new-password"
             />
             <p className="text-xs text-muted-foreground">
               Password must be at least 8 characters long
@@ -164,16 +294,24 @@ export default function SignUp() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              disabled={loading}
+              disabled={loading || !!success}
+              autoComplete="new-password"
             />
           </div>
           
           <Button
             type="submit"
             className="w-full"
-            disabled={loading}
+            disabled={loading || !!success}
           >
-            {loading ? "Signing Up..." : "Sign Up"}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating Account...
+              </>
+            ) : (
+              "Sign Up"
+            )}
           </Button>
         </form>
         

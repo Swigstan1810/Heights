@@ -2,16 +2,16 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { User, Session } from '@supabase/supabase-js';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { User, Session } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
 interface Profile {
   id: string;
   email: string;
-  full_name?: string;
-  avatar_url?: string;
+  full_name: string | null;
+  avatar_url: string | null;
   kyc_completed: boolean;
   created_at: string;
   updated_at: string;
@@ -26,70 +26,25 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  refreshSession: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+  refreshSession: () => Promise<void>;
   checkSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Session timeout in milliseconds (30 minutes)
-const SESSION_TIMEOUT = 30 * 60 * 1000;
-
-// List of public routes that don't require authentication
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/ai', '/market'];
-
-// List of protected routes that require authentication
-const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet'];
-
-// List of routes that require KYC completion
-const KYC_REQUIRED_ROUTES = ['/trade', '/wallet'];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lastActivity, setLastActivity] = useState(Date.now());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   const router = useRouter();
-  const pathname = usePathname();
   const supabase = createClientComponentClient<Database>();
 
-  // Activity tracking for session timeout
-  useEffect(() => {
-    const handleActivity = () => {
-      setLastActivity(Date.now());
-    };
-
-    // Track user activity
-    window.addEventListener('mousedown', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('scroll', handleActivity);
-    window.addEventListener('touchstart', handleActivity);
-
-    return () => {
-      window.removeEventListener('mousedown', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      window.removeEventListener('scroll', handleActivity);
-      window.removeEventListener('touchstart', handleActivity);
-    };
-  }, []);
-
-  // Session timeout check
-  useEffect(() => {
-    const checkTimeout = setInterval(() => {
-      if (session && Date.now() - lastActivity > SESSION_TIMEOUT) {
-        console.log('Session timeout - logging out user');
-        signOut();
-      }
-    }, 60000); // Check every minute
-
-    return () => clearInterval(checkTimeout);
-  }, [session, lastActivity]);
-
   // Fetch user profile
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -97,251 +52,320 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+
       return data;
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error in fetchProfile:', error);
       return null;
+    }
+  };
+
+  // Ensure wallet balance exists for user
+  const ensureWalletBalance = async (userId: string) => {
+    try {
+      // Check if wallet balance exists
+      const { data: existingWallet, error: checkError } = await supabase
+        .from('wallet_balance')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      if (checkError && checkError.code === 'PGRST116') {
+        // No wallet found, create one
+        console.log('Creating wallet balance for user:', userId);
+        const { error: createError } = await supabase
+          .from('wallet_balance')
+          .insert({
+            user_id: userId,
+            balance: 0,
+            locked_balance: 0,
+            currency: 'INR'
+          });
+
+        if (createError) {
+          console.error('Error creating wallet balance:', createError);
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring wallet balance:', error);
+    }
+  };
+
+  // Sign out function (moved up to avoid dependency issues)
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Sign out error:', error);
+        return;
+      }
+
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsAuthenticated(false);
+      router.push('/login');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
+  // Check session validity
+  const checkSession = useCallback(async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Session check error:', error);
+        return false;
+      }
+
+      if (!session) {
+        return false;
+      }
+
+      // Check if session is expired
+      const expiresAt = new Date(session.expires_at! * 1000);
+      const now = new Date();
+      
+      if (expiresAt <= now) {
+        console.log('Session expired');
+        await signOut();
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error checking session:', error);
+      return false;
     }
   }, [supabase]);
 
-  // Check if route requires authentication
-  const isProtectedRoute = useCallback((path: string) => {
-    return PROTECTED_ROUTES.some(route => path.startsWith(route));
-  }, []);
-
-  // Check if route requires KYC
-  const requiresKYC = useCallback((path: string) => {
-    return KYC_REQUIRED_ROUTES.some(route => path.startsWith(route));
-  }, []);
-
   // Initialize auth state
   useEffect(() => {
+    let mounted = true;
+    
     const initializeAuth = async () => {
       try {
+        setLoading(true);
+        
         // Get initial session
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
         
         if (error) {
-          console.error('Session error:', error);
+          console.error('Error getting session:', error);
           setLoading(false);
           return;
         }
 
-        if (initialSession?.user) {
-          setSession(initialSession);
-          setUser(initialSession.user);
-          await fetchProfile(initialSession.user.id);
+        if (session?.user) {
+          setSession(session);
+          setUser(session.user);
+          setIsAuthenticated(true);
+          
+          // Fetch profile
+          const profileData = await fetchProfile(session.user.id);
+          if (profileData && mounted) {
+            setProfile(profileData);
+          }
+          
+          // Ensure wallet balance exists
+          await ensureWalletBalance(session.user.id);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('Error initializing auth:', error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     initializeAuth();
-  }, [supabase, fetchProfile]);
 
-  // Listen for auth state changes
-  useEffect(() => {
+    // Set up auth state listener
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event);
-
+      console.log('Auth state changed:', event);
+      
+      if (!mounted) return;
+      
       if (event === 'SIGNED_IN' && session) {
         setSession(session);
         setUser(session.user);
-        await fetchProfile(session.user.id);
-        setLastActivity(Date.now());
+        setIsAuthenticated(true);
+        
+        // Fetch profile
+        const profileData = await fetchProfile(session.user.id);
+        if (profileData) {
+          setProfile(profileData);
+        }
+        
+        // Ensure wallet balance exists
+        await ensureWalletBalance(session.user.id);
+        
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
         setProfile(null);
+        setIsAuthenticated(false);
+        router.push('/login');
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setSession(session);
-        setLastActivity(Date.now());
+        console.log('Token refreshed successfully');
+      } else if (event === 'USER_UPDATED' && session) {
+        setUser(session.user);
+        // Refetch profile
+        const profileData = await fetchProfile(session.user.id);
+        if (profileData) {
+          setProfile(profileData);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [supabase, fetchProfile]);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase, router]);
 
-  // Route protection
-  useEffect(() => {
-    if (!loading) {
-      const currentPath = pathname;
-      
-      // Check if current route is protected
-      if (isProtectedRoute(currentPath) && !user) {
-        console.log('Redirecting to login - protected route without auth');
-        router.push('/login');
-        return;
-      }
-
-      // Check if route requires KYC
-      if (user && requiresKYC(currentPath) && profile && !profile.kyc_completed) {
-        console.log('Redirecting to KYC - route requires KYC completion');
-        router.push('/kyc');
-        return;
-      }
-    }
-  }, [pathname, user, profile, loading, router, isProtectedRoute, requiresKYC]);
-
+  // Sign in function
   const signIn = async (email: string, password: string) => {
     try {
-      // Add rate limiting check
-      const attempts = sessionStorage.getItem(`login_attempts_${email}`);
-      const lastAttempt = sessionStorage.getItem(`last_attempt_${email}`);
-      
-      if (attempts && lastAttempt) {
-        const attemptCount = parseInt(attempts);
-        const lastAttemptTime = parseInt(lastAttempt);
-        const timeSinceLastAttempt = Date.now() - lastAttemptTime;
-        
-        // Lock account for 15 minutes after 5 failed attempts
-        if (attemptCount >= 5 && timeSinceLastAttempt < 15 * 60 * 1000) {
-          const remainingTime = Math.ceil((15 * 60 * 1000 - timeSinceLastAttempt) / 60000);
-          return { 
-            error: new Error(`Too many login attempts. Please try again in ${remainingTime} minutes.`) 
-          };
-        }
-      }
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        // Track failed attempts
-        const currentAttempts = parseInt(sessionStorage.getItem(`login_attempts_${email}`) || '0');
-        sessionStorage.setItem(`login_attempts_${email}`, (currentAttempts + 1).toString());
-        sessionStorage.setItem(`last_attempt_${email}`, Date.now().toString());
-        
         return { error };
       }
 
-      // Clear failed attempts on successful login
-      sessionStorage.removeItem(`login_attempts_${email}`);
-      sessionStorage.removeItem(`last_attempt_${email}`);
-
-      if (data.user) {
-        await fetchProfile(data.user.id);
+      if (data.session && data.user) {
+        setSession(data.session);
+        setUser(data.user);
+        setIsAuthenticated(true);
+        
+        // Fetch profile
+        const profileData = await fetchProfile(data.user.id);
+        if (profileData) {
+          setProfile(profileData);
+        }
+        
+        // Ensure wallet balance exists
+        await ensureWalletBalance(data.user.id);
       }
 
       return { error: null };
     } catch (error) {
+      console.error('Sign in error:', error);
       return { error: error as Error };
     }
   };
 
+  // Sign up function
   const signUp = async (email: string, password: string) => {
     try {
-      // Password strength validation
-      if (password.length < 8) {
-        return { error: new Error('Password must be at least 8 characters long') };
-      }
-      
-      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/.test(password)) {
-        return { error: new Error('Password must contain uppercase, lowercase, and numbers') };
-      }
-
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            created_from: 'web_app',
-          }
-        }
+        },
       });
 
-      if (error) return { error };
+      if (error) {
+        return { error };
+      }
+
+      // If sign up successful and user is created
+      if (data.user) {
+        // The database trigger should create the profile and wallet
+        // But we'll ensure wallet exists after a short delay
+        setTimeout(async () => {
+          if (data.user) {
+            await ensureWalletBalance(data.user.id);
+          }
+        }, 2000);
+      }
 
       return { error: null };
     } catch (error) {
+      console.error('Sign up error:', error);
       return { error: error as Error };
     }
   };
 
-  const signOut = async () => {
+  // Update profile function
+  const updateProfile = async (updates: Partial<Profile>) => {
     try {
-      // Clear any sensitive data from local storage
-      localStorage.removeItem('portfolio_data');
-      localStorage.removeItem('watchlist');
-      sessionStorage.clear();
-      
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      router.push('/');
+      if (!user) {
+        return { error: new Error('No user logged in') };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (error) {
+        return { error };
+      }
+
+      if (data) {
+        setProfile(data);
+      }
+
+      return { error: null };
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Update profile error:', error);
+      return { error: error as Error };
     }
   };
 
+  // Refresh session function
   const refreshSession = async () => {
     try {
       const { data: { session }, error } = await supabase.auth.refreshSession();
-      if (error) throw error;
       
+      if (error) {
+        console.error('Session refresh error:', error);
+        await signOut();
+        return;
+      }
+
       if (session) {
         setSession(session);
-        setLastActivity(Date.now());
+        setUser(session.user);
+        console.log('Session refreshed successfully');
       }
     } catch (error) {
       console.error('Error refreshing session:', error);
-      // If refresh fails, sign out the user
       await signOut();
     }
   };
 
-  const updateProfile = async (updates: Partial<Profile>) => {
-    if (!user) return { error: new Error('No user logged in') };
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
-      if (error) return { error };
-
-      // Refresh profile data
-      await fetchProfile(user.id);
-      return { error: null };
-    } catch (error) {
-      return { error: error as Error };
-    }
-  };
-
-  const checkSession = async (): Promise<boolean> => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      return !error && !!session;
-    } catch {
-      return false;
-    }
-  };
-
-  const value: AuthContextType = {
+  const value = {
     user,
     session,
     profile,
     loading,
-    isAuthenticated: !!user && !!session,
+    isAuthenticated,
     signIn,
     signUp,
     signOut,
-    refreshSession,
     updateProfile,
+    refreshSession,
     checkSession,
   };
 
