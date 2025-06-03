@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Send, 
   Brain, 
-  ChartBar,
+  BarChart,
   Activity,
   Loader2,
 } from 'lucide-react';
@@ -241,7 +241,7 @@ Please provide specific, actionable insights based on this real-time data.`;
               {isAnalyzing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <ChartBar className="h-4 w-4" />
+                <BarChart className="h-4 w-4" />
               )}
               <span className="ml-2">Full Analysis</span>
             </Button>
