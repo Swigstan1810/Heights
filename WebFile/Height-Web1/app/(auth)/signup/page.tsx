@@ -55,25 +55,15 @@ export default function SignUp() {
     setLoading(true);
     
     try {
-      // First, check if email already exists
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .single();
-      
-      if (existingUser) {
-        setError("This email is already registered. Please login instead.");
-        setLoading(false);
-        return;
-      }
-      
       // Sign up the user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            email: email // Store email in user metadata
+          }
         },
       });
       
@@ -85,112 +75,20 @@ export default function SignUp() {
           setError("Too many signup attempts. Please wait a few minutes and try again.");
         } else if (signUpError.message.includes('already registered')) {
           setError("This email is already registered. Please login instead.");
-        } else if (signUpError.message.includes('Database error')) {
-          // If database error, still show success as the user was created in auth
-          console.log('Database trigger may have failed, but user was created');
-          setSuccess("Registration successful! Please check your email to confirm your account.");
-          
-          // Try to manually ensure profile and wallet exist after a delay
-          if (data?.user) {
-            const user = data.user as { id: string; email: string | null };
-            setTimeout(async () => {
-              try {
-                // Check and create profile if needed
-                const { data: profile } = await supabase
-                  .from('profiles')
-                  .select('id')
-                  .eq('id', user.id)
-                  .single();
-                
-                if (!profile) {
-                  await supabase
-                    .from('profiles')
-                    .insert({
-                      id: user.id,
-                      email: user.email!
-                    });
-                }
-                
-                // Check and create wallet if needed
-                const { data: wallet } = await supabase
-                  .from('wallet_balance')
-                  .select('id')
-                  .eq('user_id', user.id)
-                  .single();
-                
-                if (!wallet) {
-                  await supabase
-                    .from('wallet_balance')
-                    .insert({
-                      user_id: user.id,
-                      balance: 0,
-                      locked_balance: 0,
-                      currency: 'INR'
-                    });
-                }
-              } catch (err) {
-                console.log('Manual profile/wallet creation:', err);
-              }
-            }, 3000);
-          }
-          
-          setTimeout(() => {
-            router.push("/dashboard");
-          }, 4000);
-          return;
         } else {
           setError(signUpError.message || "An error occurred during signup. Please try again.");
         }
-      } else if (data?.user) {
-        const user = data.user as { id: string; email: string | null };
-        // Success
+        return;
+      }
+      
+      // If sign up successful
+      if (data?.user) {
         setSuccess("Registration successful! Please check your email to confirm your account.");
         
-        // Ensure profile and wallet are created after a delay
-        setTimeout(async () => {
-          try {
-            // Check if profile exists
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('id', user.id)
-              .single();
-            
-            if (!profile) {
-              // Create profile if it doesn't exist
-              await supabase
-                .from('profiles')
-                .insert({
-                  id: user.id,
-                  email: user.email!
-                });
-            }
-            
-            // Check if wallet exists
-            const { data: wallet } = await supabase
-              .from('wallet_balance')
-              .select('id')
-              .eq('user_id', user.id)
-              .single();
-            
-            if (!wallet) {
-              // Create wallet if it doesn't exist
-              await supabase
-                .from('wallet_balance')
-                .insert({
-                  user_id: user.id,
-                  balance: 0,
-                  locked_balance: 0,
-                  currency: 'INR'
-                });
-            }
-          } catch (err) {
-            console.log('Post-signup profile/wallet check:', err);
-          }
-        }, 2000);
-        
+        // The database trigger should handle profile and wallet creation
+        // But we'll add a small delay and then redirect
         setTimeout(() => {
-          router.push("/dashboard");
+          router.push("/login?registered=true");
         }, 3000);
       } else {
         setError("Signup failed. Please try again.");
@@ -241,14 +139,14 @@ export default function SignUp() {
         
         {error && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4 mr-2" />
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
         
         {success && (
           <Alert className="bg-green-100 border-green-200 dark:bg-green-900/20 dark:border-green-900">
-            <CheckCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
+            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             <AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription>
           </Alert>
         )}
