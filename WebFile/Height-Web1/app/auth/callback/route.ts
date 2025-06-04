@@ -6,6 +6,7 @@ import type { Database } from '@/types/supabase';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || requestUrl.origin;
   const code = requestUrl.searchParams.get('code');
   const error = requestUrl.searchParams.get('error');
   const errorDescription = requestUrl.searchParams.get('error_description');
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   // Handle OAuth errors
   if (error) {
     console.error('OAuth error:', { error, errorDescription });
-    const redirectUrl = new URL('/login', requestUrl.origin);
+    const redirectUrl = new URL('/login', baseUrl);
     redirectUrl.searchParams.set('error', error);
     redirectUrl.searchParams.set('error_description', errorDescription || 'Authentication failed');
     return NextResponse.redirect(redirectUrl);
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       
       if (sessionError) {
         console.error('Session exchange error:', sessionError);
-        const redirectUrl = new URL('/login', requestUrl.origin);
+        const redirectUrl = new URL('/login', baseUrl);
         redirectUrl.searchParams.set('error', 'session_error');
         redirectUrl.searchParams.set('error_description', sessionError.message);
         return NextResponse.redirect(redirectUrl);
@@ -58,11 +59,11 @@ export async function GET(request: NextRequest) {
           .single();
         
         // Always redirect to dashboard, regardless of KYC status
-        return NextResponse.redirect(new URL('/dashboard', requestUrl.origin));
+        return NextResponse.redirect(new URL('/dashboard', baseUrl));
       }
     } catch (error) {
       console.error('Auth callback error:', error);
-      const redirectUrl = new URL('/login', requestUrl.origin);
+      const redirectUrl = new URL('/login', baseUrl);
       redirectUrl.searchParams.set('error', 'callback_error');
       redirectUrl.searchParams.set('error_description', 'An error occurred during authentication');
       return NextResponse.redirect(redirectUrl);
@@ -70,5 +71,5 @@ export async function GET(request: NextRequest) {
   }
 
   // No code provided, redirect to login
-  return NextResponse.redirect(new URL('/login', requestUrl.origin));
+  return NextResponse.redirect(new URL('/login', baseUrl));
 }
