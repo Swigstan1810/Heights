@@ -438,6 +438,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (error) {
           console.error('Error getting session:', error);
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
           setLoading(false);
           return;
         }
@@ -447,21 +451,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(session.user);
           setIsAuthenticated(true);
           
-          const profileData = await fetchProfile(session.user.id);
-          if (profileData && mounted) {
-            setProfile(profileData);
+          try {
+            const profileData = await fetchProfile(session.user.id);
+            if (profileData && mounted) {
+              setProfile(profileData);
+            } else {
+              setProfile(null);
+            }
+            await ensureWalletBalance(session.user.id);
+          } catch (profileError) {
+            console.error('Profile fetch error:', profileError);
+            setProfile(null);
           }
-          
-          await ensureWalletBalance(session.user.id);
 
           // Start session monitoring
           const interval = setInterval(() => {
             checkSession();
           }, 60000); // Check every minute
           setSessionCheckInterval(interval);
+        } else {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setIsAuthenticated(false);
       } finally {
         if (mounted) {
           setLoading(false);
