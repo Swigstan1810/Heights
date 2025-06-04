@@ -81,6 +81,9 @@ export async function middleware(request: NextRequest) {
   const supabase = createMiddlewareClient({ req: request, res: response });
   const { pathname } = request.nextUrl;
 
+  // Use base URL from env or fallback to request origin
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin;
+
   // Apply security headers to all responses
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -101,35 +104,6 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // Special handling for OAuth callbacks
-  if (OAUTH_ROUTES.some(route => pathname.startsWith(route))) {
-    // Verify OAuth state parameter to prevent CSRF
-    const state = request.nextUrl.searchParams.get('state');
-    const code = request.nextUrl.searchParams.get('code');
-    const error = request.nextUrl.searchParams.get('error');
-    
-    // Log OAuth callback attempt
-    console.log('OAuth callback received:', {
-      pathname,
-      hasState: !!state,
-      hasCode: !!code,
-      hasError: !!error,
-      error: error || null,
-    });
-    
-    // If there's an error, redirect to login with error message
-    if (error) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      url.searchParams.set('error', error);
-      url.searchParams.set('error_description', request.nextUrl.searchParams.get('error_description') || 'OAuth authentication failed');
-      return NextResponse.redirect(url);
-    }
-    
-    // Allow Supabase to handle the OAuth callback
-    return response;
-  }
-
   // Get session
   const { data: { session }, error } = await supabase.auth.getSession();
 
@@ -140,8 +114,7 @@ export async function middleware(request: NextRequest) {
 
   // Handle protected routes
   if (isProtectedRoute && !session) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    const url = new URL('/login', baseUrl);
     url.searchParams.set('redirectTo', pathname);
     url.searchParams.set('session_expired', 'true');
     return NextResponse.redirect(url);
