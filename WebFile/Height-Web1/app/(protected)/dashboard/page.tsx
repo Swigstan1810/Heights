@@ -259,6 +259,13 @@ export default function Dashboard() {
       : 0,
   };
 
+  // Defensive: If loading is done and user or profile is missing, redirect or show error
+  useEffect(() => {
+    if (!loading && (!user || !profile)) {
+      router.push('/login');
+    }
+  }, [loading, user, profile, router]);
+
   if (profileError) {
     return (
       <div className="min-h-screen flex items-center justify-center">
