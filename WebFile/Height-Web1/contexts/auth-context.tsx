@@ -35,6 +35,7 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
   checkSession: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<{ error: Error | null }>;
+  profileError: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sessionCheckInterval, setSessionCheckInterval] = useState<NodeJS.Timeout | null>(null);
+  const [profileError, setProfileError] = useState(false);
   
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single();
         if (insertError) {
           console.error('Error creating profile:', insertError);
+          setProfileError(true);
           return null;
         }
         return newProfile as Profile;
@@ -83,11 +86,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return fetchProfile(userId, retries - 1);
         }
         console.error('Error fetching profile:', error);
+        setProfileError(true);
         return null;
       }
       return data as Profile;
     } catch (error) {
       console.error('Error in fetchProfile:', error);
+      setProfileError(true);
       return null;
     }
   }, [supabase, user]);
@@ -568,6 +573,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshSession,
     checkSession,
     resendVerificationEmail,
+    profileError,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -61,7 +61,7 @@ interface Portfolio {
 }
 
 export default function Dashboard() {
-  const { user, profile, loading, isAuthenticated, checkSession } = useAuth();
+  const { user, profile, loading, isAuthenticated, checkSession, profileError } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'crypto');
@@ -239,6 +239,16 @@ export default function Dashboard() {
       ? portfolio.reduce((sum, p) => sum + (p.profit_loss_percent || 0), 0) / portfolio.length 
       : 0,
   };
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 font-bold">Failed to load profile. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
