@@ -432,12 +432,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
+    let loadingTimeout: NodeJS.Timeout | null = null;
     
     const initializeAuth = async () => {
       try {
         setLoading(true);
+        loadingTimeout = setTimeout(() => {
+          if (mounted) {
+            console.warn('Auth loading stuck for 5s, forcing loading=false');
+            setLoading(false);
+          }
+        }, 5000);
         
         const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('AuthProvider: getSession result', { session, error });
         
         if (!mounted) return;
         
@@ -448,6 +456,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null);
           setIsAuthenticated(false);
           setLoading(false);
+          if (loadingTimeout) clearTimeout(loadingTimeout);
           return;
         }
 
@@ -455,9 +464,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(session);
           setUser(session.user);
           setIsAuthenticated(true);
-          
           try {
             const profileData = await fetchProfile(session.user.id);
+            console.log('AuthProvider: fetchProfile result', profileData);
             if (profileData && mounted) {
               setProfile(profileData);
             } else {
@@ -468,7 +477,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('Profile fetch error:', profileError);
             setProfile(null);
           }
-
           // Start session monitoring
           const interval = setInterval(() => {
             checkSession();
@@ -489,6 +497,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         if (mounted) {
           setLoading(false);
+          if (loadingTimeout) clearTimeout(loadingTimeout);
         }
       }
     };
@@ -500,21 +509,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event);
-      
       if (!mounted) return;
-      
       if (event === 'SIGNED_IN' && session) {
         setSession(session);
         setUser(session.user);
         setIsAuthenticated(true);
-        
         const profileData = await fetchProfile(session.user.id);
+        console.log('AuthProvider: fetchProfile result (SIGNED_IN)', profileData);
         if (profileData) {
           setProfile(profileData);
         }
-        
         await ensureWalletBalance(session.user.id);
-
         // Log security event based on provider
         const provider = session.user.app_metadata.provider || 'email';
         await supabase.rpc('log_security_event', {
@@ -527,7 +532,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           p_ip_address: window.location.hostname,
           p_user_agent: navigator.userAgent
         });
-        
       } else if (event === 'SIGNED_OUT') {
         if (sessionCheckInterval) {
           clearInterval(sessionCheckInterval);
@@ -544,6 +548,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (event === 'USER_UPDATED' && session) {
         setUser(session.user);
         const profileData = await fetchProfile(session.user.id);
+        console.log('AuthProvider: fetchProfile result (USER_UPDATED)', profileData);
         if (profileData) {
           setProfile(profileData);
         }
@@ -556,6 +561,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (sessionCheckInterval) {
         clearInterval(sessionCheckInterval);
       }
+      if (loadingTimeout) clearTimeout(loadingTimeout);
     };
   }, [supabase, router, fetchProfile, ensureWalletBalance, checkSession]);
 
