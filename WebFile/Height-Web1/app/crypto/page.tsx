@@ -6,7 +6,28 @@ import { useAuth } from '@/contexts/auth-context';
 
 export default function CryptoPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, profileError } = useAuth();
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 font-bold">Failed to load profile. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Loading...</h2>
+          <p className="text-muted-foreground">Please wait</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!loading && !user) {

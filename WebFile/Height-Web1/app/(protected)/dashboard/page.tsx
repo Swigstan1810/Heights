@@ -73,8 +73,27 @@ export default function Dashboard() {
   const [portfolio, setPortfolio] = useState<Portfolio[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [sessionValid, setSessionValid] = useState(true);
+  const [kycFullName, setKycFullName] = useState<string | null>(null);
   
   const supabase = createClientComponentClient<Database>();
+
+  // Fetch KYC full name
+  useEffect(() => {
+    const fetchKycName = async () => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('kyc_details')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .single();
+      if (!error && data && data.full_name) {
+        setKycFullName(data.full_name);
+      } else {
+        setKycFullName(null);
+      }
+    };
+    fetchKycName();
+  }, [user, supabase]);
 
   // Extended list of cryptocurrencies
   const CRYPTO_LIST = [
@@ -295,7 +314,7 @@ export default function Dashboard() {
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">
-              Welcome back, {profile?.full_name ?? user?.email?.split('@')[0] ?? 'User'}
+              Welcome back, {kycFullName ?? user?.email?.split('@')[0] ?? 'User'}
             </h1>
             <p className="text-muted-foreground flex items-center gap-2 mt-2">
               <Shield className="h-4 w-4 text-green-500" />
