@@ -1,3 +1,4 @@
+// components/navbar.tsx
 "use client";
  
 import { useState, useEffect } from "react";
@@ -17,7 +18,9 @@ import {
   ChevronDown,
   BrainCircuit,
   Sparkles,
-  Plus
+  Plus,
+  Newspaper,
+  Bitcoin
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -101,14 +104,16 @@ export function Navbar() {
           </div>
           
           <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/dashboard?tab=crypto" className="text-sm font-medium hover:text-primary transition-colors">Crypto</Link>
+            <Link href="/dashboard?tab=crypto" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
+              <Bitcoin className="h-4 w-4" />
+              Crypto
+            </Link>
             <Link href="/dashboard?tab=stocks" className="text-sm font-medium hover:text-primary transition-colors">Stocks</Link>
             <Link href="/dashboard?tab=mutual-funds" className="text-sm font-medium hover:text-primary transition-colors">Mutual Funds</Link>
             
             {/* Conditionally render protected links */}
             {isAuthenticated && (
               <>
-                <Link href="/trade" className="text-sm font-medium hover:text-primary transition-colors">Trade</Link>
                 <Link href="/portfolio" className="text-sm font-medium hover:text-primary transition-colors">Portfolio</Link>
               </>
             )}
@@ -148,7 +153,11 @@ export function Navbar() {
               </span>
             </Link>
             
-            <Link href="/learn" className="text-sm font-medium hover:text-primary transition-colors">Learn</Link>
+            {/* News section replacing Learn */}
+            <Link href="/news" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
+              <Newspaper className="h-4 w-4" />
+              News
+            </Link>
           </nav>
           
           <div className="flex items-center space-x-2">
@@ -183,9 +192,9 @@ export function Navbar() {
                       <User className="mr-2 h-4 w-4" />
                       <span>Profile</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/wallet')}>
-                      <Wallet className="mr-2 h-4 w-4" />
-                      <span>Wallet</span>
+                    <DropdownMenuItem onClick={() => router.push('/crypto')}>
+                      <Bitcoin className="mr-2 h-4 w-4" />
+                      <span>Crypto</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout}>
@@ -225,14 +234,16 @@ export function Navbar() {
       >
         {isOpen && (
           <div className="px-4 pt-2 pb-5 bg-background/95 backdrop-blur-md border-b border-border/50 space-y-1">
-            <Link href="/dashboard?tab=crypto" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Crypto</Link>
+            <Link href="/dashboard?tab=crypto" className="block py-2 text-base font-medium flex items-center gap-2" onClick={() => setIsOpen(false)}>
+              <Bitcoin className="h-4 w-4" />
+              Crypto
+            </Link>
             <Link href="/dashboard?tab=stocks" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Stocks</Link>
             <Link href="/dashboard?tab=mutual-funds" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Mutual Funds</Link>
             
             {/* Conditionally render protected links for mobile */}
             {isAuthenticated && (
               <>
-                <Link href="/trade" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Trade</Link>
                 <Link href="/portfolio" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Portfolio</Link>
               </>
             )}
@@ -246,7 +257,11 @@ export function Navbar() {
               </span>
             </Link>
             
-            <Link href="/learn" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Learn</Link>
+            {/* News section for mobile */}
+            <Link href="/news" className="block py-2 text-base font-medium flex items-center gap-2" onClick={() => setIsOpen(false)}>
+              <Newspaper className="h-5 w-5" />
+              News
+            </Link>
             
             <div className="pt-4 flex flex-col space-y-2">
               <Button onClick={toggleTheme} variant="outline" className="justify-start">
@@ -271,9 +286,9 @@ export function Navbar() {
                   </Button>
                   <Button variant="outline" className="justify-start" onClick={() => {
                     setIsOpen(false);
-                    router.push('/wallet');
+                    router.push('/crypto');
                   }}>
-                    <Wallet className="mr-2 h-4 w-4" /> Wallet
+                    <Bitcoin className="mr-2 h-4 w-4" /> Crypto
                   </Button>
                   <Button variant="outline" className="justify-start" onClick={() => {
                     setIsOpen(false);
