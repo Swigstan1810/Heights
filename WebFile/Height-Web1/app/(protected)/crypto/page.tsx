@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { motion } from 'framer-motion';
 import { 
   Search, 
@@ -23,7 +24,12 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
-  Filter
+  Filter,
+  Plus,
+  Minus,
+  AlertCircle,
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
@@ -59,6 +65,13 @@ interface CryptoData {
   low_24h: number;
   circulating_supply: number;
   isWatched?: boolean;
+}
+
+interface WatchlistItem {
+  id: string;
+  symbol: string;
+  name: string;
+  added_at: string;
 }
 
 // Mock crypto data (in production, this would come from CoinGecko API)
@@ -160,10 +173,12 @@ export default function CryptoPage() {
   const router = useRouter();
   const [cryptoData, setCryptoData] = useState<CryptoData[]>(MOCK_CRYPTO_DATA);
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoData>(MOCK_CRYPTO_DATA[0]);
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'market_cap' | 'price' | 'change'>('market_cap');
   const [showOnlyWatched, setShowOnlyWatched] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   
   const supabase = createClientComponentClient<Database>();
 
@@ -179,12 +194,18 @@ export default function CryptoPage() {
       if (!user) return;
       
       try {
-        const { data: watchlist } = await supabase
+        const { data: watchlist, error } = await supabase
           .from('crypto_watchlist')
-          .select('symbol')
+          .select('*')
           .eq('user_id', user.id);
         
+        if (error) {
+          console.error('Error loading watchlist:', error);
+          return;
+        }
+        
         if (watchlist) {
+          setWatchlistItems(watchlist);
           const watchedSymbols = new Set(watchlist.map(item => item.symbol));
           setCryptoData(prev => prev.map(crypto => ({
             ...crypto,
@@ -207,23 +228,49 @@ export default function CryptoPage() {
     try {
       if (crypto.isWatched) {
         // Remove from watchlist
-        await supabase
+        const { error } = await supabase
           .from('crypto_watchlist')
           .delete()
           .eq('user_id', user.id)
           .eq('symbol', crypto.symbol);
+
+        if (error) {
+          console.error('Error removing from watchlist:', error);
+          setNotification({type: 'error', message: 'Failed to remove from watchlist'});
+          return;
+        }
+
+        // Update local state
+        setWatchlistItems(prev => prev.filter(item => item.symbol !== crypto.symbol));
+        setNotification({type: 'success', message: `${crypto.name} removed from watchlist`});
       } else {
         // Add to watchlist
-        await supabase
+        const { error } = await supabase
           .from('crypto_watchlist')
           .insert({
             user_id: user.id,
             symbol: crypto.symbol,
             name: crypto.name
           });
+
+        if (error) {
+          console.error('Error adding to watchlist:', error);
+          setNotification({type: 'error', message: 'Failed to add to watchlist'});
+          return;
+        }
+
+        // Update local state
+        const newItem: WatchlistItem = {
+          id: Date.now().toString(), // temporary ID
+          symbol: crypto.symbol,
+          name: crypto.name,
+          added_at: new Date().toISOString()
+        };
+        setWatchlistItems(prev => [...prev, newItem]);
+        setNotification({type: 'success', message: `${crypto.name} added to watchlist`});
       }
       
-      // Update local state
+      // Update crypto data
       setCryptoData(prev => prev.map(item => 
         item.id === crypto.id 
           ? { ...item, isWatched: !item.isWatched }
@@ -233,8 +280,13 @@ export default function CryptoPage() {
       if (selectedCrypto.id === crypto.id) {
         setSelectedCrypto(prev => ({ ...prev, isWatched: !prev.isWatched }));
       }
+
+      // Clear notification after 3 seconds
+      setTimeout(() => setNotification(null), 3000);
     } catch (error) {
       console.error('Error updating watchlist:', error);
+      setNotification({type: 'error', message: 'An error occurred'});
+      setTimeout(() => setNotification(null), 3000);
     }
   };
 
@@ -282,9 +334,9 @@ export default function CryptoPage() {
   };
 
   const formatMarketCap = (value: number) => {
-    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+    if (value >= 1e12) return `${(value / 1e12).toFixed(2)}T`;
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
     return formatCurrency(value);
   };
 
@@ -308,6 +360,27 @@ export default function CryptoPage() {
       <Navbar />
       
       <div className="container mx-auto px-4 pt-24 pb-16">
+        {/* Notification */}
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-20 right-4 z-50"
+          >
+            <Alert className={notification.type === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+              {notification.type === 'success' ? (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              )}
+              <AlertDescription className={notification.type === 'success' ? 'text-green-800' : 'text-red-800'}>
+                {notification.message}
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -351,7 +424,7 @@ export default function CryptoPage() {
                 onClick={() => setShowOnlyWatched(!showOnlyWatched)}
               >
                 {showOnlyWatched ? <Eye className="h-4 w-4 mr-2" /> : <EyeOff className="h-4 w-4 mr-2" />}
-                Watchlist
+                Watchlist ({watchlistItems.length})
               </Button>
               <select
                 value={sortBy}
@@ -374,62 +447,85 @@ export default function CryptoPage() {
                 <CardTitle>Market Overview</CardTitle>
                 <CardDescription>
                   {filteredAndSortedCrypto.length} cryptocurrencies
+                  {showOnlyWatched && ' in your watchlist'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[600px] overflow-y-auto">
-                  {filteredAndSortedCrypto.map((crypto) => (
-                    <motion.div
-                      key={crypto.id}
-                      className={`p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${
-                        selectedCrypto.id === crypto.id ? 'bg-muted' : ''
-                      }`}
-                      onClick={() => setSelectedCrypto(crypto)}
-                      whileHover={{ x: 4 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <img 
-                            src={crypto.image} 
-                            alt={crypto.name}
-                            className="w-8 h-8 rounded-full"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${crypto.symbol}&background=f97316&color=fff&size=32`;
-                            }}
-                          />
-                          <div>
-                            <p className="font-medium">{crypto.name}</p>
-                            <p className="text-sm text-muted-foreground">{crypto.symbol}</p>
+                  {filteredAndSortedCrypto.length > 0 ? (
+                    filteredAndSortedCrypto.map((crypto) => (
+                      <motion.div
+                        key={crypto.id}
+                        className={`p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${
+                          selectedCrypto.id === crypto.id ? 'bg-muted' : ''
+                        }`}
+                        onClick={() => setSelectedCrypto(crypto)}
+                        whileHover={{ x: 4 }}
+                        transition={{ type: "spring", stiffness: 300 }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <img 
+                              src={crypto.image} 
+                              alt={crypto.name}
+                              className="w-8 h-8 rounded-full"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${crypto.symbol}&background=f97316&color=fff&size=32`;
+                              }}
+                            />
+                            <div>
+                              <p className="font-medium">{crypto.name}</p>
+                              <p className="text-sm text-muted-foreground">{crypto.symbol}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleWatchlist(crypto);
+                              }}
+                              className="mb-1"
+                            >
+                              <Star className={`h-4 w-4 ${
+                                crypto.isWatched ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'
+                              }`} />
+                            </button>
+                            <p className="font-medium">{formatCurrency(crypto.current_price)}</p>
+                            <p className={`text-sm flex items-center justify-end ${
+                              crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
+                            }`}>
+                              {crypto.price_change_percentage_24h >= 0 ? (
+                                <TrendingUp className="h-3 w-3 mr-1" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3 mr-1" />
+                              )}
+                              {crypto.price_change_percentage_24h >= 0 ? '+' : ''}{crypto.price_change_percentage_24h.toFixed(2)}%
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleWatchlist(crypto);
-                            }}
-                            className="mb-1"
-                          >
-                            <Star className={`h-4 w-4 ${
-                              crypto.isWatched ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'
-                            }`} />
-                          </button>
-                          <p className="font-medium">{formatCurrency(crypto.current_price)}</p>
-                          <p className={`text-sm flex items-center justify-end ${
-                            crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
-                          }`}>
-                            {crypto.price_change_percentage_24h >= 0 ? (
-                              <TrendingUp className="h-3 w-3 mr-1" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3 mr-1" />
-                            )}
-                            {crypto.price_change_percentage_24h >= 0 ? '+' : ''}{crypto.price_change_percentage_24h.toFixed(2)}%
-                          </p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center">
+                      <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">
+                        {showOnlyWatched 
+                          ? 'No cryptocurrencies in your watchlist match the search'
+                          : 'No cryptocurrencies found'
+                        }
+                      </p>
+                      {showOnlyWatched && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => setShowOnlyWatched(false)}
+                        >
+                          Show All Cryptocurrencies
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -581,11 +677,11 @@ export default function CryptoPage() {
                     }`} />
                     {selectedCrypto.isWatched ? 'Remove from Watchlist' : 'Add to Watchlist'}
                   </Button>
-                  <Button variant="outline">
+                  <Button variant="outline" disabled>
                     <Activity className="h-4 w-4 mr-2" />
                     Set Price Alert
                   </Button>
-                  <Button variant="outline">
+                  <Button variant="outline" disabled>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Technical Analysis
                   </Button>
@@ -593,7 +689,6 @@ export default function CryptoPage() {
                 <div className="mt-4 p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground">
                     💡 <strong>Note:</strong> This is a view-only cryptocurrency tracker. 
-                    Trading functionality has been removed as requested. 
                     Use this page to monitor prices, analyze charts, and manage your watchlist.
                   </p>
                 </div>

@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Using NewsAPI (you'll need to sign up for a free API key at https://newsapi.org/)
 const NEWS_API_KEY = process.env.NEWS_API_KEY || '';
-const NEWS_API_BASE_URL = 'https://newsapi.org/v2';
+const NEWS_API_BASE_URL = 'https://newsapi.org';
 
 // Alternative free news APIs as fallbacks
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY || '';
-const GNEWS_BASE_URL = 'https://gnews.io/api/v4';
+const GNEWS_BASE_URL = 'https://gnews.io';
 
 export interface NewsArticle {
   id: string;

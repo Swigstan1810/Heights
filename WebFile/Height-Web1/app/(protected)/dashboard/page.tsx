@@ -29,26 +29,42 @@ import {
   Star,
   ExternalLink,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Eye,
+  EyeOff,
+  RefreshCw
 } from "lucide-react";
 import { AssistantButton } from '@/components/ai-assistant';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
 import { motion } from 'framer-motion';
 
-interface WalletBalance {
-  balance: number;
-  locked_balance: number;
-  currency: string;
+interface WatchlistItem {
+  id: string;
+  symbol: string;
+  name: string;
+  added_at: string;
+}
+
+interface TransactionSummary {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  transactionCount: number;
 }
 
 export default function Dashboard() {
-  const { user, profile, loading, isAuthenticated, profileError } = useAuth();
+  const { user, profile, walletBalance, loading, isAuthenticated, profileError, refreshWalletBalance } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
-  const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(null);
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  const [transactionSummary, setTransactionSummary] = useState<TransactionSummary>({
+    totalDeposits: 0,
+    totalWithdrawals: 0,
+    transactionCount: 0
+  });
   const [loadingData, setLoadingData] = useState(true);
+  const [showBalance, setShowBalance] = useState(true);
   
   const supabase = createClientComponentClient<Database>();
 
@@ -59,55 +75,55 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, loading, router]);
 
-  // Fetch wallet balance (should be zero for new users)
+  // Fetch dashboard data
   useEffect(() => {
-    const fetchWalletBalance = async () => {
+    const fetchDashboardData = async () => {
       if (!user) return;
 
       try {
         setLoadingData(true);
         
-        // Fetch or create wallet balance
-        const { data: walletData, error: walletError } = await supabase
-          .from('wallet_balance')
+        // Fetch watchlist items
+        const { data: watchlist, error: watchlistError } = await supabase
+          .from('crypto_watchlist')
           .select('*')
           .eq('user_id', user.id)
-          .single();
+          .order('added_at', { ascending: false });
 
-        if (walletError && walletError.code === 'PGRST116') {
-          // No wallet balance found, create one with zero balance
-          const { data: newWallet, error: createError } = await supabase
-            .from('wallet_balance')
-            .insert({
-              user_id: user.id,
-              balance: 0,
-              locked_balance: 0,
-              currency: 'INR'
-            })
-            .select()
-            .single();
-
-          if (!createError && newWallet) {
-            setWalletBalance(newWallet);
-          }
-        } else if (!walletError && walletData) {
-          setWalletBalance(walletData);
+        if (!watchlistError && watchlist) {
+          setWatchlistItems(watchlist);
         }
+
+        // Fetch transaction summary
+        const { data: transactions, error: transactionError } = await supabase
+          .from('wallet_transactions')
+          .select('type, amount, status')
+          .eq('user_id', user.id)
+          .eq('status', 'completed');
+
+        if (!transactionError && transactions) {
+          const summary = transactions.reduce((acc, tx) => {
+            if (tx.type === 'deposit') {
+              acc.totalDeposits += Number(tx.amount);
+            } else if (tx.type === 'withdrawal') {
+              acc.totalWithdrawals += Number(tx.amount);
+            }
+            acc.transactionCount += 1;
+            return acc;
+          }, { totalDeposits: 0, totalWithdrawals: 0, transactionCount: 0 });
+          
+          setTransactionSummary(summary);
+        }
+
       } catch (error) {
-        console.error('Error fetching wallet balance:', error);
-        // Set default zero balance on error
-        setWalletBalance({
-          balance: 0,
-          locked_balance: 0,
-          currency: 'INR'
-        });
+        console.error('Error fetching dashboard data:', error);
       } finally {
         setLoadingData(false);
       }
     };
 
     if (user) {
-      fetchWalletBalance();
+      fetchDashboardData();
     }
   }, [user, supabase]);
 
@@ -115,7 +131,11 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-600 font-bold">Failed to load profile. Please try again later.</p>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Retry
+          </Button>
         </div>
       </div>
     );
@@ -146,6 +166,7 @@ export default function Dashboard() {
   };
 
   const safeWalletBalance = walletBalance ?? { balance: 0, locked_balance: 0, currency: 'INR' };
+  const totalBalance = Number(safeWalletBalance.balance) + Number(safeWalletBalance.locked_balance);
 
   return (
     <main className="min-h-screen bg-background">
@@ -160,11 +181,20 @@ export default function Dashboard() {
             </h1>
             <p className="text-muted-foreground flex items-center gap-2 mt-2">
               <Shield className="h-4 w-4 text-green-500" />
-              Secure session active • Zero-balance wallet ready
+              Secure session active • {profile?.email_verified ? 'Email verified' : 'Email pending verification'}
             </p>
           </div>
           
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshWalletBalance}
+              disabled={loadingData}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loadingData ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <AssistantButton />
           </div>
         </div>
@@ -179,18 +209,33 @@ export default function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Wallet Balance</CardTitle>
-                <Wallet className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-muted-foreground" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBalance(!showBalance)}
+                    className="h-6 w-6 p-0"
+                  >
+                    {showBalance ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
                   {loadingData ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : showBalance ? (
+                    formatCurrency(Number(safeWalletBalance.balance))
                   ) : (
-                    formatCurrency(safeWalletBalance.balance)
+                    "••••••"
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Ready for your first deposit
+                  {Number(safeWalletBalance.locked_balance) > 0 && showBalance && 
+                    `Locked: ${formatCurrency(Number(safeWalletBalance.locked_balance))}`
+                  }
+                  {Number(safeWalletBalance.locked_balance) === 0 && "Available for trading"}
                 </p>
               </CardContent>
             </Card>
@@ -203,13 +248,21 @@ export default function Dashboard() {
           >
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-                <PieChart className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Total Deposits</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₹0.00</div>
+                <div className="text-2xl font-bold">
+                  {loadingData ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : showBalance ? (
+                    formatCurrency(transactionSummary.totalDeposits)
+                  ) : (
+                    "••••••"
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Start investing today
+                  Lifetime deposits
                 </p>
               </CardContent>
             </Card>
@@ -226,9 +279,9 @@ export default function Dashboard() {
                 <Star className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">0</div>
+                <div className="text-2xl font-bold">{watchlistItems.length}</div>
                 <p className="text-xs text-muted-foreground">
-                  Add cryptos to track
+                  Tracked cryptocurrencies
                 </p>
               </CardContent>
             </Card>
@@ -241,13 +294,13 @@ export default function Dashboard() {
           >
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">0</div>
+                <div className="text-2xl font-bold">{transactionSummary.transactionCount}</div>
                 <p className="text-xs text-muted-foreground">
-                  Your trading journey awaits
+                  Completed transactions
                 </p>
               </CardContent>
             </Card>
@@ -300,17 +353,14 @@ export default function Dashboard() {
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
                     <div className="flex items-center gap-3">
-                      <Target className="h-5 w-5 text-muted-foreground" />
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
                       <div>
-                        <p className="font-medium">Add Funds to Wallet</p>
-                        <p className="text-sm text-muted-foreground">Deposit money to start investing</p>
+                        <p className="font-medium">Profile Setup</p>
+                        <p className="text-sm text-muted-foreground">Your profile is configured</p>
                       </div>
                     </div>
-                    <Button size="sm" disabled>
-                      Add Funds
-                    </Button>
                   </div>
                   
                   <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -345,56 +395,61 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              {/* Market Overview */}
+              {/* Watchlist Preview */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Market Overview</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Your Watchlist</span>
+                    <Button size="sm" variant="outline" asChild>
+                      <a href="/crypto">
+                        View All
+                        <ExternalLink className="h-3 w-3 ml-1" />
+                      </a>
+                    </Button>
+                  </CardTitle>
                   <CardDescription>
-                    Live cryptocurrency market data
+                    Your tracked cryptocurrencies
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {[
-                      { name: 'Bitcoin', symbol: 'BTC', price: 67234.56, change: 1.87, positive: true },
-                      { name: 'Ethereum', symbol: 'ETH', price: 3456.78, change: -2.52, positive: false },
-                      { name: 'Solana', symbol: 'SOL', price: 178.45, change: 7.43, positive: true },
-                      { name: 'Cardano', symbol: 'ADA', price: 0.4567, change: 5.41, positive: true }
-                    ].map((crypto) => (
-                      <div key={crypto.symbol} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-medium">{crypto.symbol.slice(0, 2)}</span>
+                  {watchlistItems.length > 0 ? (
+                    <div className="space-y-3">
+                      {watchlistItems.slice(0, 5).map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium">{item.symbol.slice(0, 2)}</span>
+                            </div>
+                            <div>
+                              <p className="font-medium">{item.name}</p>
+                              <p className="text-sm text-muted-foreground">{item.symbol}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">{crypto.name}</p>
-                            <p className="text-sm text-muted-foreground">{crypto.symbol}</p>
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">
+                              Added {new Date(item.added_at).toLocaleDateString()}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium">${crypto.price.toLocaleString()}</p>
-                          <p className={`text-sm flex items-center justify-end ${
-                            crypto.positive ? 'text-green-500' : 'text-red-500'
-                          }`}>
-                            {crypto.positive ? (
-                              <ArrowUpRight className="h-3 w-3 mr-1" />
-                            ) : (
-                              <ArrowDownRight className="h-3 w-3 mr-1" />
-                            )}
-                            {crypto.positive ? '+' : ''}{crypto.change}%
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4">
-                    <Button variant="outline" className="w-full" asChild>
-                      <a href="/crypto">
-                        View All Cryptocurrencies
-                        <ExternalLink className="h-4 w-4 ml-2" />
-                      </a>
-                    </Button>
-                  </div>
+                      ))}
+                      {watchlistItems.length > 5 && (
+                        <p className="text-center text-sm text-muted-foreground pt-2">
+                          +{watchlistItems.length - 5} more items
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Star className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground mb-4">No cryptocurrencies in your watchlist yet</p>
+                      <Button asChild>
+                        <a href="/crypto">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add to Watchlist
+                        </a>
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -427,6 +482,57 @@ export default function Dashboard() {
                       <span>AI Assistant</span>
                     </a>
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Account Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Status</CardTitle>
+                <CardDescription>
+                  Your account verification and security status
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {profile?.email_verified ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-yellow-500" />
+                      )}
+                      <div>
+                        <p className="font-medium">Email Verification</p>
+                        <p className="text-sm text-muted-foreground">
+                          {profile?.email_verified ? 'Verified' : 'Pending verification'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={profile?.email_verified ? "default" : "secondary"}>
+                      {profile?.email_verified ? 'Active' : 'Pending'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {profile?.two_factor_enabled ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-yellow-500" />
+                      )}
+                      <div>
+                        <p className="font-medium">Two-Factor Authentication</p>
+                        <p className="text-sm text-muted-foreground">
+                          {profile?.two_factor_enabled ? 'Enabled' : 'Not enabled'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" disabled>
+                      {profile?.two_factor_enabled ? 'Enabled' : 'Enable'}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
