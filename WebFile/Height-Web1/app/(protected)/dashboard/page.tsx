@@ -53,7 +53,7 @@ interface TransactionSummary {
 }
 
 export default function Dashboard() {
-  const { user, profile, walletBalance, loading, isAuthenticated, profileError, refreshWalletBalance } = useAuth();
+  const { user, profile, walletBalance, loading: authLoading, isAuthenticated, profileError, refreshWalletBalance } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
@@ -65,23 +65,40 @@ export default function Dashboard() {
   });
   const [loadingData, setLoadingData] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   
   const supabase = createClientComponentClient<Database>();
 
-  // Redirect logic for authentication
+  // Handle authentication and redirect logic
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push("/login");
-    }
-  }, [isAuthenticated, loading, router]);
+    const checkAuth = async () => {
+      console.log('Dashboard - checking auth state...', { authLoading, isAuthenticated, user: !!user });
+      
+      if (!authLoading) {
+        if (!isAuthenticated || !user) {
+          console.log('Dashboard - redirecting to login');
+          router.push("/login?redirectTo=/dashboard");
+          return;
+        }
+        console.log('Dashboard - user authenticated, continuing...');
+        setPageLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [authLoading, isAuthenticated, user, router]);
 
   // Fetch dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!user) return;
+      if (!user || authLoading) {
+        console.log('Dashboard - skipping data fetch, no user or still loading auth');
+        return;
+      }
 
       try {
         setLoadingData(true);
+        console.log('Dashboard - fetching data for user:', user.id);
         
         // Fetch watchlist items
         const { data: watchlist, error: watchlistError } = await supabase
@@ -91,7 +108,10 @@ export default function Dashboard() {
           .order('added_at', { ascending: false });
 
         if (!watchlistError && watchlist) {
+          console.log('Dashboard - watchlist loaded:', watchlist.length, 'items');
           setWatchlistItems(watchlist);
+        } else if (watchlistError) {
+          console.error('Dashboard - error loading watchlist:', watchlistError);
         }
 
         // Fetch transaction summary
@@ -102,6 +122,7 @@ export default function Dashboard() {
           .eq('status', 'completed');
 
         if (!transactionError && transactions) {
+          console.log('Dashboard - transactions loaded:', transactions.length, 'items');
           const summary = transactions.reduce((acc, tx) => {
             if (tx.type === 'deposit') {
               acc.totalDeposits += Number(tx.amount);
@@ -113,20 +134,24 @@ export default function Dashboard() {
           }, { totalDeposits: 0, totalWithdrawals: 0, transactionCount: 0 });
           
           setTransactionSummary(summary);
+        } else if (transactionError) {
+          console.error('Dashboard - error loading transactions:', transactionError);
         }
 
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        console.error('Dashboard - error fetching data:', error);
       } finally {
         setLoadingData(false);
+        console.log('Dashboard - data loading complete');
       }
     };
 
-    if (user) {
+    if (user && !authLoading && !pageLoading) {
       fetchDashboardData();
     }
-  }, [user, supabase]);
+  }, [user, supabase, authLoading, pageLoading]);
 
+  // Handle profile errors
   if (profileError) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -141,7 +166,8 @@ export default function Dashboard() {
     );
   }
 
-  if (loading) {
+  // Show loading screen while authenticating or loading page
+  if (authLoading || pageLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -152,6 +178,7 @@ export default function Dashboard() {
     );
   }
 
+  // Don't render if not authenticated
   if (!isAuthenticated) {
     return null;
   }
@@ -544,13 +571,13 @@ export default function Dashboard() {
               <CardHeader>
                 <CardTitle>Cryptocurrency Markets</CardTitle>
                 <CardDescription>
-                  View real-time cryptocurrency prices and charts
+                  View real-time cryptocurrency prices and charts powered by Coinbase
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-center py-12">
                   <Bitcoin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground mb-4">Explore cryptocurrency markets with live charts and data</p>
+                  <p className="text-muted-foreground mb-4">Explore cryptocurrency markets with live charts and data from Coinbase</p>
                   <Button asChild>
                     <a href="/crypto">
                       <Bitcoin className="h-4 w-4 mr-2" />

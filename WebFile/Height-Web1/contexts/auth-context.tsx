@@ -80,6 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch user profile with retry logic and auto-create if missing
   const fetchProfile = useCallback(async (userId: string, retries = 3): Promise<Profile | null> => {
     try {
+      setProfileError(false); // Reset error state
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -91,6 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const currentUser = user || session?.user;
         if (!currentUser) return null;
 
+        console.log('Creating new profile for user:', userId);
+
         const newProfileData = {
           id: userId,
           email: currentUser.email!,
@@ -99,6 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           google_avatar_url: currentUser.app_metadata?.provider === 'google' ? currentUser.user_metadata?.avatar_url : null,
           full_name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || null,
           email_verified: currentUser.email_confirmed_at ? true : false,
+          kyc_completed: false,
+          two_factor_enabled: false,
+          timezone: 'Asia/Kolkata'
         };
 
         const { data: newProfile, error: insertError } = await supabase
@@ -109,19 +116,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (insertError) {
           console.error('Error creating profile:', insertError);
+          if (retries > 0) {
+            console.log(`Retrying profile creation... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return fetchProfile(userId, retries - 1);
+          }
           setProfileError(true);
           return null;
         }
+        
+        console.log('Profile created successfully:', newProfile);
         return newProfile as Profile;
       }
       
       if (error) {
+        console.error('Error fetching profile:', error);
         if (retries > 0) {
           console.log(`Retrying profile fetch... (${retries} attempts left)`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           return fetchProfile(userId, retries - 1);
         }
-        console.error('Error fetching profile:', error);
         setProfileError(true);
         return null;
       }
@@ -129,6 +143,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return data as Profile;
     } catch (error) {
       console.error('Error in fetchProfile:', error);
+      if (retries > 0) {
+        console.log(`Retrying profile fetch after error... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchProfile(userId, retries - 1);
+      }
       setProfileError(true);
       return null;
     }
@@ -145,6 +164,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (checkError && checkError.code === 'PGRST116') {
         // Create wallet balance if not exists
+        console.log('Creating wallet balance for user:', userId);
+        
         const { data: newWallet, error: createError } = await supabase
           .from('wallet_balance')
           .insert({
@@ -160,6 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error creating wallet balance:', createError);
           return null;
         }
+        
+        console.log('Wallet balance created successfully:', newWallet);
         return newWallet as WalletBalance;
       }
 
@@ -178,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Refresh wallet balance
   const refreshWalletBalance = useCallback(async () => {
     if (!user) return;
+    console.log('Refreshing wallet balance for user:', user.id);
     const balance = await fetchWalletBalance(user.id);
     setWalletBalance(balance);
   }, [user, fetchWalletBalance]);
@@ -185,25 +209,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Enhanced sign out with session cleanup
   const signOut = useCallback(async () => {
     try {
+      console.log('Signing out user');
+      
       // Clear session check interval
       if (sessionCheckInterval) {
         clearInterval(sessionCheckInterval);
         setSessionCheckInterval(null);
-      }
-
-      // Log security event before signing out
-      if (user) {
-        try {
-          await supabase.rpc('log_security_event', {
-            p_user_id: user.id,
-            p_event_type: 'logout',
-            p_event_details: { method: 'manual' },
-            p_ip_address: window.location.hostname,
-            p_user_agent: navigator.userAgent
-          });
-        } catch (err) {
-          console.warn('Failed to log security event:', err);
-        }
       }
 
       const { error } = await supabase.auth.signOut();
@@ -219,6 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       setWalletBalance(null);
       setIsAuthenticated(false);
+      setProfileError(false);
 
       // Clear any stored session data
       if (typeof window !== 'undefined') {
@@ -226,13 +238,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.clear();
       }
 
+      console.log('Redirecting to login page');
       router.push('/login');
     } catch (error) {
       console.error('Sign out error:', error);
       // Force redirect even on error
       router.push('/login');
     }
-  }, [user, supabase, router, sessionCheckInterval]);
+  }, [supabase, router, sessionCheckInterval]);
 
   // Check session validity with enhanced security
   const checkSession = useCallback(async (): Promise<boolean> => {
@@ -292,19 +305,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session.user);
         console.log('Session refreshed successfully');
-
-        // Log security event
-        try {
-          await supabase.rpc('log_security_event', {
-            p_user_id: session.user.id,
-            p_event_type: 'session_refresh',
-            p_event_details: { automatic: true },
-            p_ip_address: window.location.hostname,
-            p_user_agent: navigator.userAgent
-          });
-        } catch (err) {
-          console.warn('Failed to log session refresh event:', err);
-        }
       }
     } catch (error) {
       console.error('Error refreshing session:', error);
@@ -318,49 +318,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sign in with email/password
   const signIn = useCallback(async (email: string, password: string) => {
     try {
+      console.log('Attempting sign in for:', email);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('Sign in error:', error);
         return { error };
       }
 
       if (data.session && data.user) {
+        console.log('Sign in successful:', data.user.id);
         setSession(data.session);
         setUser(data.user);
         setIsAuthenticated(true);
         
-        const profileData = await fetchProfile(data.user.id);
-        if (profileData) {
-          setProfile(profileData);
-        }
+        // Fetch profile and wallet data
+        const [profileData, walletData] = await Promise.all([
+          fetchProfile(data.user.id),
+          fetchWalletBalance(data.user.id)
+        ]);
         
-        const walletData = await fetchWalletBalance(data.user.id);
+        setProfile(profileData);
         setWalletBalance(walletData);
-
-        // Update last login
-        try {
-          await supabase.rpc('update_last_login', {
-            p_user_id: data.user.id
-          });
-        } catch (err) {
-          console.warn('Failed to update last login:', err);
-        }
-
-        // Log successful login
-        try {
-          await supabase.rpc('log_security_event', {
-            p_user_id: data.user.id,
-            p_event_type: 'login_success',
-            p_event_details: { method: 'password' },
-            p_ip_address: window.location.hostname,
-            p_user_agent: navigator.userAgent
-          });
-        } catch (err) {
-          console.warn('Failed to log login event:', err);
-        }
       }
 
       return { error: null };
@@ -373,18 +356,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sign in with Google
   const signInWithGoogle = useCallback(async () => {
     try {
-      // Check rate limiting first
-      const canProceed = await supabase.rpc('check_oauth_rate_limit', {
-        p_identifier: window.location.hostname,
-        p_provider: 'google'
-      });
-
-      if (!canProceed) {
-        return { 
-          error: new Error('Too many authentication attempts. Please try again later.') 
-        };
-      }
-
+      console.log('Attempting Google sign in');
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -398,21 +371,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
-        // Log failed attempt
-        try {
-          await supabase.rpc('log_security_event', {
-            p_user_id: null,
-            p_event_type: 'oauth_login_failed',
-            p_event_details: { 
-              provider: 'google',
-              error: error.message 
-            },
-            p_ip_address: window.location.hostname,
-            p_user_agent: navigator.userAgent
-          });
-        } catch (err) {
-          console.warn('Failed to log oauth error:', err);
-        }
+        console.error('Google sign in error:', error);
         return { error };
       }
 
@@ -427,6 +386,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sign up with email/password
   const signUp = useCallback(async (email: string, password: string) => {
     try {
+      console.log('Attempting sign up for:', email);
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -440,9 +401,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
+        console.error('Sign up error:', error);
         return { error };
       }
 
+      console.log('Sign up successful');
       return { error: null };
     } catch (error) {
       console.error('Sign up error:', error);
@@ -457,6 +420,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: new Error('No user logged in') };
       }
 
+      console.log('Updating profile for user:', user.id);
+
       const { data, error } = await supabase
         .from('profiles')
         .update({
@@ -468,11 +433,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
+        console.error('Update profile error:', error);
         return { error };
       }
 
       if (data) {
         setProfile(data as Profile);
+        console.log('Profile updated successfully');
       }
 
       return { error: null };
@@ -511,6 +478,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth state...');
         setLoading(true);
         
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -529,11 +497,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (session?.user) {
+          console.log('Session found for user:', session.user.id);
           setSession(session);
           setUser(session.user);
           setIsAuthenticated(true);
           
           try {
+            console.log('Fetching profile and wallet data...');
             const [profileData, walletData] = await Promise.all([
               fetchProfile(session.user.id),
               fetchWalletBalance(session.user.id)
@@ -542,11 +512,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (mounted) {
               setProfile(profileData);
               setWalletBalance(walletData);
+              console.log('Profile and wallet data loaded successfully');
             }
           } catch (profileError) {
             console.error('Profile/wallet fetch error:', profileError);
-            setProfile(null);
-            setWalletBalance(null);
+            if (mounted) {
+              setProfile(null);
+              setWalletBalance(null);
+            }
           }
 
           // Start session monitoring
@@ -555,6 +528,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }, 60000); // Check every minute
           setSessionCheckInterval(interval);
         } else {
+          console.log('No session found');
           setSession(null);
           setUser(null);
           setProfile(null);
@@ -571,6 +545,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         if (mounted) {
           setLoading(false);
+          console.log('Auth initialization complete');
         }
       }
     };
@@ -586,6 +561,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
       
       if (event === 'SIGNED_IN' && session) {
+        console.log('User signed in:', session.user.id);
         setSession(session);
         setUser(session.user);
         setIsAuthenticated(true);
@@ -597,25 +573,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setProfile(profileData);
         setWalletBalance(walletData);
-
-        // Log security event based on provider
-        const provider = session.user.app_metadata.provider || 'email';
-        try {
-          await supabase.rpc('log_security_event', {
-            p_user_id: session.user.id,
-            p_event_type: 'login_success',
-            p_event_details: { 
-              method: provider,
-              provider: provider 
-            },
-            p_ip_address: window.location.hostname,
-            p_user_agent: navigator.userAgent
-          });
-        } catch (err) {
-          console.warn('Failed to log auth state change:', err);
-        }
         
       } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
         if (sessionCheckInterval) {
           clearInterval(sessionCheckInterval);
           setSessionCheckInterval(null);
@@ -625,6 +585,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setWalletBalance(null);
         setIsAuthenticated(false);
+        setProfileError(false);
         router.push('/login');
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setSession(session);

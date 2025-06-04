@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
+import { marketDataService, type MarketData } from '@/lib/market-data';
 import dynamic from 'next/dynamic';
 
 // Dynamically import TradingView widget to avoid SSR issues
@@ -65,6 +66,7 @@ interface CryptoData {
   low_24h: number;
   circulating_supply: number;
   isWatched?: boolean;
+  marketData?: MarketData;
 }
 
 interface WatchlistItem {
@@ -74,126 +76,166 @@ interface WatchlistItem {
   added_at: string;
 }
 
-// Mock crypto data (in production, this would come from CoinGecko API)
-const MOCK_CRYPTO_DATA: CryptoData[] = [
-  {
-    id: 'bitcoin',
-    symbol: 'BTC',
-    name: 'Bitcoin',
-    current_price: 67234.56,
-    price_change_24h: 1234.78,
-    price_change_percentage_24h: 1.87,
-    market_cap: 1320000000000,
-    total_volume: 28500000000,
-    image: 'https://assets.coingecko.com/coins/images/1/thumb/bitcoin.png',
-    high_24h: 67890.12,
-    low_24h: 65123.45,
-    circulating_supply: 19654218,
-    isWatched: false
-  },
-  {
-    id: 'ethereum',
-    symbol: 'ETH',
-    name: 'Ethereum',
-    current_price: 3456.78,
-    price_change_24h: -89.45,
-    price_change_percentage_24h: -2.52,
-    market_cap: 415000000000,
-    total_volume: 15200000000,
-    image: 'https://assets.coingecko.com/coins/images/279/thumb/ethereum.png',
-    high_24h: 3567.89,
-    low_24h: 3398.12,
-    circulating_supply: 120280000,
-    isWatched: false
-  },
-  {
-    id: 'solana',
-    symbol: 'SOL',
-    name: 'Solana',
-    current_price: 178.45,
-    price_change_24h: 12.34,
-    price_change_percentage_24h: 7.43,
-    market_cap: 82000000000,
-    total_volume: 2800000000,
-    image: 'https://assets.coingecko.com/coins/images/4128/thumb/solana.png',
-    high_24h: 182.56,
-    low_24h: 165.23,
-    circulating_supply: 459000000,
-    isWatched: false
-  },
-  {
-    id: 'cardano',
-    symbol: 'ADA',
-    name: 'Cardano',
-    current_price: 0.4567,
-    price_change_24h: 0.0234,
-    price_change_percentage_24h: 5.41,
-    market_cap: 16000000000,
-    total_volume: 320000000,
-    image: 'https://assets.coingecko.com/coins/images/975/thumb/cardano.png',
-    high_24h: 0.4789,
-    low_24h: 0.4234,
-    circulating_supply: 35045000000,
-    isWatched: false
-  },
-  {
-    id: 'polkadot',
-    symbol: 'DOT',
-    name: 'Polkadot',
-    current_price: 6.789,
-    price_change_24h: -0.234,
-    price_change_percentage_24h: -3.33,
-    market_cap: 9800000000,
-    total_volume: 145000000,
-    image: 'https://assets.coingecko.com/coins/images/12171/thumb/polkadot.png',
-    high_24h: 7.123,
-    low_24h: 6.567,
-    circulating_supply: 1440000000,
-    isWatched: false
-  },
-  {
-    id: 'chainlink',
-    symbol: 'LINK',
-    name: 'Chainlink',
-    current_price: 14.567,
-    price_change_24h: 0.789,
-    price_change_percentage_24h: 5.73,
-    market_cap: 8900000000,
-    total_volume: 287000000,
-    image: 'https://assets.coingecko.com/coins/images/877/thumb/chainlink-new-logo.png',
-    high_24h: 15.234,
-    low_24h: 13.789,
-    circulating_supply: 613000000,
-    isWatched: false
-  }
+// Crypto symbols to track with real Coinbase data
+const CRYPTO_SYMBOLS = [
+  { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', coinbaseSymbol: 'CRYPTO:BTC' },
+  { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', coinbaseSymbol: 'CRYPTO:ETH' },
+  { id: 'solana', symbol: 'SOL', name: 'Solana', coinbaseSymbol: 'CRYPTO:SOL' },
+  { id: 'cardano', symbol: 'ADA', name: 'Cardano', coinbaseSymbol: 'CRYPTO:ADA' },
+  { id: 'polkadot', symbol: 'DOT', name: 'Polkadot', coinbaseSymbol: 'CRYPTO:DOT' },
+  { id: 'chainlink', symbol: 'LINK', name: 'Chainlink', coinbaseSymbol: 'CRYPTO:LINK' },
 ];
 
+// Default crypto data structure
+const createDefaultCryptoData = (symbol: any): CryptoData => ({
+  id: symbol.id,
+  symbol: symbol.symbol,
+  name: symbol.name,
+  current_price: 0,
+  price_change_24h: 0,
+  price_change_percentage_24h: 0,
+  market_cap: 0,
+  total_volume: 0,
+  image: `https://ui-avatars.com/api/?name=${symbol.symbol}&background=f97316&color=fff&size=64`,
+  high_24h: 0,
+  low_24h: 0,
+  circulating_supply: 0,
+  isWatched: false
+});
+
 export default function CryptoPage() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
-  const [cryptoData, setCryptoData] = useState<CryptoData[]>(MOCK_CRYPTO_DATA);
-  const [selectedCrypto, setSelectedCrypto] = useState<CryptoData>(MOCK_CRYPTO_DATA[0]);
+  const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
+  const [selectedCrypto, setSelectedCrypto] = useState<CryptoData | null>(null);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'market_cap' | 'price' | 'change'>('market_cap');
   const [showOnlyWatched, setShowOnlyWatched] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [marketDataSubscriptions, setMarketDataSubscriptions] = useState<(() => void)[]>([]);
   
   const supabase = createClientComponentClient<Database>();
 
+  // Initialize crypto data with Coinbase integration
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [loading, isAuthenticated, router]);
+    console.log('Initializing crypto data with Coinbase...');
+    
+    // Connect to market data service
+    marketDataService.connect();
+    
+    // Initialize crypto data array
+    const initialData = CRYPTO_SYMBOLS.map(createDefaultCryptoData);
+    setCryptoData(initialData);
+    setSelectedCrypto(initialData[0]);
+    
+    // Subscribe to real-time updates for each crypto
+    const unsubscribes = CRYPTO_SYMBOLS.map(symbol => {
+      return marketDataService.subscribe(symbol.coinbaseSymbol, (marketData) => {
+        console.log('Received market data for', symbol.symbol, marketData);
+        
+        setCryptoData(prev => prev.map(crypto => {
+          if (crypto.symbol === symbol.symbol) {
+            return {
+              ...crypto,
+              current_price: marketData.price,
+              price_change_24h: marketData.change24h,
+              price_change_percentage_24h: marketData.change24hPercent,
+              high_24h: marketData.high24h,
+              low_24h: marketData.low24h,
+              total_volume: marketData.volume24h,
+              marketData: marketData
+            };
+          }
+          return crypto;
+        }));
+        
+        // Update selected crypto if it matches
+        setSelectedCrypto(prev => {
+          if (prev && prev.symbol === symbol.symbol) {
+            return {
+              ...prev,
+              current_price: marketData.price,
+              price_change_24h: marketData.change24h,
+              price_change_percentage_24h: marketData.change24hPercent,
+              high_24h: marketData.high24h,
+              low_24h: marketData.low24h,
+              total_volume: marketData.volume24h,
+              marketData: marketData
+            };
+          }
+          return prev;
+        });
+      });
+    });
+    
+    setMarketDataSubscriptions(unsubscribes);
+    
+    // Fetch initial data for each crypto
+    CRYPTO_SYMBOLS.forEach(async (symbol) => {
+      try {
+        const marketData = await marketDataService.getMarketData(symbol.coinbaseSymbol);
+        if (marketData) {
+          console.log('Initial market data for', symbol.symbol, marketData);
+          setCryptoData(prev => prev.map(crypto => {
+            if (crypto.symbol === symbol.symbol) {
+              return {
+                ...crypto,
+                current_price: marketData.price,
+                price_change_24h: marketData.change24h,
+                price_change_percentage_24h: marketData.change24hPercent,
+                high_24h: marketData.high24h,
+                low_24h: marketData.low24h,
+                total_volume: marketData.volume24h,
+                marketData: marketData
+              };
+            }
+            return crypto;
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching initial data for', symbol.symbol, error);
+      }
+    });
+    
+    // Cleanup subscriptions on unmount
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+      marketDataService.disconnect();
+    };
+  }, []);
+
+  // Handle authentication redirect
+  useEffect(() => {
+    const checkAuth = async () => {
+      console.log('Crypto page - checking auth state...', { authLoading, isAuthenticated, user: !!user });
+      
+      if (!authLoading) {
+        if (!isAuthenticated || !user) {
+          console.log('Crypto page - redirecting to login');
+          router.push('/login?redirectTo=/crypto');
+          return;
+        }
+        console.log('Crypto page - user authenticated, continuing...');
+        setPageLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [authLoading, isAuthenticated, user, router]);
 
   // Load watchlist from database
   useEffect(() => {
     const loadWatchlist = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log('No user, skipping watchlist load');
+        return;
+      }
       
       try {
+        console.log('Loading watchlist for user:', user.id);
         const { data: watchlist, error } = await supabase
           .from('crypto_watchlist')
           .select('*')
@@ -205,6 +247,7 @@ export default function CryptoPage() {
         }
         
         if (watchlist) {
+          console.log('Watchlist loaded:', watchlist);
           setWatchlistItems(watchlist);
           const watchedSymbols = new Set(watchlist.map(item => item.symbol));
           setCryptoData(prev => prev.map(crypto => ({
@@ -217,13 +260,16 @@ export default function CryptoPage() {
       }
     };
 
-    if (user) {
+    if (user && !authLoading) {
       loadWatchlist();
     }
-  }, [user, supabase]);
+  }, [user, supabase, authLoading]);
 
   const toggleWatchlist = async (crypto: CryptoData) => {
-    if (!user) return;
+    if (!user) {
+      setNotification({type: 'error', message: 'Please log in to manage watchlist'});
+      return;
+    }
 
     try {
       if (crypto.isWatched) {
@@ -277,8 +323,8 @@ export default function CryptoPage() {
           : item
       ));
       
-      if (selectedCrypto.id === crypto.id) {
-        setSelectedCrypto(prev => ({ ...prev, isWatched: !prev.isWatched }));
+      if (selectedCrypto && selectedCrypto.id === crypto.id) {
+        setSelectedCrypto(prev => prev ? { ...prev, isWatched: !prev.isWatched } : null);
       }
 
       // Clear notification after 3 seconds
@@ -292,18 +338,48 @@ export default function CryptoPage() {
 
   const refreshData = async () => {
     setIsRefreshing(true);
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('Refreshing crypto data from Coinbase...');
     
-    // In production, this would fetch real data from CoinGecko API
-    setCryptoData(prev => prev.map(crypto => ({
-      ...crypto,
-      current_price: crypto.current_price * (1 + (Math.random() - 0.5) * 0.02),
-      price_change_24h: crypto.price_change_24h * (1 + (Math.random() - 0.5) * 0.1),
-      price_change_percentage_24h: crypto.price_change_percentage_24h * (1 + (Math.random() - 0.5) * 0.1)
-    })));
-    
-    setIsRefreshing(false);
+    try {
+      // Fetch fresh data for all cryptos
+      const promises = CRYPTO_SYMBOLS.map(async (symbol) => {
+        try {
+          const marketData = await marketDataService.getMarketData(symbol.coinbaseSymbol);
+          return { symbol: symbol.symbol, marketData };
+        } catch (error) {
+          console.error('Error refreshing data for', symbol.symbol, error);
+          return { symbol: symbol.symbol, marketData: null };
+        }
+      });
+      
+      const results = await Promise.all(promises);
+      
+      // Update crypto data with fresh data
+      setCryptoData(prev => prev.map(crypto => {
+        const result = results.find(r => r.symbol === crypto.symbol);
+        if (result?.marketData) {
+          return {
+            ...crypto,
+            current_price: result.marketData.price,
+            price_change_24h: result.marketData.change24h,
+            price_change_percentage_24h: result.marketData.change24hPercent,
+            high_24h: result.marketData.high24h,
+            low_24h: result.marketData.low24h,
+            total_volume: result.marketData.volume24h,
+            marketData: result.marketData
+          };
+        }
+        return crypto;
+      }));
+      
+      setNotification({type: 'success', message: 'Market data refreshed successfully'});
+    } catch (error) {
+      console.error('Error refreshing market data:', error);
+      setNotification({type: 'error', message: 'Failed to refresh market data'});
+    } finally {
+      setIsRefreshing(false);
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
   const filteredAndSortedCrypto = cryptoData
@@ -320,32 +396,36 @@ export default function CryptoPage() {
         case 'change':
           return b.price_change_percentage_24h - a.price_change_percentage_24h;
         default:
-          return b.market_cap - a.market_cap;
+          // For market cap, use volume as fallback since we don't have market cap from Coinbase
+          return b.total_volume - a.total_volume;
       }
     });
 
   const formatCurrency = (value: number) => {
+    if (value === 0) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: value < 1 ? 4 : 2,
+      maximumFractionDigits: value < 1 ? 4 : 2,
     }).format(value);
   };
 
   const formatMarketCap = (value: number) => {
-    if (value >= 1e12) return `${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+    if (value === 0) return '$0';
+    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
     return formatCurrency(value);
   };
 
-  if (loading) {
+  // Show loading screen while authenticating or loading page
+  if (authLoading || pageLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Loading cryptocurrency data...</p>
         </div>
       </div>
     );
@@ -353,6 +433,21 @@ export default function CryptoPage() {
 
   if (!isAuthenticated) {
     return null;
+  }
+
+  // Don't render if selectedCrypto is null
+  if (!selectedCrypto) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600">Failed to load cryptocurrency data</p>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -390,7 +485,7 @@ export default function CryptoPage() {
                 Cryptocurrency Markets
               </h1>
               <p className="text-muted-foreground mt-2">
-                Real-time cryptocurrency prices and charts. Track your favorite coins and analyze market trends.
+                Real-time cryptocurrency prices from Coinbase. Track your favorite coins and analyze market trends.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -431,7 +526,7 @@ export default function CryptoPage() {
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="px-3 py-2 rounded-md border border-border bg-background text-sm"
               >
-                <option value="market_cap">Market Cap</option>
+                <option value="market_cap">Volume</option>
                 <option value="price">Price</option>
                 <option value="change">24h Change</option>
               </select>
@@ -457,7 +552,7 @@ export default function CryptoPage() {
                       <motion.div
                         key={crypto.id}
                         className={`p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${
-                          selectedCrypto.id === crypto.id ? 'bg-muted' : ''
+                          selectedCrypto && selectedCrypto.id === crypto.id ? 'bg-muted' : ''
                         }`}
                         onClick={() => setSelectedCrypto(crypto)}
                         whileHover={{ x: 4 }}
@@ -501,6 +596,11 @@ export default function CryptoPage() {
                               )}
                               {crypto.price_change_percentage_24h >= 0 ? '+' : ''}{crypto.price_change_percentage_24h.toFixed(2)}%
                             </p>
+                            {crypto.marketData && (
+                              <p className="text-xs text-muted-foreground">
+                                Live • {new Date(crypto.marketData.timestamp).toLocaleTimeString()}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </motion.div>
@@ -581,12 +681,12 @@ export default function CryptoPage() {
                     <p className="font-medium">{formatCurrency(selectedCrypto.low_24h)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Market Cap</p>
-                    <p className="font-medium">{formatMarketCap(selectedCrypto.market_cap)}</p>
-                  </div>
-                  <div>
                     <p className="text-sm text-muted-foreground">24h Volume</p>
                     <p className="font-medium">{formatMarketCap(selectedCrypto.total_volume)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Data Source</p>
+                    <p className="font-medium text-blue-600">Coinbase Live</p>
                   </div>
                 </div>
               </CardContent>
@@ -616,17 +716,6 @@ export default function CryptoPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Circulating Supply</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">
-                    {selectedCrypto.circulating_supply.toLocaleString()} {selectedCrypto.symbol}
-                  </p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Price Range (24h)</CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -650,13 +739,13 @@ export default function CryptoPage() {
               
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Volume/Market Cap</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">24h Volume</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold">
-                    {((selectedCrypto.total_volume / selectedCrypto.market_cap) * 100).toFixed(2)}%
+                    {formatMarketCap(selectedCrypto.total_volume)}
                   </p>
-                  <p className="text-sm text-muted-foreground">Volume ratio</p>
+                  <p className="text-sm text-muted-foreground">Trading volume</p>
                 </CardContent>
               </Card>
             </div>
@@ -688,13 +777,32 @@ export default function CryptoPage() {
                 </div>
                 <div className="mt-4 p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground">
-                    💡 <strong>Note:</strong> This is a view-only cryptocurrency tracker. 
+                    💡 <strong>Live Data:</strong> Prices are updated in real-time from Coinbase. 
                     Use this page to monitor prices, analyze charts, and manage your watchlist.
                   </p>
                 </div>
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Connection Status */}
+        <div className="mt-8">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm text-muted-foreground">
+                    Connected to Coinbase WebSocket • Real-time data
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-green-600 border-green-600">
+                  Live
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>

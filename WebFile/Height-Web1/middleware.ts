@@ -15,10 +15,10 @@ const securityHeaders = {
 };
 
 // Protected routes that require authentication
-const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet'];
+const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet', '/crypto'];
 
-// Routes that require KYC completion
-const KYC_REQUIRED_ROUTES = ['/trade', '/wallet'];
+// Routes that are public (no auth required)
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai'];
 
 // API routes that require authentication
 const PROTECTED_API_ROUTES = ['/api/trades', '/api/portfolio', '/api/wallet'];
@@ -104,16 +104,26 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  // Skip auth checks for static files and API routes that don't need auth
+  if (
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/api/') && !PROTECTED_API_ROUTES.some(route => pathname.startsWith(route)) ||
+    pathname.includes('.') // Static files
+  ) {
+    return response;
+  }
+
   // Get session
   const { data: { session }, error } = await supabase.auth.getSession();
 
-  // Check if route is protected
+  // Check if this is a protected route
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
   const isProtectedAPIRoute = PROTECTED_API_ROUTES.some(route => pathname.startsWith(route));
-  const requiresKYC = KYC_REQUIRED_ROUTES.some(route => pathname.startsWith(route));
 
   // Handle protected routes
   if (isProtectedRoute && !session) {
+    console.log(`Access denied to ${pathname} - no session`);
     const url = new URL('/login', baseUrl);
     url.searchParams.set('redirectTo', pathname);
     url.searchParams.set('session_expired', 'true');
@@ -131,6 +141,11 @@ export async function middleware(request: NextRequest) {
         },
       }
     );
+  }
+
+  // Redirect authenticated users away from auth pages
+  if (session && (pathname === '/login' || pathname === '/signup')) {
+    return NextResponse.redirect(new URL('/dashboard', baseUrl));
   }
 
   // Add session info to request headers for API routes
@@ -168,6 +183,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
     '/((?!_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
