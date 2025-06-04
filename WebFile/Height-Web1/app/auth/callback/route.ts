@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
           .eq('id', session.user.id)
           .single();
         
-        // Always redirect to dashboard, regardless of KYC status
-        return NextResponse.redirect(new URL('/dashboard', baseUrl));
+        // Always redirect to ai-assistant, regardless of KYC status
+        return NextResponse.redirect(new URL('/ai-assistant', baseUrl));
       }
     } catch (error) {
       console.error('Auth callback error:', error);
