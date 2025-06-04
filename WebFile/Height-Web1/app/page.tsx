@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/navbar";
 import { marketDataService, type MarketData } from '@/lib/market-data';
@@ -156,6 +156,7 @@ const features = [
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
   const [loadingCrypto, setLoadingCrypto] = useState(true);
@@ -185,6 +186,12 @@ export default function Home() {
       unsubscribes.forEach(unsub => unsub());
     };
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('code')) {
+      router.replace('/dashboard');
+    }
+  }, [searchParams, router]);
 
   const handleCategoryClick = (category: typeof ASSET_CATEGORIES[0]) => {
     setSelectedCategory(category.id);

@@ -53,7 +53,7 @@ export default function Login() {
   useEffect(() => {
     if (user && !authLoading) {
       console.log("User already logged in, redirecting to: /dashboard");
-      router.push('/');
+      router.push('/ai-assistant');
     }
   }, [user, authLoading, router]);
 
