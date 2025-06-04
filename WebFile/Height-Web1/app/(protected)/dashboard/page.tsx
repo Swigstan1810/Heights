@@ -111,10 +111,16 @@ export default function Dashboard() {
   // Fetch user data (wallet, portfolio, watchlist)
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!user || !sessionValid) return;
+      if (!user || !sessionValid) {
+        setLoadingData(false);
+        return;
+      }
 
+      let timeoutId: NodeJS.Timeout | null = null;
       try {
         setLoadingData(true);
+        // Fallback: stop loading after 5 seconds
+        timeoutId = setTimeout(() => setLoadingData(false), 5000);
 
         // Fetch wallet balance
         const { data: walletData, error: walletError } = await supabase
@@ -151,6 +157,7 @@ export default function Dashboard() {
         console.error('Error fetching user data:', error);
       } finally {
         setLoadingData(false);
+        if (timeoutId) clearTimeout(timeoutId);
       }
     };
 
@@ -226,25 +233,31 @@ export default function Dashboard() {
 
   // Calculate portfolio metrics
   const portfolioMetrics = {
-    totalValue: portfolio.reduce((sum, p) => sum + (p.current_value || 0), 0) + (walletBalance?.balance || 0),
+    totalValue: portfolio.reduce((sum, p) => sum + (p.current_value || 0), 0) + (walletBalance?.balance ?? 0),
     totalPL: portfolio.reduce((sum, p) => sum + (p.profit_loss || 0), 0),
     totalPLPercent: portfolio.length > 0 
       ? portfolio.reduce((sum, p) => sum + (p.profit_loss_percent || 0), 0) / portfolio.length 
       : 0,
   };
 
-  if (loading || !isAuthenticated || !sessionValid) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="mt-4 text-muted-foreground">
-            {!sessionValid ? 'Validating session...' : 'Loading...'}
-          </p>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
   }
+
+  if (!isAuthenticated || !sessionValid) {
+    // Optionally redirect or show a message
+    return null;
+  }
+
+  // If walletBalance is still null after loading, set to zero balance
+  const safeWalletBalance = walletBalance ?? { balance: 0, locked_balance: 0, currency: 'INR' };
 
   return (
     <main className="min-h-screen bg-background">
@@ -252,7 +265,7 @@ export default function Dashboard() {
       
       <div className="container mx-auto px-4 pt-24 pb-16">
         {/* Security Status Alert */}
-        {profile && !profile.kyc_completed && (
+        {profile?.kyc_completed === false && (
           <Alert className="mb-6 border-yellow-600 bg-yellow-600/10">
             <AlertCircle className="h-4 w-4 text-yellow-600" />
             <AlertDescription className="text-yellow-600">
@@ -272,11 +285,11 @@ export default function Dashboard() {
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">
-              Welcome back, {profile?.full_name || user?.email?.split('@')[0]}
+              Welcome back, {profile?.full_name ?? user?.email?.split('@')[0] ?? 'User'}
             </h1>
             <p className="text-muted-foreground flex items-center gap-2 mt-2">
               <Shield className="h-4 w-4 text-green-500" />
-              Secure session active • Last login: {new Date(user?.last_sign_in_at || '').toLocaleString()}
+              Secure session active • Last login: {user?.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'N/A'}
             </p>
           </div>
           
@@ -316,7 +329,7 @@ export default function Dashboard() {
                 {loadingData ? (
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
-                  formatCurrency(walletBalance?.balance || 0)
+                  formatCurrency(safeWalletBalance.balance)
                 )}
               </div>
               <p className="text-xs text-muted-foreground">

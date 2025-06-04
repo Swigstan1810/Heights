@@ -25,6 +25,10 @@ export interface Database {
           locked_until: string | null
           two_factor_enabled: boolean
           two_factor_secret: string | null
+          auth_provider: string
+          google_id: string | null
+          google_avatar_url: string | null
+          email_verified: boolean
         }
         Insert: {
           id: string
@@ -40,6 +44,10 @@ export interface Database {
           locked_until?: string | null
           two_factor_enabled?: boolean
           two_factor_secret?: string | null
+          auth_provider?: string
+          google_id?: string | null
+          google_avatar_url?: string | null
+          email_verified?: boolean
         }
         Update: {
           id?: string
@@ -55,6 +63,39 @@ export interface Database {
           locked_until?: string | null
           two_factor_enabled?: boolean
           two_factor_secret?: string | null
+          auth_provider?: string
+          google_id?: string | null
+          google_avatar_url?: string | null
+          email_verified?: boolean
+        }
+      }
+      oauth_rate_limit: {
+        Row: {
+          id: string
+          identifier: string
+          provider: string
+          attempt_count: number
+          first_attempt_at: string
+          last_attempt_at: string
+          locked_until: string | null
+        }
+        Insert: {
+          id?: string
+          identifier: string
+          provider: string
+          attempt_count?: number
+          first_attempt_at?: string
+          last_attempt_at?: string
+          locked_until?: string | null
+        }
+        Update: {
+          id?: string
+          identifier?: string
+          provider?: string
+          attempt_count?: number
+          first_attempt_at?: string
+          last_attempt_at?: string
+          locked_until?: string | null
         }
       }
       kyc_details: {
@@ -414,6 +455,7 @@ export interface Database {
           ip_address: string | null
           user_agent: string | null
           created_at: string
+          auth_method: string | null
         }
         Insert: {
           id?: string
@@ -423,6 +465,7 @@ export interface Database {
           ip_address?: string | null
           user_agent?: string | null
           created_at?: string
+          auth_method?: string | null
         }
         Update: {
           id?: string
@@ -432,6 +475,7 @@ export interface Database {
           ip_address?: string | null
           user_agent?: string | null
           created_at?: string
+          auth_method?: string | null
         }
       }
       failed_login_attempts: {
@@ -492,6 +536,25 @@ export interface Database {
           p_email: string
         }
         Returns: boolean
+      }
+      check_oauth_rate_limit: {
+        Args: {
+          p_identifier: string
+          p_provider: string
+        }
+        Returns: boolean
+      }
+      merge_google_account: {
+        Args: {
+          p_user_id: string
+          p_google_id: string
+          p_google_avatar_url: string
+        }
+        Returns: void
+      }
+      cleanup_oauth_rate_limits: {
+        Args: {}
+        Returns: void
       }
       decrement_wallet_balance: {
         Args: {

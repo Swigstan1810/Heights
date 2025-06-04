@@ -23,6 +23,9 @@ const KYC_REQUIRED_ROUTES = ['/trade', '/wallet'];
 // API routes that require authentication
 const PROTECTED_API_ROUTES = ['/api/trades', '/api/portfolio', '/api/wallet'];
 
+// OAuth callback routes
+const OAUTH_ROUTES = ['/auth/callback', '/auth/google/callback'];
+
 // Rate limiting map
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
@@ -32,6 +35,7 @@ const RATE_LIMITS = {
   '/api/auth/signup': { requests: 3, windowMs: 60 * 60 * 1000 }, // 3 requests per hour
   '/api/trades': { requests: 100, windowMs: 60 * 1000 }, // 100 requests per minute
   '/api/market': { requests: 300, windowMs: 60 * 1000 }, // 300 requests per minute
+  '/auth/callback': { requests: 10, windowMs: 60 * 1000 }, // 10 OAuth callbacks per minute
   default: { requests: 200, windowMs: 60 * 1000 }, // 200 requests per minute default
 };
 
@@ -97,6 +101,35 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  // Special handling for OAuth callbacks
+  if (OAUTH_ROUTES.some(route => pathname.startsWith(route))) {
+    // Verify OAuth state parameter to prevent CSRF
+    const state = request.nextUrl.searchParams.get('state');
+    const code = request.nextUrl.searchParams.get('code');
+    const error = request.nextUrl.searchParams.get('error');
+    
+    // Log OAuth callback attempt
+    console.log('OAuth callback received:', {
+      pathname,
+      hasState: !!state,
+      hasCode: !!code,
+      hasError: !!error,
+      error: error || null,
+    });
+    
+    // If there's an error, redirect to login with error message
+    if (error) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('error', error);
+      url.searchParams.set('error_description', request.nextUrl.searchParams.get('error_description') || 'OAuth authentication failed');
+      return NextResponse.redirect(url);
+    }
+    
+    // Allow Supabase to handle the OAuth callback
+    return response;
+  }
+
   // Get session
   const { data: { session }, error } = await supabase.auth.getSession();
 
@@ -110,6 +143,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirectTo', pathname);
+    url.searchParams.set('session_expired', 'true');
     return NextResponse.redirect(url);
   }
 
@@ -126,43 +160,35 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Check KYC status for routes that require it
-  if (session && requiresKYC) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('kyc_completed')
-      .eq('id', session.user.id)
-      .single();
-
-    if (profile && !profile.kyc_completed) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/kyc';
-      return NextResponse.redirect(url);
-    }
-  }
-
   // Add session info to request headers for API routes
   if (session && pathname.startsWith('/api/')) {
     response.headers.set('x-user-id', session.user.id);
     response.headers.set('x-user-email', session.user.email || '');
+    response.headers.set('x-auth-provider', session.user.app_metadata?.provider || 'email');
   }
 
-  // Content Security Policy
+  // Enhanced Content Security Policy for OAuth
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://s3.tradingview.com https://cdnjs.cloudflare.com;
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data: https:;
-    font-src 'self';
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://s3.tradingview.com https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;
+    style-src 'self' 'unsafe-inline' https://accounts.google.com;
+    img-src 'self' blob: data: https: https://lh3.googleusercontent.com;
+    font-src 'self' https://fonts.gstatic.com;
     object-src 'none';
     base-uri 'self';
-    form-action 'self';
+    form-action 'self' https://accounts.google.com;
     frame-ancestors 'none';
-    frame-src 'self' https://s.tradingview.com;
-    connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co;
+    frame-src 'self' https://s.tradingview.com https://accounts.google.com;
+    connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://www.googleapis.com;
   `.replace(/\n/g, '');
 
   response.headers.set('Content-Security-Policy', cspHeader);
+
+  // Add additional security headers for OAuth
+  if (pathname.startsWith('/auth/')) {
+    response.headers.set('X-OAuth-Request', 'true');
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  }
 
   return response;
 }
