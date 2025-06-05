@@ -126,7 +126,7 @@ async function fetchNewsFromAPI(category: string = 'business', page: number = 1)
       console.error('NewsAPI error:', error);
     }
   }
-  
+
   // Return fallback news immediately if API fails
   return FALLBACK_NEWS.filter(article => 
     category === 'general' || article.category === category

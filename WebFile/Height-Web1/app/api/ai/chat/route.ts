@@ -1,99 +1,338 @@
-// app/api/ai/chat/route.ts
+// app/api/ai/chat/route.ts - Enhanced with Real-time Data
 import { NextResponse } from 'next/server';
-import { anthropic, formatConversationForClaude, TRADING_SYSTEM_PROMPT } from '@/lib/claude-api';
-import { marketDataService } from '@/lib/market-data';
+import { tradingAgent } from '@/lib/claude-api';
+import { headers } from 'next/headers';
+import { ratelimit } from '@/lib/rate-limit';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Rate limiting
+const rateLimiter = ratelimit({
+  interval: 60 * 1000, // 1 minute
+  uniqueTokenPerInterval: 500,
+});
+
+// Real-time market data fetchers
+async function fetchRealTimeMarketData(symbol: string) {
+  try {
+    // Multiple data sources for reliability
+    const promises = [];
+
+    // 1. Coinbase API for crypto
+    if (['BTC', 'ETH', 'SOL', 'MATIC'].includes(symbol.toUpperCase())) {
+      promises.push(
+        fetch(`https://api.coinbase.com/v2/exchange-rates?currency=${symbol}`)
+          .then(res => res.json())
+          .then(data => ({
+            source: 'coinbase',
+            price: parseFloat(data.data?.rates?.USD || '0'),
+            timestamp: new Date().toISOString()
+          }))
+          .catch(() => null)
+      );
+    }
+
+    // 2. Yahoo Finance for stocks (via proxy or serverless function)
+    if (!['BTC', 'ETH', 'SOL', 'MATIC'].includes(symbol.toUpperCase())) {
+      promises.push(
+        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`)
+          .then(res => res.json())
+          .then(data => {
+            const result = data.chart?.result?.[0];
+            return {
+              source: 'yahoo',
+              price: result?.meta?.regularMarketPrice || 0,
+              change: result?.meta?.regularMarketPrice - result?.meta?.previousClose,
+              changePercent: ((result?.meta?.regularMarketPrice - result?.meta?.previousClose) / result?.meta?.previousClose) * 100,
+              volume: result?.meta?.regularMarketVolume || 0,
+              high: result?.meta?.regularMarketDayHigh || 0,
+              low: result?.meta?.regularMarketDayLow || 0,
+              timestamp: new Date().toISOString()
+            };
+          })
+          .catch(() => null)
+      );
+    }
+
+    // 3. Alpha Vantage API (if available)
+    if (process.env.ALPHA_VANTAGE_API_KEY) {
+      promises.push(
+        fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`)
+          .then(res => res.json())
+          .then(data => ({
+            source: 'alphavantage',
+            price: parseFloat(data['Global Quote']?.['05. price'] || '0'),
+            change: parseFloat(data['Global Quote']?.['09. change'] || '0'),
+            changePercent: parseFloat(data['Global Quote']?.['10. change percent']?.replace('%', '') || '0'),
+            volume: parseInt(data['Global Quote']?.['06. volume'] || '0'),
+            timestamp: new Date().toISOString()
+          }))
+          .catch(() => null)
+      );
+    }
+
+    const results = await Promise.all(promises);
+    const validResults = results.filter(r => r !== null && r.price > 0);
+    
+    return validResults.length > 0 ? validResults[0] : null;
+  } catch (error) {
+    console.error('Error fetching market data:', error);
+    return null;
+  }
+}
+
+async function fetchRealTimeNews(symbol: string) {
+  try {
+    const newsPromises = [];
+
+    // 1. NewsAPI
+    if (process.env.NEWS_API_KEY) {
+      newsPromises.push(
+        fetch(`https://newsapi.org/v2/everything?q=${symbol}&sortBy=publishedAt&language=en&apiKey=${process.env.NEWS_API_KEY}`)
+          .then(res => res.json())
+          .then(data => ({
+            source: 'newsapi',
+            articles: data.articles?.slice(0, 5).map((article: any) => ({
+              title: article.title,
+              description: article.description,
+              url: article.url,
+              publishedAt: article.publishedAt,
+              source: article.source.name,
+              sentiment: analyzeSentiment(article.title + ' ' + article.description)
+            })) || []
+          }))
+          .catch(() => ({ source: 'newsapi', articles: [] }))
+      );
+    }
+
+    // 2. Alpha Vantage News
+    if (process.env.ALPHA_VANTAGE_API_KEY) {
+      newsPromises.push(
+        fetch(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`)
+          .then(res => res.json())
+          .then(data => ({
+            source: 'alphavantage',
+            articles: data.feed?.slice(0, 5).map((item: any) => ({
+              title: item.title,
+              description: item.summary,
+              url: item.url,
+              publishedAt: item.time_published,
+              sentiment: item.overall_sentiment_label || 'neutral',
+              sentimentScore: item.overall_sentiment_score || 0
+            })) || []
+          }))
+          .catch(() => ({ source: 'alphavantage', articles: [] }))
+      );
+    }
+
+    const results = await Promise.all(newsPromises);
+    const allArticles = results.flatMap(r => r.articles);
+    
+    return allArticles;
+  } catch (error) {
+    console.error('Error fetching news:', error);
+    return [];
+  }
+}
+
+function analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
+  const positiveWords = ['gain', 'rise', 'up', 'bull', 'positive', 'growth', 'surge', 'rally', 'breakthrough'];
+  const negativeWords = ['fall', 'drop', 'down', 'bear', 'negative', 'decline', 'crash', 'plunge', 'loss'];
+  
+  const lowerText = text.toLowerCase();
+  const positiveCount = positiveWords.filter(word => lowerText.includes(word)).length;
+  const negativeCount = negativeWords.filter(word => lowerText.includes(word)).length;
+  
+  if (positiveCount > negativeCount) return 'positive';
+  if (negativeCount > positiveCount) return 'negative';
+  return 'neutral';
+}
+
+// Store conversation in Supabase
+async function storeConversation(userId: string, message: string, response: string, metadata: any) {
+  try {
+    const { error } = await supabase
+      .from('ai_conversations')
+      .insert({
+        user_id: userId,
+        user_message: message,
+        ai_response: response,
+        metadata,
+        created_at: new Date().toISOString()
+      });
+    
+    if (error) console.error('Error storing conversation:', error);
+  } catch (error) {
+    console.error('Error with Supabase:', error);
+  }
+}
+
+// Store market analysis in Supabase
+async function storeMarketAnalysis(symbol: string, analysis: any) {
+  try {
+    const { error } = await supabase
+      .from('market_analyses')
+      .insert({
+        symbol,
+        analysis,
+        confidence: analysis.confidence || 0.7,
+        created_at: new Date().toISOString()
+      });
+    
+    if (error) console.error('Error storing analysis:', error);
+  } catch (error) {
+    console.error('Error with Supabase:', error);
+  }
+}
 
 export async function POST(request: Request) {
   try {
+    // Rate limiting
+    const ip = headers().get('x-forwarded-for') ?? 'anonymous';
+    const { success, limit, reset, remaining } = await rateLimiter.limit(ip);
+    
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded', limit, reset, remaining },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
-    const { message, history } = body;
+    const { message, history, userId = 'anonymous', streamResponse = false, analysisType = 'comprehensive' } = body;
     
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
-    
-    // Format conversation history for Claude
-    const messages = history || [];
-    
-    // Add the new user message
-    messages.push({
-      role: "user",
-      content: message
-    });
-    
-    // Format messages for Claude API
-    const formattedMessages = formatConversationForClaude(messages);
-    
+
+    // Check if this is a market analysis request
+    const isMarketQuery = message.toLowerCase().includes('analyze') || 
+                         message.toLowerCase().includes('predict') ||
+                         message.toLowerCase().includes('market') ||
+                         message.toLowerCase().includes('price') ||
+                         /\b[A-Z]{2,5}\b/.test(message); // Looks like a ticker symbol
+
     try {
-      // Check if we have the API key
-      if (!process.env.ANTHROPIC_API_KEY) {
-        throw new Error("ANTHROPIC_API_KEY is not set");
+      let response;
+      let metadata: any = {
+        model: 'claude-3-5-sonnet-20241022',
+        timestamp: new Date().toISOString(),
+        analysisType,
+        rateLimitRemaining: remaining
+      };
+
+      if (isMarketQuery) {
+        // Extract potential symbols from the message
+        const symbolMatch = message.match(/\b([A-Z]{2,5})\b/g);
+        const symbols = symbolMatch ? symbolMatch : ['BTC'];
+
+        // Fetch real-time data for all symbols
+        const marketDataPromises = symbols.map((symbol: string) => fetchRealTimeMarketData(symbol));
+        const newsDataPromises = symbols.map((symbol: string) => fetchRealTimeNews(symbol));
+
+        const [marketDataResults, newsDataResults] = await Promise.all([
+          Promise.all(marketDataPromises),
+          Promise.all(newsDataPromises)
+        ]);
+
+        // Combine all data
+        const enrichedData = symbols.map((symbol: string, index: number) => ({
+          symbol,
+          marketData: marketDataResults[index],
+          news: newsDataResults[index]
+        }));
+
+        // Create enhanced context for Claude
+        const marketContext = `
+Real-time Market Data:
+-${enrichedData.map((data: any) => `
+Symbol: ${data.symbol}
+Current Price: $${data.marketData?.price || 'N/A'}
+24h Change: ${(data.marketData && 'changePercent' in data.marketData) ? data.marketData.changePercent : 0}%
+Volume: ${data.marketData?.volume || 'N/A'}
+
+Recent News:
+${data.news.slice(0, 3).map((article: any) => 
+  `- ${article.title} (${article.sentiment}) - ${new Date(article.publishedAt).toLocaleDateString()}`
+).join('\n')}
+`).join('\n---\n')}
+
+User Question: ${message}
+`;
+
+        // Use enhanced market analysis with real data
+        response = await tradingAgent.analyzeMarket(symbols[0], analysisType);
+
+        metadata = {
+          ...metadata,
+          symbols,
+          marketData: enrichedData,
+          analysisPerformed: true,
+          dataSourcesUsed: ['real-time', 'news', 'technical_analysis']
+        };
+
+        // Store analysis in Supabase
+        await storeMarketAnalysis(symbols[0], {
+          response,
+          marketData: enrichedData,
+          metadata
+        });
+
+      } else {
+        // Regular chat with context
+        const contextMessage = history?.length > 0 
+          ? `Previous context: ${history.slice(-3).map((h: any) => `${h.role}: ${h.content}`).join('\n')}\n\nCurrent question: ${message}`
+          : message;
+
+        response = await tradingAgent.chatWithAgent(contextMessage);
+        metadata = {
+          ...metadata,
+          contextProvided: history?.length > 0
+        };
       }
 
-      // Get real-time market data context if available
-      let marketContext = '';
-      try {
-        // Fetch current prices for major cryptos
-        const btcData = await marketDataService.getMarketData('CRYPTO:BTC');
-        const ethData = await marketDataService.getMarketData('CRYPTO:ETH');
-        const solData = await marketDataService.getMarketData('CRYPTO:SOL');
-        
-        if (btcData || ethData || solData) {
-          marketContext = `\n\nCurrent Market Data (Real-time from Coinbase):
-${btcData ? `- BTC/USD: $${btcData.price.toLocaleString()} (${btcData.change24hPercent >= 0 ? '+' : ''}${btcData.change24hPercent.toFixed(2)}% 24h)` : ''}
-${ethData ? `- ETH/USD: $${ethData.price.toLocaleString()} (${ethData.change24hPercent >= 0 ? '+' : ''}${ethData.change24hPercent.toFixed(2)}% 24h)` : ''}
-${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hPercent >= 0 ? '+' : ''}${solData.change24hPercent.toFixed(2)}% 24h)` : ''}`;
-        }
-      } catch (error) {
-        console.log('Could not fetch market data for context');
-      }
-      
-      // Enhance the system prompt with market context
-      const enhancedSystemPrompt = TRADING_SYSTEM_PROMPT + marketContext;
-      
-      // Call Claude API with enhanced context
-      const completion = await anthropic.messages.create({
-        model: process.env.CLAUDE_MODEL || "claude-3-opus-20240229",
-        max_tokens: parseInt(process.env.CLAUDE_MAX_TOKENS || "1500", 10),
-        system: enhancedSystemPrompt,
-        messages: formattedMessages,
-        temperature: parseFloat(process.env.CLAUDE_TEMPERATURE || "0.7"),
-      });
-      
-      // Extract and return Claude's response
-      const responseText = completion.content[0].type === 'text' ? (completion.content[0] as { text: string }).text : '';
-      
-      // Analyze response for trading signals
-      const containsTradingSignal = 
-        responseText.toLowerCase().includes('buy') || 
-        responseText.toLowerCase().includes('sell') ||
-        responseText.toLowerCase().includes('strong buy') ||
-        responseText.toLowerCase().includes('strong sell');
-      
-      return NextResponse.json({ 
-        message: responseText,
-        metadata: {
-          model: completion.model,
-          usage: completion.usage,
-          containsTradingSignal,
-          timestamp: new Date().toISOString()
-        }
-      });
-      
+      // Store conversation in Supabase
+      await storeConversation(userId, message, response, metadata);
+
+      // Enhanced response with structured data
+      const enhancedResponse = {
+        message: response,
+        metadata,
+        suggestions: generateSuggestions(message, response),
+        relatedSymbols: extractSymbols(response),
+        confidence: calculateConfidence(response)
+      };
+
+      return NextResponse.json(enhancedResponse);
+
     } catch (apiError: unknown) {
-      console.error('Error calling Claude API:', apiError);
+      console.error('Enhanced Claude API error:', apiError);
       
-      // Enhanced fallback response with market awareness
+      // Log error to Supabase
+      await supabase
+        .from('ai_errors')
+        .insert({
+          error: apiError instanceof Error ? apiError.message : 'Unknown error',
+          context: { message, userId },
+          created_at: new Date().toISOString()
+        });
+      
       return NextResponse.json({ 
-        message: getEnhancedFallbackResponse(message),
+        message: "I'm experiencing some technical difficulties accessing real-time data. Please try again in a moment.",
         metadata: {
-          source: "enhanced_fallback",
-          error: apiError instanceof Error ? apiError.message : 'An unknown error occurred'
+          source: "error_handler",
+          error: apiError instanceof Error ? apiError.message : 'API temporarily unavailable',
+          timestamp: new Date().toISOString()
         }
       });
     }
   } catch (error: unknown) {
-    console.error(`Error processing request: ${error}`);
+    console.error(`Enhanced API error: ${error}`);
     return NextResponse.json({ 
       error: 'Failed to process message',
       message: error instanceof Error ? error.message : 'An unknown error occurred'
@@ -101,71 +340,99 @@ ${solData ? `- SOL/USD: $${solData.price.toLocaleString()} (${solData.change24hP
   }
 }
 
-// Enhanced fallback response function with better trading intelligence
-function getEnhancedFallbackResponse(userMessage: string): string {
-  const lowercaseMessage = userMessage.toLowerCase();
+// Enhanced streaming endpoint with real-time data
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const message = searchParams.get('message');
+  const userId = searchParams.get('userId') || 'anonymous';
   
-  // Greetings
-  if (lowercaseMessage.includes("hello") || lowercaseMessage.includes("hi")) {
-    return "Hello! I'm your AI trading assistant. How can I help you navigate the markets today? I can provide market analysis, explain trading strategies, help with technical analysis, or answer questions about the Heights platform.";
+  if (!message) {
+    return NextResponse.json({ error: 'Message parameter required' }, { status: 400 });
   }
-  
-  // Market Analysis
-  if (lowercaseMessage.includes("market") && (lowercaseMessage.includes("analysis") || lowercaseMessage.includes("update"))) {
-    return "Based on current market conditions, we're seeing mixed signals across crypto markets. Bitcoin is showing signs of consolidation, while Ethereum appears to be testing resistance levels. For detailed real-time analysis, I recommend checking the live charts on your dashboard. Would you like me to explain any specific technical indicators?";
-  }
-  
-  // Bitcoin specific
-  if (lowercaseMessage.includes("bitcoin") || lowercaseMessage.includes("btc")) {
-    return "Bitcoin is currently experiencing volatility typical of cryptocurrency markets. Key support levels to watch are around $60,000-$61,000, with resistance at $65,000. The RSI suggests we're neither overbought nor oversold. Would you like a more detailed technical analysis or information about trading BTC on Heights?";
-  }
-  
-  // Ethereum specific
-  if (lowercaseMessage.includes("ethereum") || lowercaseMessage.includes("eth")) {
-    return "Ethereum has been showing strength relative to Bitcoin recently. The upcoming network upgrades continue to drive institutional interest. Key levels to watch are support at $3,000 and resistance at $3,500. The platform offers real-time ETH trading with competitive fees. Would you like to know more about ETH trading strategies?";
-  }
-  
-  // Trading strategies
-  if (lowercaseMessage.includes("strategy") || lowercaseMessage.includes("strategies")) {
-    return "Here are some popular trading strategies on Heights:\n\n1. **Dollar-Cost Averaging (DCA)**: Invest fixed amounts regularly regardless of price\n2. **Swing Trading**: Capture price swings over days or weeks\n3. **HODLing**: Long-term investment strategy\n4. **Technical Analysis**: Use indicators like RSI, MACD, and moving averages\n\nWhich strategy interests you most?";
-  }
-  
-  // Risk management
-  if (lowercaseMessage.includes("risk") || lowercaseMessage.includes("stop loss")) {
-    return "Risk management is crucial for successful trading. Here are key principles:\n\n1. Never invest more than you can afford to lose\n2. Use stop-loss orders to limit downside (typically 2-5% below entry)\n3. Diversify across different assets\n4. Size positions appropriately (1-2% of portfolio per trade)\n5. Have clear entry and exit strategies\n\nWould you like help setting up risk parameters for your trades?";
-  }
-  
-  // Technical indicators
-  if (lowercaseMessage.includes("rsi") || lowercaseMessage.includes("macd") || lowercaseMessage.includes("indicator")) {
-    return "Technical indicators help identify trading opportunities:\n\n• **RSI (Relative Strength Index)**: Measures overbought/oversold conditions (>70 overbought, <30 oversold)\n• **MACD**: Shows trend direction and momentum\n• **Moving Averages**: Identify support/resistance and trend direction\n• **Volume**: Confirms price movements\n\nOur charts include all these indicators. Which would you like to learn more about?";
-  }
-  
-  // Platform features
-  if (lowercaseMessage.includes("kyc")) {
-    return "KYC (Know Your Customer) verification is required for regulatory compliance and to ensure the security of your account. The process involves:\n\n1. Personal information verification\n2. Identity document upload (PAN, Aadhaar)\n3. Address proof\n4. Bank account verification\n\nOnce completed, you'll have full access to all trading features. The verification typically takes 1-3 business days.";
-  }
-  
-  if (lowercaseMessage.includes("fee") || lowercaseMessage.includes("charge") || lowercaseMessage.includes("commission")) {
-    return "Heights offers competitive and transparent pricing:\n\n• **Cryptocurrency trades**: 0.1% per transaction\n• **Stock trades**: ₹20 per order or 0.05%, whichever is lower\n• **No hidden fees**: What you see is what you pay\n• **No deposit/withdrawal fees**: Move your money freely\n\nCompared to other platforms, our fees are among the lowest in the industry.";
-  }
-  
-  if (lowercaseMessage.includes("wallet") || lowercaseMessage.includes("connect")) {
-    return "To connect your crypto wallet:\n\n1. Navigate to the Crypto section\n2. Click 'Connect Wallet'\n3. Choose your wallet provider (MetaMask, WalletConnect, etc.)\n4. Approve the connection request\n\nHeights supports all major Ethereum-compatible wallets. Your funds remain in your control at all times.";
-  }
-  
-  // Buy/Sell recommendations
-  if (lowercaseMessage.includes("should i buy") || lowercaseMessage.includes("should i sell")) {
-    return "I cannot provide specific investment advice, but I can help you make informed decisions. Consider:\n\n1. Your investment goals and timeline\n2. Current market conditions and trends\n3. Technical and fundamental analysis\n4. Your risk tolerance\n5. Portfolio diversification\n\nWould you like me to explain how to analyze any of these factors?";
-  }
-  
-  // Default response with helpful options
-  return `I understand you're asking about "${userMessage}". As your AI trading assistant, I can help with:
 
-• Market analysis and price predictions
-• Trading strategies and risk management
-• Technical indicator explanations
-• Platform features and how-to guides
-• Cryptocurrency and stock market education
+  // Create a readable stream for Server-Sent Events
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      
+      try {
+        // Fetch real-time data first
+        const symbolMatch = message.match(/\b([A-Z]{2,5})\b/);
+        const symbol = symbolMatch ? symbolMatch[1] : 'BTC';
+        
+        const [marketData, news] = await Promise.all([
+          fetchRealTimeMarketData(symbol),
+          fetchRealTimeNews(symbol)
+        ]);
 
-Please feel free to ask me anything specific about trading, markets, or using the Heights platform. What would you like to know more about?`;
+        const enrichedMessage = `
+${message}
+
+Current Market Data for ${symbol}:
+Price: $${marketData?.price || 'N/A'}
+-24h Change: ${(marketData && 'changePercent' in marketData) ? marketData.changePercent : 0}%
+
+Recent News Sentiment: ${news.length > 0 ? news[0].sentiment : 'No recent news'}
+`;
+
+        tradingAgent.streamResponse(enrichedMessage, (token: string) => {
+          const data = `data: ${JSON.stringify({ token, timestamp: Date.now() })}\n\n`;
+          controller.enqueue(encoder.encode(data));
+        }).then(() => {
+          controller.close();
+        }).catch((error) => {
+          const errorData = `data: ${JSON.stringify({ error: error.message, timestamp: Date.now() })}\n\n`;
+          controller.enqueue(encoder.encode(errorData));
+          controller.close();
+        });
+      } catch (error) {
+        const errorData = `data: ${JSON.stringify({ error: 'Failed to fetch market data', timestamp: Date.now() })}\n\n`;
+        controller.enqueue(encoder.encode(errorData));
+        controller.close();
+      }
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
+// Helper functions remain the same
+function generateSuggestions(userMessage: string, aiResponse: string): string[] {
+  const suggestions = [];
+  
+  if (userMessage.toLowerCase().includes('btc') || userMessage.toLowerCase().includes('bitcoin')) {
+    suggestions.push('Show me Ethereum analysis', 'Compare BTC to S&P 500', 'What are the BTC support levels?');
+  } else if (userMessage.toLowerCase().includes('market')) {
+    suggestions.push('Analyze top crypto gainers', 'Show me market sentiment', 'Risk assessment for my portfolio');
+  } else {
+    suggestions.push('Analyze current market trends', 'Show me trading opportunities', 'What are today\'s market movers?');
+  }
+  
+  return suggestions.slice(0, 3);
+}
+
+function extractSymbols(text: string): string[] {
+  const symbolRegex = /\b([A-Z]{2,5})\b/g;
+  const matches = text.match(symbolRegex) || [];
+  return Array.from(new Set(matches)).slice(0, 5);
+}
+
+function calculateConfidence(response: string): number {
+  let confidence = 0.7;
+  
+  if (response.includes('strong') || response.includes('high probability')) confidence += 0.1;
+  if (response.includes('uncertain') || response.includes('might')) confidence -= 0.1;
+  if (response.includes('data shows') || response.includes('analysis indicates')) confidence += 0.15;
+  if (response.length > 500) confidence += 0.05;
+  
+  return Math.max(0.1, Math.min(0.95, confidence));
 }

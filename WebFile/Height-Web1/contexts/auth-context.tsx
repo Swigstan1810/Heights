@@ -1,7 +1,7 @@
-// Updated auth-context.tsx with better error handling and session management
+// contexts/auth-context.tsx - Enhanced with better state management and error handling
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Session } from '@supabase/supabase-js';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -39,13 +39,19 @@ interface WalletBalance {
   updated_at: string;
 }
 
-interface AuthContextType {
+interface AuthState {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
   walletBalance: WalletBalance | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isInitialized: boolean;
+  error: string | null;
+  profileError: string | null;
+}
+
+interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -55,106 +61,129 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
   checkSession: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<{ error: Error | null }>;
-  profileError: boolean;
+  clearError: () => void;
+  retryProfileLoad: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [sessionCheckInterval, setSessionCheckInterval] = useState<NodeJS.Timeout | null>(null);
-  const [profileError, setProfileError] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    session: null,
+    profile: null,
+    walletBalance: null,
+    loading: true,
+    isAuthenticated: false,
+    isInitialized: false,
+    error: null,
+    profileError: null
+  });
+
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
+  const initializationRef = useRef(false);
+  const profileFetchRef = useRef(false);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch user profile with retry logic and auto-create if missing
-  const fetchProfile = useCallback(async (userId: string, retries = 3): Promise<Profile | null> => {
+  // Update state helper
+  const updateState = useCallback((updates: Partial<AuthState>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Clear error
+  const clearError = useCallback(() => {
+    updateState({ error: null, profileError: null });
+  }, [updateState]);
+
+  // Enhanced profile fetcher with exponential backoff retry
+  const fetchProfile = useCallback(async (userId: string, retries = 3, delay = 1000): Promise<Profile | null> => {
+    if (profileFetchRef.current) return null;
+    profileFetchRef.current = true;
+
     try {
-      setProfileError(false);
+      console.log(`[Auth] Fetching profile for user: ${userId}, attempt: ${4 - retries}`);
       
-      // First try to get the profile
-      const { data, error } = await supabase
+      // First check if profile exists
+      const { data: existingProfile, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle(); // Use maybeSingle instead of single
-      
-      if (data) {
-        return data as Profile;
-      }
-      
-      // If no profile exists, create one
-      if (!data && !error) {
-        const currentUser = user || session?.user;
-        if (!currentUser) return null;
-        
-        console.log('Creating new profile for user:', userId);
-        
-        const newProfileData = {
-          id: userId,
-          email: currentUser.email!,
-          auth_provider: currentUser.app_metadata?.provider || 'email',
-          google_id: currentUser.app_metadata?.provider === 'google' ? currentUser.user_metadata?.sub : null,
-          google_avatar_url: currentUser.app_metadata?.provider === 'google' ? currentUser.user_metadata?.avatar_url : null,
-          full_name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || null,
-          email_verified: currentUser.email_confirmed_at ? true : false,
-          kyc_completed: false,
-          two_factor_enabled: false,
-          timezone: 'Asia/Kolkata'
-        };
+        .maybeSingle();
 
-        // Insert the profile
-        const { data: newProfile, error: insertError } = await supabase
-          .from('profiles')
-          .insert(newProfileData)
-          .select()
-          .single();
-        
-        if (insertError) {
-          console.error('Error creating profile:', insertError);
-          if (retries > 0) {
-            console.log(`Retrying profile creation... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return fetchProfile(userId, retries - 1);
-          }
-          return null;
-        }
-        
-        return newProfile as Profile;
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('[Auth] Profile fetch error:', fetchError);
+        throw fetchError;
       }
-      
-      if (error) {
-        console.error('Error fetching profile:', error);
-        if (retries > 0) {
-          console.log(`Retrying profile fetch... (${retries} attempts left)`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          return fetchProfile(userId, retries - 1);
-        }
+
+      if (existingProfile) {
+        console.log('[Auth] Profile found:', existingProfile.email);
+        updateState({ profileError: null });
+        return existingProfile as Profile;
+      }
+
+      // Create profile if it doesn't exist
+      const currentUser = state.user;
+      if (!currentUser) {
+        console.log('[Auth] No current user for profile creation');
         return null;
       }
-      
-      return null;
-    } catch (error) {
-      console.error('Error in fetchProfile:', error);
-      if (retries > 0) {
-        console.log(`Retrying profile fetch after error... (${retries} attempts left)`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return fetchProfile(userId, retries - 1);
-      }
-      return null;
-    }
-  }, [supabase, user, session]);
 
-  // Fetch wallet balance with better error handling
-  const fetchWalletBalance = useCallback(async (userId: string): Promise<WalletBalance | null> => {
+      console.log('[Auth] Creating new profile for user:', userId);
+
+      const newProfileData = {
+        id: userId,
+        email: currentUser.email!,
+        auth_provider: currentUser.app_metadata?.provider || 'email',
+        google_id: currentUser.app_metadata?.provider === 'google' ? currentUser.user_metadata?.sub : null,
+        google_avatar_url: currentUser.app_metadata?.provider === 'google' ? 
+          (currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture) : null,
+        full_name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || null,
+        email_verified: currentUser.email_confirmed_at ? true : false,
+        kyc_completed: false,
+        two_factor_enabled: false,
+        timezone: 'Asia/Kolkata'
+      };
+
+      const { data: newProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert(newProfileData)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('[Auth] Profile creation error:', insertError);
+        throw insertError;
+      }
+
+      console.log('[Auth] Profile created successfully');
+      updateState({ profileError: null });
+      return newProfile as Profile;
+
+    } catch (error) {
+      console.error('[Auth] Error in fetchProfile:', error);
+      
+      if (retries > 0) {
+        console.log(`[Auth] Retrying profile fetch in ${delay}ms, ${retries} attempts remaining`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        profileFetchRef.current = false;
+        return fetchProfile(userId, retries - 1, Math.min(delay * 2, 10000)); // Exponential backoff, max 10s
+      }
+      
+      updateState({ 
+        profileError: error instanceof Error ? error.message : 'Failed to load profile'
+      });
+      return null;
+    } finally {
+      profileFetchRef.current = false;
+    }
+  }, [supabase, state.user, updateState]);
+
+  // Enhanced wallet balance fetcher
+  const fetchWalletBalance = useCallback(async (userId: string, retries = 2): Promise<WalletBalance | null> => {
     try {
+      console.log(`[Auth] Fetching wallet balance for user: ${userId}`);
+      
       const { data, error } = await supabase
         .from('wallet_balance')
         .select('*')
@@ -162,14 +191,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching wallet balance:', error);
-        return null;
+        console.error('[Auth] Wallet balance fetch error:', error);
+        throw error;
       }
 
       if (!data) {
-        // Create wallet balance if not exists
-        console.log('Creating wallet balance for user:', userId);
-        
+        console.log('[Auth] Creating wallet balance for user');
         const { data: newWallet, error: createError } = await supabase
           .from('wallet_balance')
           .insert({
@@ -182,174 +209,232 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single();
 
         if (createError) {
-          console.error('Error creating wallet balance:', createError);
-          return null;
+          console.error('[Auth] Wallet creation error:', createError);
+          throw createError;
         }
-        
         return newWallet as WalletBalance;
       }
 
       return data as WalletBalance;
     } catch (error) {
-      console.error('Error in fetchWalletBalance:', error);
+      console.error('[Auth] Error in fetchWalletBalance:', error);
+      
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchWalletBalance(userId, retries - 1);
+      }
+      
       return null;
     }
   }, [supabase]);
 
-  // Initialize auth state with proper error boundaries
-  useEffect(() => {
-    let mounted = true;
+  // Retry profile load function
+  const retryProfileLoad = useCallback(async () => {
+    if (!state.user) return;
     
+    updateState({ profileError: null, loading: true });
+    
+    try {
+      const [profileData, walletData] = await Promise.all([
+        fetchProfile(state.user.id),
+        fetchWalletBalance(state.user.id)
+      ]);
+
+      updateState({
+        profile: profileData,
+        walletBalance: walletData,
+        loading: false
+      });
+    } catch (error) {
+      console.error('[Auth] Retry profile load failed:', error);
+      updateState({ loading: false });
+    }
+  }, [state.user, fetchProfile, fetchWalletBalance, updateState]);
+
+  // Initialize auth state with better error handling
+  useEffect(() => {
+    if (initializationRef.current) return;
+    initializationRef.current = true;
+
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth state...');
+        console.log('[Auth] Initializing auth state...');
+        updateState({ loading: true, error: null, profileError: null });
         
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (!mounted) return;
-        
         if (error) {
-          console.error('Error getting session:', error);
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setWalletBalance(null);
-          setIsAuthenticated(false);
-        } else if (session?.user) {
-          console.log('Session found for user:', session.user.id);
-          setSession(session);
-          setUser(session.user);
-          setIsAuthenticated(true);
+          console.error('[Auth] Session fetch error:', error);
+          throw error;
+        }
+        
+        if (session?.user) {
+          console.log('[Auth] Active session found for user:', session.user.email);
           
-          // Fetch profile and wallet data in background
-          Promise.all([
+          updateState({
+            session,
+            user: session.user,
+            isAuthenticated: true,
+            loading: true // Keep loading while fetching additional data
+          });
+
+          // Fetch profile and wallet in parallel with timeout
+          const fetchPromise = Promise.all([
             fetchProfile(session.user.id),
             fetchWalletBalance(session.user.id)
-          ]).then(([profileData, walletData]) => {
-            if (mounted) {
-              setProfile(profileData);
-              setWalletBalance(walletData);
-            }
-          }).catch(error => {
-            console.error('Error loading user data:', error);
+          ]);
+
+          // Set a timeout for data fetching
+          const timeoutPromise = new Promise<[Profile | null, WalletBalance | null]>((_, reject) => {
+            setTimeout(() => reject(new Error('Data fetch timeout')), 15000); // 15 second timeout
           });
+
+          try {
+            const [profileData, walletData] = await Promise.race([fetchPromise, timeoutPromise]);
+            
+            updateState({
+              profile: profileData,
+              walletBalance: walletData,
+              loading: false,
+              isInitialized: true
+            });
+          } catch (fetchError) {
+            console.error('[Auth] Data fetch error:', fetchError);
+            updateState({
+              loading: false,
+              isInitialized: true,
+              profileError: fetchError instanceof Error ? fetchError.message : 'Failed to load user data'
+            });
+          }
         } else {
-          console.log('No session found');
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setWalletBalance(null);
-          setIsAuthenticated(false);
+          console.log('[Auth] No active session found');
+          updateState({
+            loading: false,
+            isInitialized: true
+          });
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setWalletBalance(null);
-        setIsAuthenticated(false);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-          setIsInitialized(true);
-          console.log('Auth initialization complete');
-        }
+        console.error('[Auth] Auth initialization error:', error);
+        updateState({
+          error: error instanceof Error ? error.message : 'Failed to initialize authentication',
+          loading: false,
+          isInitialized: true
+        });
       }
     };
 
     initializeAuth();
 
-    // Set up auth state listener
+    // Set up auth state listener with enhanced error handling
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
+      console.log('[Auth] Auth state changed:', event);
       
-      if (!mounted) return;
+      // Clear any existing retry timeout
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
       
       if (event === 'SIGNED_IN' && session) {
-        console.log('User signed in:', session.user.id);
-        setSession(session);
-        setUser(session.user);
-        setIsAuthenticated(true);
+        console.log('[Auth] User signed in:', session.user.email);
+        updateState({
+          session,
+          user: session.user,
+          isAuthenticated: true,
+          loading: true,
+          error: null,
+          profileError: null
+        });
         
-        // Load user data
-        const [profileData, walletData] = await Promise.all([
-          fetchProfile(session.user.id),
-          fetchWalletBalance(session.user.id)
-        ]);
-        
-        setProfile(profileData);
-        setWalletBalance(walletData);
+        try {
+          const [profileData, walletData] = await Promise.all([
+            fetchProfile(session.user.id),
+            fetchWalletBalance(session.user.id)
+          ]);
+          
+          updateState({
+            profile: profileData,
+            walletBalance: walletData,
+            loading: false
+          });
+        } catch (error) {
+          console.error('[Auth] Post-signin data fetch error:', error);
+          updateState({
+            loading: false,
+            profileError: error instanceof Error ? error.message : 'Failed to load user data'
+          });
+        }
         
       } else if (event === 'SIGNED_OUT') {
-        console.log('User signed out');
-        if (sessionCheckInterval) {
-          clearInterval(sessionCheckInterval);
-          setSessionCheckInterval(null);
-        }
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setWalletBalance(null);
-        setIsAuthenticated(false);
-        setProfileError(false);
+        console.log('[Auth] User signed out');
+        updateState({
+          user: null,
+          session: null,
+          profile: null,
+          walletBalance: null,
+          isAuthenticated: false,
+          loading: false,
+          error: null,
+          profileError: null
+        });
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        setSession(session);
-        console.log('Token refreshed successfully');
+        console.log('[Auth] Token refreshed');
+        updateState({ session });
       }
     });
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
-      if (sessionCheckInterval) {
-        clearInterval(sessionCheckInterval);
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
       }
     };
-  }, [supabase, fetchProfile, fetchWalletBalance]);
+  }, [supabase, fetchProfile, fetchWalletBalance, updateState]);
 
-  // Enhanced sign out
+  // Enhanced sign out with cleanup
   const signOut = useCallback(async () => {
     try {
-      console.log('Signing out user');
+      console.log('[Auth] Signing out user');
+      updateState({ loading: true });
       
-      // Clear session check interval
-      if (sessionCheckInterval) {
-        clearInterval(sessionCheckInterval);
-        setSessionCheckInterval(null);
-      }
-
       await supabase.auth.signOut();
+      
+      updateState({
+        user: null,
+        session: null,
+        profile: null,
+        walletBalance: null,
+        isAuthenticated: false,
+        loading: false,
+        error: null,
+        profileError: null
+      });
 
-      // Clear all state
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setWalletBalance(null);
-      setIsAuthenticated(false);
-      setProfileError(false);
-
-      // Clear any stored session data
+      // Clear browser storage
       if (typeof window !== 'undefined') {
         localStorage.removeItem('supabase.auth.token');
         sessionStorage.clear();
       }
 
-      console.log('Redirecting to login page');
       router.push('/login');
     } catch (error) {
-      console.error('Sign out error:', error);
-      router.push('/login');
+      console.error('[Auth] Sign out error:', error);
+      updateState({ 
+        error: 'Failed to sign out',
+        loading: false 
+      });
     }
-  }, [supabase, router, sessionCheckInterval]);
+  }, [supabase, router, updateState]);
 
-  // Session management functions
+  // Enhanced session validation
   const checkSession = useCallback(async (): Promise<boolean> => {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error || !session) {
+        console.log('[Auth] Session check failed - no valid session');
         return false;
       }
 
@@ -358,81 +443,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const timeUntilExpiry = expiresAt.getTime() - now.getTime();
       
       if (timeUntilExpiry <= 0) {
-        console.log('Session expired');
+        console.log('[Auth] Session expired');
         await signOut();
         return false;
       }
 
+      // Refresh token if expiring within 5 minutes
+      if (timeUntilExpiry < 5 * 60 * 1000) {
+        console.log('[Auth] Session expiring soon, refreshing...');
+        await refreshSession();
+      }
+
       return true;
     } catch (error) {
-      console.error('Error checking session:', error);
+      console.error('[Auth] Error checking session:', error);
       return false;
     }
   }, [supabase, signOut]);
 
+  // Enhanced session refresh
   const refreshSession = useCallback(async () => {
     try {
+      console.log('[Auth] Refreshing session');
       const { data: { session }, error } = await supabase.auth.refreshSession();
       
       if (error) {
-        console.error('Session refresh error:', error);
-        await signOut();
-        return;
+        console.error('[Auth] Session refresh error:', error);
+        throw error;
       }
-
+      
       if (session) {
-        setSession(session);
-        setUser(session.user);
-        console.log('Session refreshed successfully');
+        updateState({ session, user: session.user });
       }
     } catch (error) {
-      console.error('Error refreshing session:', error);
+      console.error('[Auth] Error refreshing session:', error);
       await signOut();
     }
-  }, [supabase, signOut]);
+  }, [supabase, signOut, updateState]);
 
+  // Enhanced wallet balance refresh
   const refreshWalletBalance = useCallback(async () => {
-    if (!user) return;
-    console.log('Refreshing wallet balance for user:', user.id);
-    const balance = await fetchWalletBalance(user.id);
-    setWalletBalance(balance);
-  }, [user, fetchWalletBalance]);
+    if (!state.user) return;
+    
+    try {
+      console.log('[Auth] Refreshing wallet balance');
+      const balance = await fetchWalletBalance(state.user.id);
+      updateState({ walletBalance: balance });
+    } catch (error) {
+      console.error('[Auth] Error refreshing wallet balance:', error);
+    }
+  }, [state.user, fetchWalletBalance, updateState]);
 
-  // Authentication methods
+  // Enhanced sign in
   const signIn = useCallback(async (email: string, password: string) => {
     try {
+      updateState({ loading: true, error: null, profileError: null });
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        return { error };
-      }
+      if (error) throw error;
 
       if (data.session && data.user) {
-        setSession(data.session);
-        setUser(data.user);
-        setIsAuthenticated(true);
-        
-        // Load user data in background
-        Promise.all([
-          fetchProfile(data.user.id),
-          fetchWalletBalance(data.user.id)
-        ]).then(([profileData, walletData]) => {
-          setProfile(profileData);
-          setWalletBalance(walletData);
+        updateState({
+          session: data.session,
+          user: data.user,
+          isAuthenticated: true
         });
+
+        // Load profile and wallet data will be handled by the auth state change listener
       }
 
       return { error: null };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Sign in failed';
+      console.error('[Auth] Sign in error:', errorMessage);
+      updateState({ 
+        error: errorMessage,
+        loading: false 
+      });
       return { error: error as Error };
     }
-  }, [supabase, fetchProfile, fetchWalletBalance]);
+  }, [supabase, updateState]);
 
+  // Enhanced Google sign in
   const signInWithGoogle = useCallback(async () => {
     try {
+      updateState({ loading: true, error: null, profileError: null });
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -445,14 +545,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      return { error };
+      if (error) throw error;
+      
+      return { error: null };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Google sign in failed';
+      console.error('[Auth] Google sign in error:', errorMessage);
+      updateState({ 
+        error: errorMessage,
+        loading: false 
+      });
       return { error: error as Error };
     }
-  }, [supabase]);
+  }, [supabase, updateState]);
 
+  // Enhanced sign up
   const signUp = useCallback(async (email: string, password: string) => {
     try {
+      updateState({ loading: true, error: null, profileError: null });
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -465,16 +576,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      return { error };
+      if (error) throw error;
+      
+      updateState({ loading: false });
+      return { error: null };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
+      console.error('[Auth] Sign up error:', errorMessage);
+      updateState({ 
+        error: errorMessage,
+        loading: false 
+      });
       return { error: error as Error };
     }
-  }, [supabase]);
+  }, [supabase, updateState]);
 
+  // Enhanced update profile
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {
     try {
-      if (!user) {
-        return { error: new Error('No user logged in') };
+      if (!state.user) {
+        throw new Error('No user logged in');
       }
 
       const { data, error } = await supabase
@@ -483,48 +604,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...updates,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id)
+        .eq('id', state.user.id)
         .select()
         .single();
 
-      if (error) {
-        return { error };
-      }
+      if (error) throw error;
 
       if (data) {
-        setProfile(data as Profile);
+        updateState({ profile: data as Profile });
       }
 
       return { error: null };
     } catch (error) {
+      console.error('[Auth] Update profile error:', error);
       return { error: error as Error };
     }
-  }, [user, supabase]);
+  }, [state.user, supabase, updateState]);
 
+  // Enhanced resend verification email
   const resendVerificationEmail = useCallback(async () => {
     try {
-      if (!user?.email) {
-        return { error: new Error('No email address found') };
+      if (!state.user?.email) {
+        throw new Error('No email address found');
       }
 
       const { error } = await supabase.auth.resend({
         type: 'signup',
-        email: user.email,
+        email: state.user.email,
       });
 
-      return { error };
+      if (error) throw error;
+      
+      return { error: null };
     } catch (error) {
+      console.error('[Auth] Resend verification error:', error);
       return { error: error as Error };
     }
-  }, [user, supabase]);
+  }, [state.user, supabase]);
 
   const value = {
-    user,
-    session,
-    profile,
-    walletBalance,
-    loading: loading || !isInitialized,
-    isAuthenticated,
+    ...state,
     signIn,
     signInWithGoogle,
     signUp,
@@ -534,7 +653,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshSession,
     checkSession,
     resendVerificationEmail,
-    profileError,
+    clearError,
+    retryProfileLoad,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -7,7 +7,10 @@ export default function AIPage() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-      <AIDashboard />
+      {/* Add proper spacing after navbar */}
+      <div className="pt-180">
+        <AIDashboard />
+      </div>
     </main>
   );
 }

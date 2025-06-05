@@ -1,38 +1,48 @@
-// app/news/page.tsx
+// app/(protected)/news/page.tsx - Enhanced News Page with Robust Loading
 "use client";
 
-import { useEffect, useState } from 'react';
-import { Navbar } from '@/components/navbar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { motion } from 'framer-motion';
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
+import { Navbar } from "@/components/navbar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Newspaper, 
-  ExternalLink, 
-  Clock, 
+  Search, 
+  RefreshCw, 
+  Filter,
+  Calendar,
+  Clock,
+  ExternalLink,
   TrendingUp,
-  Bitcoin,
-  Building2,
-  Zap,
-  RefreshCw,
   AlertCircle,
-  Settings,
+  CheckCircle,
   Loader2,
+  BookOpen,
   Globe,
-  Star
-} from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
+  Star,
+  Share,
+  Bookmark,
+  Eye,
+  MessageSquare,
+  ArrowUpRight,
+  Activity,
+  Zap,
+  Bell,
+  Settings
+} from "lucide-react";
 
 interface NewsArticle {
   id: string;
   title: string;
   description: string;
-  content: string;
+  content?: string;
   url: string;
   urlToImage: string;
   publishedAt: string;
@@ -43,162 +53,236 @@ interface NewsArticle {
   category: string;
 }
 
-interface NewsPreferences {
-  id: string;
-  user_id: string;
-  categories: string[];
-  created_at: string;
-  updated_at: string;
+interface NewsResponse {
+  success: boolean;
+  articles: NewsArticle[];
+  source: string;
+  cached?: boolean;
+  responseTime?: number;
+  error?: string;
 }
 
-const DEFAULT_CATEGORIES = ['cryptocurrency', 'business', 'technology'];
+const CATEGORIES = [
+  { id: 'business', label: 'Business', icon: TrendingUp, color: 'text-blue-500' },
+  { id: 'cryptocurrency', label: 'Crypto', icon: Star, color: 'text-orange-500' },
+  { id: 'technology', label: 'Technology', icon: Zap, color: 'text-purple-500' },
+  { id: 'general', label: 'General', icon: Globe, color: 'text-green-500' }
+];
+
+const NewsCardSkeleton = () => (
+  <Card className="h-full">
+    <div className="aspect-video relative overflow-hidden">
+      <Skeleton className="w-full h-full" />
+    </div>
+    <CardHeader className="space-y-2">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-3 w-1/2" />
+    </CardHeader>
+    <CardContent className="space-y-2">
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-2/3" />
+      <div className="flex justify-between items-center pt-2">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+    </CardContent>
+  </Card>
+);
 
 export default function NewsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [preferences, setPreferences] = useState<NewsPreferences | null>(null);
-  const [activeCategory, setActiveCategory] = useState('business');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState(searchParams.get('category') || 'business');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [bookmarkedArticles, setBookmarkedArticles] = useState<Set<string>>(new Set());
+  const [readArticles, setReadArticles] = useState<Set<string>>(new Set());
+  const [responseInfo, setResponseInfo] = useState<{ source: string; responseTime?: number; cached?: boolean } | null>(null);
 
-  const supabase = createClientComponentClient<Database>();
-
-  const categories = [
-    { id: 'business', name: 'Business', icon: Building2 },
-    { id: 'cryptocurrency', name: 'Cryptocurrency', icon: Bitcoin },
-    { id: 'technology', name: 'Technology', icon: Zap },
-    { id: 'general', name: 'General', icon: Globe }
-  ];
-
-  // Load user preferences
+  // Check auth and redirect if needed
   useEffect(() => {
-    const loadPreferences = async () => {
-      if (!user) return;
-
-      try {
-        const { data: existingPrefs, error } = await supabase
-          .from('news_preferences')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
-        if (error && error.code === 'PGRST116') {
-          // Create default preferences
-          const { data: newPrefs, error: createError } = await supabase
-            .from('news_preferences')
-            .insert({
-              user_id: user.id,
-              categories: DEFAULT_CATEGORIES
-            })
-            .select()
-            .single();
-
-          if (!createError && newPrefs) {
-            setPreferences(newPrefs);
-          }
-        } else if (!error && existingPrefs) {
-          setPreferences(existingPrefs);
-        }
-      } catch (error) {
-        console.error('Error loading preferences:', error);
+    if (!authLoading) {
+      if (!isAuthenticated || !user) {
+        console.log('News page - redirecting to login');
+        router.push('/login?redirectTo=/news');
+        return;
       }
-    };
-
-    if (user) {
-      loadPreferences();
     }
-  }, [user, supabase]);
+  }, [authLoading, isAuthenticated, user, router]);
 
-  // Fetch news articles
-  const fetchNews = async (category: string, pageNum: number = 1, refresh: boolean = false) => {
-    try {
-      if (refresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+  // Enhanced news fetching with retry logic
+  const fetchNews = useCallback(async (category: string, pageNum: number = 1, retries = 3) => {
+    if (pageNum === 1) {
+      setLoading(true);
       setError(null);
+    }
 
-      const response = await fetch(`/api/news?category=${category}&page=${pageNum}`);
-      const data = await response.json();
+    try {
+      console.log(`[News] Fetching ${category} news, page ${pageNum}`);
+      
+      const url = new URL('/api/news', window.location.origin);
+      url.searchParams.set('category', category);
+      url.searchParams.set('page', pageNum.toString());
+      url.searchParams.set('pageSize', '20');
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch news');
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+        signal: AbortSignal.timeout(15000) // 15 second timeout
+  });
+  
+  if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (pageNum === 1 || refresh) {
-        setArticles(data.articles);
+      const data: NewsResponse = await response.json();
+      
+      console.log(`[News] Received ${data.articles?.length || 0} articles from ${data.source}`);
+      
+      setResponseInfo({
+        source: data.source,
+        responseTime: data.responseTime,
+        cached: data.cached
+      });
+
+      if (data.articles && data.articles.length > 0) {
+        if (pageNum === 1) {
+          setArticles(data.articles);
+        } else {
+          setArticles(prev => [...prev, ...data.articles]);
+        }
+        setHasMore(data.articles.length === 20); // If we got full page, there might be more
       } else {
-        setArticles(prev => [...prev, ...data.articles]);
+        if (pageNum === 1) {
+          setArticles([]);
+        }
+        setHasMore(false);
       }
 
-      setHasMore(data.articles.length === 20); // Assuming 20 is the page size
-      setPage(pageNum);
+      if (data.error) {
+        console.warn('[News] API warning:', data.error);
+      }
+
     } catch (err) {
-      console.error('Error fetching news:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch news');
+      console.error('[News] Fetch error:', err);
+      
+      if (retries > 0 && !(err instanceof DOMException && err.name === 'AbortError')) {
+        console.log(`[News] Retrying in 2s... (${retries} attempts left)`);
+        setTimeout(() => {
+          fetchNews(category, pageNum, retries - 1);
+        }, 2000);
+        return;
+      }
+      
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load news';
+      setError(errorMsg);
+      
+      // Don't completely fail - show any existing articles
+      if (pageNum === 1 && articles.length === 0) {
+        setArticles([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [articles.length]);
 
   // Load news when category changes
   useEffect(() => {
-    fetchNews(activeCategory, 1);
-  }, [activeCategory]);
+    if (isAuthenticated && user) {
+      setPage(1);
+      fetchNews(activeCategory, 1);
+    }
+  }, [activeCategory, isAuthenticated, user, fetchNews]);
 
-  const handleRefresh = () => {
-    fetchNews(activeCategory, 1, true);
+  // Handle category change
+  const handleCategoryChange = (category: string) => {
+    setActiveCategory(category);
+    setPage(1);
+    setHasMore(true);
+    
+    // Update URL without triggering navigation
+    const url = new URL(window.location.href);
+    url.searchParams.set('category', category);
+    window.history.replaceState({}, '', url.toString());
   };
 
-  const loadMore = () => {
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setError(null);
+    setPage(1);
+    setHasMore(true);
+    await fetchNews(activeCategory, 1);
+  };
+
+  // Handle load more
+  const handleLoadMore = () => {
     if (!loading && hasMore) {
-      fetchNews(activeCategory, page + 1);
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchNews(activeCategory, nextPage);
     }
   };
 
-  const updatePreferences = async (newCategories: string[]) => {
-    if (!user || !preferences) return;
-
-    try {
-      const { error } = await supabase
-        .from('news_preferences')
-        .update({
-          categories: newCategories,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
-
-      if (!error) {
-        setPreferences(prev => prev ? { ...prev, categories: newCategories } : null);
+  // Handle article interactions
+  const toggleBookmark = (articleId: string) => {
+    setBookmarkedArticles(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(articleId)) {
+        newSet.delete(articleId);
+      } else {
+        newSet.add(articleId);
       }
-    } catch (error) {
-      console.error('Error updating preferences:', error);
-    }
+      return newSet;
+    });
   };
 
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes}m ago`;
-    } else if (diffInMinutes < 1440) {
-      return `${Math.floor(diffInMinutes / 60)}h ago`;
-    } else {
-      return `${Math.floor(diffInMinutes / 1440)}d ago`;
-    }
+  const markAsRead = (articleId: string) => {
+    setReadArticles(prev => new Set(prev).add(articleId));
   };
 
-  const getCategoryIcon = (categoryId: string) => {
-    const category = categories.find(c => c.id === categoryId);
-    return category ? category.icon : Newspaper;
+  const openArticle = (article: NewsArticle) => {
+    markAsRead(article.id);
+    window.open(article.url, '_blank', 'noopener,noreferrer');
   };
+
+  // Filter articles based on search
+  const filteredArticles = articles.filter(article => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      article.title.toLowerCase().includes(query) ||
+      article.description.toLowerCase().includes(query) ||
+      article.source.name.toLowerCase().includes(query)
+    );
+  });
+
+  // Show loading screen while auth is loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading news...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!isAuthenticated || !user) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -207,22 +291,39 @@ export default function NewsPage() {
       <div className="container mx-auto px-4 pt-24 pb-16">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Newspaper className="h-8 w-8 text-primary" />
-                Financial News
+                <BookOpen className="h-8 w-8 text-primary" />
+                Market News
               </h1>
               <p className="text-muted-foreground mt-2">
-                Stay updated with the latest financial markets, cryptocurrency, and business news
+                Stay updated with the latest financial and cryptocurrency news
               </p>
             </div>
+            
             <div className="flex items-center gap-2">
+              {responseInfo && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Badge variant="outline" className="text-xs">
+                    {responseInfo.cached ? 'Cached' : 'Live'}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {responseInfo.source}
+                  </Badge>
+                  {responseInfo.responseTime && (
+                    <Badge variant="outline" className="text-xs">
+                      {responseInfo.responseTime}ms
+                    </Badge>
+                  )}
+                </div>
+              )}
+              
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRefresh}
-                disabled={refreshing}
+                disabled={refreshing || loading}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
@@ -230,258 +331,293 @@ export default function NewsPage() {
             </div>
           </div>
 
-          {/* User Preferences */}
-          {user && preferences && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Your News Preferences
-                </CardTitle>
-                <CardDescription>
-                  Customize which categories you want to see
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((category) => {
-                    const isSelected = preferences.categories.includes(category.id);
-                    const IconComponent = category.icon;
-                    return (
-                      <Button
-                        key={category.id}
-                        variant={isSelected ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          const newCategories = isSelected
-                            ? preferences.categories.filter(c => c !== category.id)
-                            : [...preferences.categories, category.id];
-                          updatePreferences(newCategories);
-                        }}
-                      >
-                        <IconComponent className="h-4 w-4 mr-2" />
-                        {category.name}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Search Bar */}
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search news articles..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Category Tabs */}
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map(({ id, label, icon: Icon, color }) => (
+              <Button
+                key={id}
+                variant={activeCategory === id ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleCategoryChange(id)}
+                className="flex items-center gap-2"
+              >
+                <Icon className={`h-4 w-4 ${activeCategory === id ? '' : color}`} />
+                {label}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Error Alert */}
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6"
+            >
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{error}</span>
+                  <Button size="sm" variant="outline" onClick={handleRefresh}>
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Category Tabs */}
-        <Tabs value={activeCategory} onValueChange={setActiveCategory} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            {categories.map((category) => {
-              const IconComponent = category.icon;
-              return (
-                <TabsTrigger key={category.id} value={category.id} className="flex items-center gap-2">
-                  <IconComponent className="h-4 w-4" />
-                  {category.name}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          {categories.map((category) => (
-            <TabsContent key={category.id} value={category.id}>
-              {loading && articles.length === 0 ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2">Loading news...</span>
-                </div>
-              ) : (
-                <>
-                  {/* Featured Article */}
-                  {articles.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5 }}
-                      className="mb-8"
-                    >
-                      <Card className="overflow-hidden">
-                        <div className="md:flex">
-                          <div className="md:w-1/2">
-                            <img
-                              src={articles[0].urlToImage}
-                              alt={articles[0].title}
-                              className="w-full h-64 md:h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&h=600&fit=crop';
-                              }}
-                            />
+        {/* News Grid */}
+        <div className="space-y-6">
+          {loading && articles.length === 0 ? (
+            // Loading skeletons
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <NewsCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : filteredArticles.length > 0 ? (
+            <>
+              {/* Featured Article */}
+              {filteredArticles.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-8"
+                >
+                  <Card className="overflow-hidden">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="relative aspect-video lg:aspect-auto">
+                        <img
+                          src={filteredArticles[0].urlToImage}
+                          alt={filteredArticles[0].title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&h=600&fit=crop';
+                          }}
+                        />
+                        <div className="absolute top-4 left-4">
+                          <Badge variant="default">Featured</Badge>
+                        </div>
+                      </div>
+                      <div className="p-6 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline">{filteredArticles[0].source.name}</Badge>
+                            <Badge variant="secondary">{filteredArticles[0].category}</Badge>
                           </div>
-                          <div className="md:w-1/2 p-6">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="secondary">{articles[0].source.name}</Badge>
-                              <Badge variant="outline">Featured</Badge>
-                            </div>
-                            <h2 className="text-2xl font-bold mb-3 line-clamp-2">
-                              {articles[0].title}
-                            </h2>
-                            <p className="text-muted-foreground mb-4 line-clamp-3">
-                              {articles[0].description}
-                            </p>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Clock className="h-4 w-4" />
-                                {formatTimeAgo(articles[0].publishedAt)}
-                              </div>
-                              <Button asChild>
-                                <a href={articles[0].url} target="_blank" rel="noopener noreferrer">
-                                  Read More
-                                  <ExternalLink className="h-4 w-4 ml-2" />
-                                </a>
-                              </Button>
-                            </div>
+                          <h2 className="text-2xl font-bold mb-3 line-clamp-2">
+                            {filteredArticles[0].title}
+                          </h2>
+                          <p className="text-muted-foreground mb-4 line-clamp-3">
+                            {filteredArticles[0].description}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>{new Date(filteredArticles[0].publishedAt).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleBookmark(filteredArticles[0].id)}
+                            >
+                              <Bookmark 
+                                className={`h-4 w-4 ${bookmarkedArticles.has(filteredArticles[0].id) ? 'fill-current' : ''}`} 
+                              />
+                            </Button>
+                            <Button
+                              onClick={() => openArticle(filteredArticles[0])}
+                              size="sm"
+                            >
+                              Read More
+                              <ExternalLink className="h-4 w-4 ml-2" />
+                            </Button>
                           </div>
                         </div>
-                      </Card>
-                    </motion.div>
-                  )}
-
-                  {/* Articles Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {articles.slice(1).map((article, index) => (
-                      <motion.div
-                        key={article.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: index * 0.1 }}
-                      >
-                        <Card className="h-full overflow-hidden hover:shadow-lg transition-shadow">
-                          <div className="aspect-video">
-                            <img
-                              src={article.urlToImage}
-                              alt={article.title}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&h=600&fit=crop';
-                              }}
-                            />
-                          </div>
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="outline" className="text-xs">
-                                {article.source.name}
-                              </Badge>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                {formatTimeAgo(article.publishedAt)}
-                              </div>
-                            </div>
-                            <h3 className="font-semibold mb-2 line-clamp-2 text-sm">
-                              {article.title}
-                            </h3>
-                            <p className="text-muted-foreground text-xs mb-3 line-clamp-2">
-                              {article.description}
-                            </p>
-                            <Button size="sm" variant="outline" asChild className="w-full">
-                              <a href={article.url} target="_blank" rel="noopener noreferrer">
-                                Read Full Article
-                                <ExternalLink className="h-3 w-3 ml-2" />
-                              </a>
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  {/* Load More Button */}
-                  {hasMore && articles.length > 0 && (
-                    <div className="text-center mt-8">
-                      <Button
-                        onClick={loadMore}
-                        disabled={loading}
-                        variant="outline"
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          'Load More Articles'
-                        )}
-                      </Button>
+                      </div>
                     </div>
-                  )}
-
-                  {/* Empty State */}
-                  {articles.length === 0 && !loading && (
-                    <div className="text-center py-12">
-                      <Newspaper className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-semibold mb-2">No articles found</h3>
-                      <p className="text-muted-foreground mb-4">
-                        We couldn't find any articles for this category. Try refreshing or check another category.
-                      </p>
-                      <Button onClick={handleRefresh}>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Refresh
-                      </Button>
-                    </div>
-                  )}
-                </>
+                  </Card>
+                </motion.div>
               )}
-            </TabsContent>
-          ))}
-        </Tabs>
 
-        {/* Sidebar with trending topics (if space allows) */}
-        <div className="mt-12">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Trending Topics
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  'Bitcoin ETF',
-                  'Federal Reserve',
-                  'Interest Rates',
-                  'Stock Market',
-                  'Cryptocurrency',
-                  'Inflation',
-                  'Economic Policy',
-                  'Tech Stocks'
-                ].map((topic) => (
-                  <Badge key={topic} variant="secondary" className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors">
-                    {topic}
-                  </Badge>
+              {/* Articles Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredArticles.slice(1).map((article, index) => (
+                  <motion.div
+                    key={article.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <Card className={`h-full cursor-pointer transition-all hover:shadow-lg ${
+                      readArticles.has(article.id) ? 'opacity-75' : ''
+                    }`}>
+                      <div className="aspect-video relative overflow-hidden">
+                        <img
+                          src={article.urlToImage}
+                          alt={article.title}
+                          className="w-full h-full object-cover transition-transform hover:scale-105"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&h=600&fit=crop';
+                          }}
+                        />
+                        <div className="absolute top-2 right-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0 bg-background/80 hover:bg-background"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleBookmark(article.id);
+                            }}
+                          >
+                            <Bookmark 
+                              className={`h-3 w-3 ${bookmarkedArticles.has(article.id) ? 'fill-current' : ''}`} 
+                            />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {article.source.name}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(article.publishedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <CardTitle className="text-lg line-clamp-2 hover:text-primary transition-colors">
+                          {article.title}
+                        </CardTitle>
+                      </CardHeader>
+                      
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
+                          {article.description}
+                        </p>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {article.category}
+                            </Badge>
+                            {readArticles.has(article.id) && (
+                              <Badge variant="outline" className="text-xs">
+                                <Eye className="h-3 w-3 mr-1" />
+                                Read
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openArticle(article)}
+                            className="text-primary hover:text-primary"
+                          >
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+
+              {/* Load More Button */}
+              {hasMore && (
+                <div className="flex justify-center mt-8">
+                  <Button
+                    onClick={handleLoadMore}
+                    disabled={loading}
+                    variant="outline"
+                    size="lg"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading more...
+                      </>
+                    ) : (
+                      <>
+                        Load More Articles
+                        <ArrowUpRight className="h-4 w-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            // No articles found
+            <div className="text-center py-16">
+              <BookOpen className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-xl font-semibold mb-2">No articles found</h3>
+              <p className="text-muted-foreground mb-6">
+                {searchQuery 
+                  ? `No articles match your search for "${searchQuery}"`
+                  : `No articles available for ${CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}`
+                }
+              </p>
+              <div className="flex justify-center gap-2">
+                {searchQuery && (
+                  <Button variant="outline" onClick={() => setSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                )}
+                <Button onClick={handleRefresh} disabled={loading}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh News
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Information Footer */}
-        <div className="mt-8 p-4 bg-muted/50 rounded-lg">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-sm">
-              <h4 className="font-medium mb-1">About Our News</h4>
-              <p className="text-muted-foreground">
-                News articles are sourced from reputable financial and technology publications. 
-                We aggregate content to provide you with comprehensive market coverage. 
-                Always verify information from original sources before making investment decisions.
-              </p>
+        {/* Stats Footer */}
+        {filteredArticles.length > 0 && (
+          <div className="mt-12 pt-8 border-t border-border">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-primary">{filteredArticles.length}</div>
+                <div className="text-sm text-muted-foreground">Articles Loaded</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-primary">{bookmarkedArticles.size}</div>
+                <div className="text-sm text-muted-foreground">Bookmarked</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-primary">{readArticles.size}</div>
+                <div className="text-sm text-muted-foreground">Articles Read</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-primary">
+                  {new Set(filteredArticles.map(a => a.source.name)).size}
+                </div>
+                <div className="text-sm text-muted-foreground">News Sources</div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   );
