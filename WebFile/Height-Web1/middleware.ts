@@ -15,10 +15,10 @@ const securityHeaders = {
 };
 
 // Protected routes that require authentication
-const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet', '/crypto'];
+const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet'];
 
 // Routes that are public (no auth required)
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai'];
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai', '/crypto'];
 
 // API routes that require authentication
 const PROTECTED_API_ROUTES = ['/api/trades', '/api/portfolio', '/api/wallet'];
@@ -110,6 +110,11 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/') && !PROTECTED_API_ROUTES.some(route => pathname.startsWith(route)) ||
     pathname.includes('.') // Static files
   ) {
+    return response;
+  }
+
+  // Make /crypto page public (remove auth requirement)
+  if (pathname === '/crypto') {
     return response;
   }
 

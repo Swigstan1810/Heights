@@ -1,4 +1,4 @@
-// app/(protected)/dashboard/page.tsx
+// Updated dashboard page.tsx with better error handling and loading states
 "use client";
 
 import { useEffect, useState } from "react";
@@ -63,41 +63,37 @@ export default function Dashboard() {
     totalWithdrawals: 0,
     transactionCount: 0
   });
-  const [loadingData, setLoadingData] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
-  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const supabase = createClientComponentClient<Database>();
 
-  // Handle authentication and redirect logic
+  // Wait for auth to initialize before doing anything
   useEffect(() => {
-    const checkAuth = async () => {
-      console.log('Dashboard - checking auth state...', { authLoading, isAuthenticated, user: !!user });
-      
-      if (!authLoading) {
-        if (!isAuthenticated || !user) {
-          console.log('Dashboard - redirecting to login');
-          router.push("/login?redirectTo=/dashboard");
-          return;
-        }
-        console.log('Dashboard - user authenticated, continuing...');
-        setPageLoading(false);
-      }
-    };
+    if (authLoading) {
+      return; // Still loading auth
+    }
 
-    checkAuth();
+    if (!isAuthenticated || !user) {
+      console.log('Dashboard - redirecting to login, not authenticated');
+      router.push("/login?redirectTo=/dashboard");
+      return;
+    }
+
+    console.log('Dashboard - user authenticated, loading data');
   }, [authLoading, isAuthenticated, user, router]);
 
-  // Fetch dashboard data
+  // Fetch dashboard data only when user is ready
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!user || authLoading) {
-        console.log('Dashboard - skipping data fetch, no user or still loading auth');
+      if (!user || authLoading || !isAuthenticated) {
         return;
       }
 
       try {
         setLoadingData(true);
+        setError(null);
         console.log('Dashboard - fetching data for user:', user.id);
         
         // Fetch watchlist items
@@ -107,11 +103,11 @@ export default function Dashboard() {
           .eq('user_id', user.id)
           .order('added_at', { ascending: false });
 
-        if (!watchlistError && watchlist) {
+        if (watchlistError) {
+          console.error('Dashboard - error loading watchlist:', watchlistError);
+        } else if (watchlist) {
           console.log('Dashboard - watchlist loaded:', watchlist.length, 'items');
           setWatchlistItems(watchlist);
-        } else if (watchlistError) {
-          console.error('Dashboard - error loading watchlist:', watchlistError);
         }
 
         // Fetch transaction summary
@@ -121,7 +117,9 @@ export default function Dashboard() {
           .eq('user_id', user.id)
           .eq('status', 'completed');
 
-        if (!transactionError && transactions) {
+        if (transactionError) {
+          console.error('Dashboard - error loading transactions:', transactionError);
+        } else if (transactions) {
           console.log('Dashboard - transactions loaded:', transactions.length, 'items');
           const summary = transactions.reduce((acc, tx) => {
             if (tx.type === 'deposit') {
@@ -134,22 +132,22 @@ export default function Dashboard() {
           }, { totalDeposits: 0, totalWithdrawals: 0, transactionCount: 0 });
           
           setTransactionSummary(summary);
-        } else if (transactionError) {
-          console.error('Dashboard - error loading transactions:', transactionError);
         }
 
       } catch (error) {
         console.error('Dashboard - error fetching data:', error);
+        setError('Failed to load dashboard data. Please try refreshing the page.');
       } finally {
         setLoadingData(false);
         console.log('Dashboard - data loading complete');
       }
     };
 
-    if (user && !authLoading && !pageLoading) {
+    // Only fetch data if we have an authenticated user
+    if (user && isAuthenticated && !authLoading) {
       fetchDashboardData();
     }
-  }, [user, supabase, authLoading, pageLoading]);
+  }, [user, supabase, authLoading, isAuthenticated]);
 
   // Handle profile errors
   if (profileError) {
@@ -166,8 +164,8 @@ export default function Dashboard() {
     );
   }
 
-  // Show loading screen while authenticating or loading page
-  if (authLoading || pageLoading) {
+  // Show loading screen while auth is loading
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -179,7 +177,7 @@ export default function Dashboard() {
   }
 
   // Don't render if not authenticated
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return null;
   }
 
@@ -200,6 +198,14 @@ export default function Dashboard() {
       <Navbar />
       
       <div className="container mx-auto px-4 pt-24 pb-16">
+        {/* Error Alert */}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -439,7 +445,11 @@ export default function Dashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {watchlistItems.length > 0 ? (
+                  {loadingData ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : watchlistItems.length > 0 ? (
                     <div className="space-y-3">
                       {watchlistItems.slice(0, 5).map((item) => (
                         <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">

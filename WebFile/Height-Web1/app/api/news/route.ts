@@ -98,25 +98,26 @@ async function fetchNewsFromAPI(category: string = 'business', page: number = 1)
   // Try NewsAPI first
   if (NEWS_API_KEY) {
     try {
-      const url = `${NEWS_API_BASE_URL}/top-headlines?category=${category}&country=in&pageSize=20&page=${page}&apiKey=${NEWS_API_KEY}`;
+      const url = `https://newsapi.org/v2/top-headlines?category=${category}&country=us&pageSize=20&page=${page}&apiKey=${NEWS_API_KEY}`;
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'Heights-Trading-Platform/1.0'
-        }
+        },
+        cache: 'no-store'
       });
       
       if (response.ok) {
         const data = await response.json();
-        if (data.status === 'ok' && data.articles) {
+        if (data.status === 'ok' && data.articles && data.articles.length > 0) {
           return data.articles.map((article: any, index: number) => ({
             id: `newsapi_${Date.now()}_${index}`,
-            title: article.title,
+            title: article.title || 'No title',
             description: article.description || '',
             content: article.content || article.description || '',
-            url: article.url,
+            url: article.url || '#',
             urlToImage: article.urlToImage || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&h=600&fit=crop',
-            publishedAt: article.publishedAt,
-            source: article.source,
+            publishedAt: article.publishedAt || new Date().toISOString(),
+            source: article.source || { id: 'unknown', name: 'Unknown' },
             category: category
           }));
         }
@@ -125,35 +126,8 @@ async function fetchNewsFromAPI(category: string = 'business', page: number = 1)
       console.error('NewsAPI error:', error);
     }
   }
-
-  // Try GNews as backup
-  if (GNEWS_API_KEY) {
-    try {
-      const url = `${GNEWS_BASE_URL}/top-headlines?category=${category}&lang=en&country=in&max=20&apikey=${GNEWS_API_KEY}`;
-      const response = await fetch(url);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.articles) {
-          return data.articles.map((article: any, index: number) => ({
-            id: `gnews_${Date.now()}_${index}`,
-            title: article.title,
-            description: article.description || '',
-            content: article.content || article.description || '',
-            url: article.url,
-            urlToImage: article.image || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&h=600&fit=crop',
-            publishedAt: article.publishedAt,
-            source: article.source,
-            category: category
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('GNews error:', error);
-    }
-  }
-
-  // Return fallback news filtered by category
+  
+  // Return fallback news immediately if API fails
   return FALLBACK_NEWS.filter(article => 
     category === 'general' || article.category === category
   );
