@@ -1,4 +1,4 @@
-// middleware.ts - Optimized with better performance and caching
+// middleware.ts - Complete optimized middleware
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
@@ -17,7 +17,7 @@ const securityHeaders = {
 // Routes configuration
 const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet'];
 const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai', '/crypto', '/home'];
-const STATIC_EXTENSIONS = ['.js', '.css', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.woff', '.woff2'];
+const STATIC_EXTENSIONS = ['.js', '.css', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
 
 // Rate limiting with memory optimization
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -25,18 +25,20 @@ const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const DEFAULT_RATE_LIMIT = 200;
 
 // Clean up expired entries more efficiently
-setInterval(() => {
-  const now = Date.now();
-  const keysToDelete: string[] = [];
-  
-  rateLimitMap.forEach((record, key) => {
-    if (now > record.resetTime) {
-      keysToDelete.push(key);
-    }
-  });
-  
-  keysToDelete.forEach(key => rateLimitMap.delete(key));
-}, 30000); // Every 30 seconds
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    const keysToDelete: string[] = [];
+    
+    rateLimitMap.forEach((record, key) => {
+      if (now > record.resetTime) {
+        keysToDelete.push(key);
+      }
+    });
+    
+    keysToDelete.forEach(key => rateLimitMap.delete(key));
+  }, 30000); // Every 30 seconds
+}
 
 function checkRateLimit(identifier: string): boolean {
   const now = Date.now();
@@ -71,7 +73,7 @@ const generateCSP = (nonce: string) => `
   form-action 'self' https://accounts.google.com;
   frame-ancestors 'none';
   frame-src 'self' https://s.tradingview.com https://accounts.google.com;
-  connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://www.googleapis.com https://newsapi.org https://gnews.io;
+  connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://www.googleapis.com https://newsapi.org https://gnews.io https://api.anthropic.com;
   media-src 'self';
   worker-src 'self' blob:;
 `.replace(/\s+/g, ' ').trim();

@@ -64,14 +64,6 @@ export function MarketStats({ symbol, marketData }: MarketStatsProps) {
               ${(marketData.volume24h / 1000000).toFixed(2)}M
             </p>
           </div>
-          {marketData.marketCap && (
-            <div>
-              <p className="text-sm text-muted-foreground">Market Cap</p>
-              <p className="font-medium">
-                ${(marketData.marketCap / 1000000000).toFixed(2)}B
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-// lib/market-data.ts - Fixed version with proper error handling
+// lib/market-data.ts - Complete fixed version with Coinbase integration
 import { EventEmitter } from 'events';
 
 export interface MarketData {
@@ -21,6 +21,7 @@ class MarketDataService extends EventEmitter {
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private isConnecting = false;
   private lastDataCache: Map<string, MarketData> = new Map();
+  private mockDataInterval: NodeJS.Timeout | null = null;
   
   // Mock data generator for when API is not available
   private generateMockData(symbol: string): MarketData {
@@ -63,6 +64,14 @@ class MarketDataService extends EventEmitter {
     this.isConnecting = true;
     
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined') {
+        console.log('[MarketData] Not in browser environment, using mock data');
+        this.startMockDataGenerator();
+        this.isConnecting = false;
+        return;
+      }
+
       // Check if we have Coinbase credentials
       const apiKey = process.env.NEXT_PUBLIC_COINBASE_API_KEY;
       
@@ -85,6 +94,13 @@ class MarketDataService extends EventEmitter {
   
   private connectWebSocket() {
     try {
+      // Check if we're in browser environment
+      if (typeof window === 'undefined' || typeof WebSocket === 'undefined') {
+        console.log('[MarketData] WebSocket not available, using mock data');
+        this.startMockDataGenerator();
+        return;
+      }
+
       this.ws = new WebSocket('wss://ws-feed.exchange.coinbase.com');
       
       this.ws.onopen = () => {
@@ -162,8 +178,6 @@ class MarketDataService extends EventEmitter {
       this.startMockDataGenerator();
     }
   }
-  
-  private mockDataInterval: NodeJS.Timeout | null = null;
   
   private startMockDataGenerator() {
     if (this.mockDataInterval) return;
@@ -256,7 +270,7 @@ class MarketDataService extends EventEmitter {
     try {
       const apiKey = process.env.NEXT_PUBLIC_COINBASE_API_KEY;
       
-      if (apiKey) {
+      if (apiKey && typeof window !== 'undefined') {
         return await this.fetchCoinbaseData(symbol);
       }
     } catch (error) {

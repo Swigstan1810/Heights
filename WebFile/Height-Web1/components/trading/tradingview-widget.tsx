@@ -1,4 +1,4 @@
-
+// components/trading/tradingview-widget.tsx - Complete fixed version
 "use client";
 
 import { useEffect, useRef } from 'react';
@@ -28,32 +28,45 @@ export default function TradingViewWidget({
   const widgetRef = useRef<any>(null);
 
   useEffect(() => {
-    // Clean up previous widget
-    if (widgetRef.current) {
-      try {
-        widgetRef.current.remove();
-        widgetRef.current = null;
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-    }
-
-    if (!containerRef.current) return;
-
+    // Create a new widget container div
+    const widgetContainer = document.createElement('div');
+    widgetContainer.style.height = '100%';
+    widgetContainer.style.width = '100%';
+    
     // Create unique container ID
     const containerId = `tradingview_${Math.random().toString(36).substring(7)}`;
-    containerRef.current.id = containerId;
+    widgetContainer.id = containerId;
 
+    // Cleanup function
+    const cleanup = () => {
+      if (widgetRef.current) {
+        try {
+          widgetRef.current.remove();
+          widgetRef.current = null;
+        } catch (e) {
+          console.error('Widget cleanup error:', e);
+        }
+      }
+      widgetContainer.remove();
+    };
+
+    // Add container to ref
+    if (containerRef.current) {
+      // Clear existing content
+      containerRef.current.innerHTML = '';
+      containerRef.current.appendChild(widgetContainer);
+    } else {
+      return cleanup;
+    }
+
+    // Load TradingView script
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/tv.js';
     script.async = true;
     
     script.onload = () => {
-      if (window.TradingView && containerRef.current) {
+      if (window.TradingView) {
         try {
-          // Remove any existing content
-          containerRef.current.innerHTML = '';
-          
           widgetRef.current = new window.TradingView.widget({
             autosize: true,
             symbol: symbol,
@@ -83,23 +96,16 @@ export default function TradingViewWidget({
       console.error('Failed to load TradingView script');
     };
 
-    document.head.appendChild(script);
+    // Add script to document
+    const scriptParent = document.head || document.body;
+    scriptParent.appendChild(script);
 
+    // Cleanup on unmount
     return () => {
-      // Cleanup
       if (script.parentNode) {
         script.parentNode.removeChild(script);
       }
-      if (widgetRef.current) {
-        try {
-          widgetRef.current.remove();
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
+      cleanup();
     };
   }, [symbol, height, theme, allowSymbolChange, showIntervalTabs]);
 
