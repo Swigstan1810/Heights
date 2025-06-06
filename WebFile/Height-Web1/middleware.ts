@@ -150,7 +150,7 @@ export async function middleware(request: NextRequest) {
 
   // Redirect authenticated users away from auth pages
   if (session && (pathname === '/login' || pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/dashboard', baseUrl));
+    return NextResponse.redirect(new URL('/home', baseUrl));
   }
 
   // Add session info to request headers for API routes

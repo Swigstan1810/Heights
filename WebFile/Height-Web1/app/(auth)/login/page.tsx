@@ -1,4 +1,4 @@
-// app/(auth)/login/page.tsx
+// app/(auth)/login/page.tsx - Updated to redirect to home
 "use client";
 
 import { useState, useEffect } from "react";
@@ -38,7 +38,7 @@ export default function Login() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+  const redirectTo = searchParams.get('redirectTo') || '/home'; // Changed default to /home
   const { signIn, signInWithGoogle, user, loading: authLoading } = useAuth();
   const supabase = createClientComponentClient<Database>();
   
@@ -52,8 +52,8 @@ export default function Login() {
   // Check if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      console.log("User already logged in, redirecting to: /dashboard");
-      router.push('/ai');
+      console.log("User already logged in, redirecting to: /home");
+      router.push('/home'); // Changed to /home
     }
   }, [user, authLoading, router]);
 
@@ -156,7 +156,7 @@ export default function Login() {
           setError(signInError.message);
         }
       } else {
-        console.log("Sign in successful, redirecting to: /dashboard");
+        console.log("Sign in successful, redirecting to: /home");
         
         // Clear login attempts on success
         sessionStorage.removeItem(`login_attempts_${email}`);
@@ -169,7 +169,7 @@ export default function Login() {
           localStorage.removeItem('heights_remember_email');
         }
         
-        router.push('/dashboard');
+        // Router push is handled in auth context
       }
     } catch (err: unknown) {
       if (err instanceof Error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
@@ -9,7 +9,9 @@ import { marketDataService, type MarketData } from '@/lib/market-data';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -36,7 +38,15 @@ import {
   Target,
   Rocket,
   Diamond,
-  TrendingDownIcon
+  AlertCircle,
+  Loader2,
+  BookOpen,
+  Calendar,
+  Clock,
+  ExternalLink,
+  TrendingDownIcon,
+  CreditCard,
+  PieChart
 } from "lucide-react";
 import Link from 'next/link';
 
@@ -212,18 +222,79 @@ const MarketStats = ({ data }: { data: Map<string, MarketData> }) => {
   );
 };
 
-// Portfolio Summary Component
+// Portfolio Summary Component with Real Data
 const PortfolioSummary = () => {
-  const { walletBalance, profile } = useAuth();
-  
-  const mockPortfolioData = {
-    totalValue: 125432.50,
-    todayChange: 2847.23,
-    todayChangePercent: 2.32,
-    positions: 12,
-    winners: 8,
-    losers: 4
+  const { walletBalance, profile, user } = useAuth();
+  const [portfolioData, setPortfolioData] = useState({
+    totalValue: 0,
+    totalInvested: 0,
+    totalPnL: 0,
+    totalPnLPercentage: 0,
+    holdingsCount: 0,
+    todayChange: 0,
+    todayChangePercent: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const supabase = createClientComponentClient<Database>();
+
+  useEffect(() => {
+    const fetchPortfolioData = async () => {
+      if (!user) return;
+
+      try {
+        // Get portfolio summary from database
+        const { data: summary, error: summaryError } = await supabase
+          .rpc('get_portfolio_summary', { p_user_id: user.id });
+
+        if (summaryError) {
+          console.error('Error fetching portfolio summary:', summaryError);
+          return;
+        }
+
+        if (summary && summary.length > 0) {
+          const data = summary[0];
+          setPortfolioData({
+            totalValue: Number(data.total_value) || 0,
+            totalInvested: Number(data.total_invested) || 0,
+            totalPnL: Number(data.total_pnl) || 0,
+            totalPnLPercentage: Number(data.total_pnl_percentage) || 0,
+            holdingsCount: Number(data.holdings_count) || 0,
+            todayChange: Number(data.total_pnl) * 0.02, // Simulate today's change
+            todayChangePercent: 2.32 // Simulate today's change percentage
+          });
+        }
+      } catch (error) {
+        console.error('Error loading portfolio data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPortfolioData();
+  }, [user, supabase]);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
   };
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-6">
+              <div className="h-20 bg-muted rounded" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -235,18 +306,23 @@ const PortfolioSummary = () => {
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-green-500" />
+            <PieChart className="h-5 w-5 text-green-500" />
             <span className="text-sm font-medium text-green-500">Portfolio Value</span>
           </div>
           <TrendingUp className="h-5 w-5 text-green-500" />
         </div>
         <div className="space-y-2">
           <p className="text-3xl font-bold">
-            ₹<AnimatedCounter value={mockPortfolioData.totalValue} decimals={2} />
+            {formatCurrency(portfolioData.totalValue)}
           </p>
           <p className="text-sm text-green-500 flex items-center">
-            <ArrowRight className="h-3 w-3 mr-1 rotate-[-45deg]" />
-            +₹{mockPortfolioData.todayChange.toLocaleString()} ({mockPortfolioData.todayChangePercent}%) today
+            {portfolioData.totalPnL >= 0 ? (
+              <ArrowRight className="h-3 w-3 mr-1 rotate-[-45deg]" />
+            ) : (
+              <ArrowRight className="h-3 w-3 mr-1 rotate-[45deg]" />
+            )}
+            {portfolioData.totalPnL >= 0 ? '+' : ''}{formatCurrency(portfolioData.totalPnL)} 
+            ({portfolioData.totalPnLPercentage.toFixed(2)}%) all time
           </p>
         </div>
       </motion.div>
@@ -266,10 +342,13 @@ const PortfolioSummary = () => {
         </div>
         <div className="space-y-2">
           <p className="text-3xl font-bold">
-            <AnimatedCounter value={mockPortfolioData.positions} />
+            <AnimatedCounter value={portfolioData.holdingsCount} />
           </p>
           <p className="text-sm text-muted-foreground">
-            {mockPortfolioData.winners} winners • {mockPortfolioData.losers} losers
+            {portfolioData.holdingsCount > 0 
+              ? `Across crypto & stocks`
+              : 'No active positions'
+            }
           </p>
         </div>
       </motion.div>
@@ -282,7 +361,7 @@ const PortfolioSummary = () => {
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-purple-500" />
+            <Wallet className="h-5 w-5 text-purple-500" />
             <span className="text-sm font-medium text-purple-500">Available Balance</span>
           </div>
           <Eye className="h-5 w-5 text-purple-500" />
@@ -296,6 +375,200 @@ const PortfolioSummary = () => {
           </p>
         </div>
       </motion.div>
+    </div>
+  );
+};
+
+// News Component with Real Data
+const RecentNews = () => {
+  const [newsArticles, setNewsArticles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const response = await fetch('/api/news?category=business&pageSize=5');
+        const data = await response.json();
+        
+        if (data.success && data.articles) {
+          setNewsArticles(data.articles.slice(0, 5));
+        } else {
+          setError('Failed to load news');
+        }
+      } catch (err) {
+        console.error('Error fetching news:', err);
+        setError('Failed to load news');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNews();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="animate-pulse">
+            <div className="h-20 bg-muted rounded" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error || newsArticles.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <p className="text-muted-foreground">Unable to load news at the moment</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {newsArticles.map((article, index) => (
+        <motion.div
+          key={article.id || index}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg hover:bg-muted/70 transition-all cursor-pointer"
+          onClick={() => window.open(article.url, '_blank')}
+        >
+          <div className="flex-1">
+            <h4 className="font-medium line-clamp-2 mb-1">{article.title}</h4>
+            <p className="text-sm text-muted-foreground line-clamp-2">{article.description}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant="outline" className="text-xs">
+                {article.source?.name || 'News'}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {new Date(article.publishedAt).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+          <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+        </motion.div>
+      ))}
+    </div>
+  );
+};
+
+// Recent Activity Component with Real Data
+const RecentActivity = () => {
+  const { user } = useAuth();
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClientComponentClient<Database>();
+
+  useEffect(() => {
+    const fetchActivities = async () => {
+      if (!user) return;
+
+      try {
+        // Fetch recent orders
+        const { data: orders, error } = await supabase
+          .from('portfolio_orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (error) {
+          console.error('Error fetching activities:', error);
+          return;
+        }
+
+        const formattedActivities = orders?.map(order => ({
+          id: order.id,
+          type: order.order_type,
+          symbol: order.symbol,
+          name: order.name,
+          amount: order.total_amount,
+          quantity: order.quantity,
+          price: order.price,
+          status: order.status,
+          createdAt: order.created_at
+        })) || [];
+
+        setActivities(formattedActivities);
+      } catch (error) {
+        console.error('Error loading activities:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchActivities();
+  }, [user, supabase]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="animate-pulse">
+            <div className="h-16 bg-muted rounded" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (activities.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <p className="text-muted-foreground">No recent trading activity</p>
+        <Button variant="outline" className="mt-4" asChild>
+          <Link href="/trade">
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Start Trading
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {activities.map((activity, index) => (
+        <motion.div
+          key={activity.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className="flex items-center justify-between p-4 bg-muted/50 rounded-lg"
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-full ${
+              activity.type === 'buy' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
+            }`}>
+              {activity.type === 'buy' ? 
+                <TrendingUp className="h-4 w-4" /> : 
+                <TrendingDown className="h-4 w-4" />
+              }
+            </div>
+            <div>
+              <p className="font-medium">
+                {activity.type === 'buy' ? 'Bought' : 'Sold'} {activity.name}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {activity.quantity} {activity.symbol} @ ₹{activity.price}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="font-medium">₹{activity.amount.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(activity.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        </motion.div>
+      ))}
     </div>
   );
 };
@@ -314,7 +587,6 @@ export default function HomePage() {
 
   // Major symbols to track
   const CRYPTO_SYMBOLS = ['CRYPTO:BTC', 'CRYPTO:ETH', 'CRYPTO:SOL', 'CRYPTO:MATIC', 'CRYPTO:LINK', 'CRYPTO:AVAX'];
-  const STOCK_SYMBOLS = ['NSE:RELIANCE', 'NSE:TCS', 'NSE:INFY', 'NSE:HDFCBANK', 'NSE:ICICIBANK', 'NSE:SBIN'];
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
@@ -427,7 +699,7 @@ export default function HomePage() {
               className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6"
             >
               <Sparkles className="h-4 w-4 mr-2" />
-              Welcome back to Heights
+              Welcome back, {user?.email?.split('@')[0]}!
             </motion.div>
             
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
@@ -456,7 +728,7 @@ export default function HomePage() {
           </motion.div>
         </motion.section>
 
-        {/* Portfolio Summary */}
+        {/* Portfolio Summary with Real Data */}
         <motion.section 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
@@ -470,7 +742,7 @@ export default function HomePage() {
           <PortfolioSummary />
         </motion.section>
 
-        {/* Live Market Data */}
+        {/* Live Market Data from Coinbase */}
         <motion.section 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
@@ -484,7 +756,7 @@ export default function HomePage() {
             </h2>
             <Badge variant="outline" className="text-green-500 border-green-500">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
-              Live
+              Live from Coinbase
             </Badge>
           </div>
           
@@ -497,7 +769,7 @@ export default function HomePage() {
                 className="text-center py-12"
               >
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-                <p className="text-muted-foreground">Loading real-time market data...</p>
+                <p className="text-muted-foreground">Connecting to Coinbase WebSocket...</p>
               </motion.div>
             ) : (
               <motion.div
@@ -523,100 +795,85 @@ export default function HomePage() {
             Market Analysis
           </h2>
           
-          <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
-              <TabsTrigger value="crypto" className="flex items-center gap-2">
-                <Bitcoin className="h-4 w-4" />
-                Cryptocurrency
-              </TabsTrigger>
-              <TabsTrigger value="stocks" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Stocks
-              </TabsTrigger>
-              <TabsTrigger value="mutual-funds" className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Mutual Funds
-              </TabsTrigger>
-            </TabsList>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bitcoin className="h-5 w-5 text-orange-500" />
+                  Bitcoin (BTC/USD)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <TradingViewWidget symbol="BTCUSD" height={400} />
+              </CardContent>
+            </Card>
 
-            <TabsContent value="crypto" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Bitcoin className="h-5 w-5 text-orange-500" />
-                      Bitcoin (BTC/USD)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <TradingViewWidget symbol="BTCUSD" height={400} />
-                  </CardContent>
-                </Card>
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Diamond className="h-5 w-5 text-blue-500" />
+                  Ethereum (ETH/USD)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <TradingViewWidget symbol="ETHUSD" height={400} />
+              </CardContent>
+            </Card>
+          </div>
+        </motion.section>
 
-                <Card className="overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Diamond className="h-5 w-5 text-blue-500" />
-                      Ethereum (ETH/USD)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <TradingViewWidget symbol="ETHUSD" height={400} />
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
+        {/* Recent Activity Section */}
+        <motion.section 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 1.3 }}
+        >
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <Activity className="h-6 w-6 text-primary" />
+            Recent Activity
+          </h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5" />
+                    Market News
+                  </span>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/news">
+                      View All
+                      <ExternalLink className="h-3 w-3 ml-1" />
+                    </Link>
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RecentNews />
+              </CardContent>
+            </Card>
 
-            <TabsContent value="stocks" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-green-500" />
-                      Reliance Industries
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <TradingViewWidget symbol="NSE:RELIANCE" height={400} />
-                  </CardContent>
-                </Card>
-
-                <Card className="overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5 text-blue-500" />
-                      Tata Consultancy Services
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <TradingViewWidget symbol="NSE:TCS" height={400} />
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="mutual-funds" className="space-y-6">
-              <div className="text-center py-16">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="mb-6"
-                >
-                  <Building2 className="h-16 w-16 mx-auto text-muted-foreground" />
-                </motion.div>
-                <h3 className="text-2xl font-bold mb-4">Mutual Funds Coming Soon</h3>
-                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  We're working on bringing you the best mutual fund investment platform. 
-                  Stay tuned for diversified portfolio options managed by experts.
-                </p>
-                <Button variant="outline" disabled>
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Notify Me When Available
-                </Button>
-              </div>
-            </TabsContent>
-          </Tabs>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Your Recent Trades
+                  </span>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/portfolio">
+                      View All
+                      <ExternalLink className="h-3 w-3 ml-1" />
+                    </Link>
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RecentActivity />
+              </CardContent>
+            </Card>
+          </div>
         </motion.section>
 
         {/* Quick Actions */}
@@ -624,7 +881,7 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.9 }}
-          className="mb-12"
+          className="mt-12"
         >
           <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
             <Zap className="h-6 w-6 text-primary" />
@@ -706,12 +963,12 @@ export default function HomePage() {
           </div>
         </motion.section>
 
-        {/* Performance Metrics */}
+        {/* Platform Performance */}
         <motion.section 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 1.1 }}
-          className="mb-12"
+          className="mt-12"
         >
           <Card className="overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-primary/10 to-blue-600/10">
@@ -769,95 +1026,6 @@ export default function HomePage() {
               </div>
             </CardContent>
           </Card>
-        </motion.section>
-
-        {/* Recent Activity */}
-        <motion.section 
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.3 }}
-        >
-          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <Activity className="h-6 w-6 text-primary" />
-            Recent Activity
-          </h2>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Market Alerts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { symbol: 'BTC', message: 'Bitcoin breaks above $45,000 resistance', time: '2 min ago', type: 'bullish' },
-                    { symbol: 'ETH', message: 'Ethereum showing strong momentum', time: '15 min ago', type: 'bullish' },
-                    { symbol: 'RELIANCE', message: 'Reliance approaching support level', time: '1 hour ago', type: 'neutral' }
-                  ].map((alert, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.5 + index * 0.1 }}
-                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${
-                          alert.type === 'bullish' ? 'bg-green-500' : 
-                          alert.type === 'bearish' ? 'bg-red-500' : 'bg-yellow-500'
-                        }`} />
-                        <div>
-                          <p className="font-medium text-sm">{alert.message}</p>
-                          <p className="text-xs text-muted-foreground">{alert.time}</p>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {alert.symbol}
-                      </Badge>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Platform Updates</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { title: 'New AI Trading Assistant Released', time: '1 day ago', type: 'feature' },
-                    { title: 'Enhanced Mobile Trading Experience', time: '3 days ago', type: 'improvement' },
-                    { title: 'Added 50+ New Cryptocurrency Pairs', time: '1 week ago', type: 'feature' }
-                  ].map((update, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.7 + index * 0.1 }}
-                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${
-                          update.type === 'feature' ? 'bg-blue-500/20 text-blue-500' : 'bg-green-500/20 text-green-500'
-                        }`}>
-                          {update.type === 'feature' ? 
-                            <Sparkles className="h-4 w-4" /> : 
-                            <TrendingUp className="h-4 w-4" />
-                          }
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">{update.title}</p>
-                          <p className="text-xs text-muted-foreground">{update.time}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </motion.section>
       </div>
     </main>

@@ -1,4 +1,4 @@
-// contexts/auth-context.tsx - Enhanced with better state management and error handling
+// contexts/auth-context.tsx - Updated to redirect to home instead of dashboard
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log(`[Auth] Retrying profile fetch in ${delay}ms, ${retries} attempts remaining`);
         await new Promise(resolve => setTimeout(resolve, delay));
         profileFetchRef.current = false;
-        return fetchProfile(userId, retries - 1, Math.min(delay * 2, 10000)); // Exponential backoff, max 10s
+        return fetchProfile(userId, retries - 1, Math.min(delay * 2, 10000));
       }
       
       updateState({ 
@@ -275,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             session,
             user: session.user,
             isAuthenticated: true,
-            loading: true // Keep loading while fetching additional data
+            loading: true
           });
 
           // Fetch profile and wallet in parallel with timeout
@@ -286,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           // Set a timeout for data fetching
           const timeoutPromise = new Promise<[Profile | null, WalletBalance | null]>((_, reject) => {
-            setTimeout(() => reject(new Error('Data fetch timeout')), 15000); // 15 second timeout
+            setTimeout(() => reject(new Error('Data fetch timeout')), 15000);
           });
 
           try {
@@ -494,7 +494,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.user, fetchWalletBalance, updateState]);
 
-  // Enhanced sign in
+  // Enhanced sign in - REDIRECT TO HOME
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       updateState({ loading: true, error: null, profileError: null });
@@ -514,6 +514,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         // Load profile and wallet data will be handled by the auth state change listener
+        
+        // REDIRECT TO HOME AFTER SUCCESSFUL LOGIN
+        router.push('/home');
       }
 
       return { error: null };
@@ -526,9 +529,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return { error: error as Error };
     }
-  }, [supabase, updateState]);
+  }, [supabase, updateState, router]);
 
-  // Enhanced Google sign in
+  // Enhanced Google sign in - with home redirect in callback
   const signInWithGoogle = useCallback(async () => {
     try {
       updateState({ loading: true, error: null, profileError: null });

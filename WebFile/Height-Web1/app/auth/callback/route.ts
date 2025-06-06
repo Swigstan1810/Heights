@@ -1,4 +1,4 @@
-// app/auth/callback/route.ts
+// app/auth/callback/route.ts - Updated to redirect to home
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
           .eq('id', session.user.id)
           .single();
         
-        // Always redirect to ai-assistant, regardless of KYC status
-        return NextResponse.redirect(new URL('/ai', baseUrl));
+        // Always redirect to home page after successful login
+        return NextResponse.redirect(new URL('/home', baseUrl));
       }
     } catch (error) {
       console.error('Auth callback error:', error);
