@@ -570,9 +570,9 @@ export class EnhancedTradingAgent {
         HumanMessagePromptTemplate.fromTemplate("{input}")
       ]);
 
-      this.agent = createToolCallingAgent({
-        llm: enhancedClaude,
-        tools: this.tools,
+    this.agent = createToolCallingAgent({
+      llm: enhancedClaude,
+      tools: this.tools,
         prompt: agentPrompt
       });
       
@@ -620,7 +620,7 @@ export class EnhancedTradingAgent {
   async generatePrediction(symbol: string, context?: string): Promise<any> {
     try {
       this.checkInitialization();
-      
+
       const marketData = await this.tools[0].invoke(symbol);
       const technicalData = await this.tools[1].invoke(JSON.stringify({ symbol }));
 
@@ -671,11 +671,11 @@ export class EnhancedTradingAgent {
     try {
       this.checkInitialization();
       
-      const handler = new TradingCallbackHandler({ onToken });
-      await enhancedClaude.invoke(
-        [new HumanMessage(message)],
-        { callbacks: [handler] }
-      );
+    const handler = new TradingCallbackHandler({ onToken });
+    await enhancedClaude.invoke(
+      [new HumanMessage(message)],
+      { callbacks: [handler] }
+    );
     } catch (error) {
       console.error('Stream error:', error);
       if (error instanceof Error && error.message.includes('API key')) {

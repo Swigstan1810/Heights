@@ -151,7 +151,7 @@ export async function GET(
     // Check cache first
     const cachedPrediction = await getCachedPrediction(symbol, timeframe);
     if (cachedPrediction) {
-      console.log('Cache hit for', symbol);
+          console.log('Cache hit for', symbol);
       return NextResponse.json(cachedPrediction.prediction);
     }
 
@@ -267,12 +267,12 @@ Please provide:
 Format the response as structured JSON.
 `;
 
-    const prediction = await tradingAgent.generatePrediction(symbol);
-    
+      const prediction = await tradingAgent.generatePrediction(symbol);
+      
     // Structure the enhanced prediction
-    const enhancedPrediction = {
-      symbol,
-      timestamp: new Date().toISOString(),
+      const enhancedPrediction = {
+        symbol,
+        timestamp: new Date().toISOString(),
       timeframe,
       currentPrice: comprehensiveContext.currentPrice,
       predictions: {
@@ -322,9 +322,9 @@ Format the response as structured JSON.
         risk_factors: ['market_volatility', 'news_uncertainty', 'technical_divergence']
       },
       trading_signals: generateTradingSignals(comprehensiveContext),
-      metadata: {
-        model: 'claude-3-5-sonnet-20241022',
-        analysis_depth: analysisDepth,
+        metadata: {
+          model: 'claude-3-5-sonnet-20241022',
+          analysis_depth: analysisDepth,
         data_sources: ['real_market_data', 'technical_indicators', 'news_analysis', 'historical_data'],
         data_freshness: 'real-time'
       }
@@ -338,7 +338,7 @@ Format the response as structured JSON.
       created_at: new Date().toISOString()
     });
 
-    return NextResponse.json(enhancedPrediction);
+      return NextResponse.json(enhancedPrediction);
     
   } catch (err: unknown) {
     console.error('Prediction API error:', err);
@@ -426,7 +426,7 @@ function generateTradingSignals(context: any): any[] {
         strength: 0.8
       });
     } else if (context.technicalIndicators.rsi > 70) {
-      signals.push({
+    signals.push({
         type: 'sell',
         indicator: 'RSI',
         reason: 'Overbought condition',
