@@ -89,7 +89,7 @@ const ASSET_CATEGORIES = [
     bgColor: 'bg-orange-500/10',
     borderColor: 'border-orange-500/20',
     href: '/dashboard?tab=crypto',
-    stats: { markets: '150+', volume: '$2.5B', change: '+5.2%' }
+    stats: { markets: '150+', volume: '$3B', change: '+5.2%' }
   },
   {
     id: 'stocks',
