@@ -1,4 +1,4 @@
-// middleware.ts - Complete optimized middleware
+// middleware.ts - Fixed for production deployment
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
@@ -6,39 +6,21 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 // Security headers
 const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'X-Frame-Options': 'SAMEORIGIN',
   'X-Content-Type-Options': 'nosniff',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
-// Routes configuration
-const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet'];
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai', '/crypto', '/home'];
-const STATIC_EXTENSIONS = ['.js', '.css', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
+// Routes configuration - Updated to match your app structure
+const PROTECTED_ROUTES = ['/home', '/portfolio', '/trade', '/profile', '/wallet', '/crypto'];
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai'];
+const STATIC_EXTENSIONS = ['.js', '.css', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map'];
 
-// Rate limiting with memory optimization
+// Simple rate limiting for production
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
-const DEFAULT_RATE_LIMIT = 200;
-
-// Clean up expired entries more efficiently
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    const now = Date.now();
-    const keysToDelete: string[] = [];
-    
-    rateLimitMap.forEach((record, key) => {
-      if (now > record.resetTime) {
-        keysToDelete.push(key);
-      }
-    });
-    
-    keysToDelete.forEach(key => rateLimitMap.delete(key));
-  }, 30000); // Every 30 seconds
-}
+const DEFAULT_RATE_LIMIT = 300; // Increased for production
 
 function checkRateLimit(identifier: string): boolean {
   const now = Date.now();
@@ -61,52 +43,39 @@ function checkRateLimit(identifier: string): boolean {
   return true;
 }
 
-// Enhanced CSP for better security
-const generateCSP = (nonce: string) => `
-  default-src 'self';
-  script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://s3.tradingview.com https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;
-  style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com;
-  img-src 'self' blob: data: https: http: https://lh3.googleusercontent.com https://images.unsplash.com;
-  font-src 'self' data: https://fonts.gstatic.com;
-  object-src 'none';
-  base-uri 'self';
-  form-action 'self' https://accounts.google.com;
-  frame-ancestors 'none';
-  frame-src 'self' https://s.tradingview.com https://accounts.google.com;
-  connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://www.googleapis.com https://newsapi.org https://gnews.io https://api.anthropic.com;
-  media-src 'self';
-  worker-src 'self' blob:;
-`.replace(/\s+/g, ' ').trim();
+// Clean up rate limit map periodically
+setInterval(() => {
+  const now = Date.now();
+  rateLimitMap.forEach((record, key) => {
+    if (now > record.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  });
+}, 60000);
 
 export async function middleware(request: NextRequest) {
-  const startTime = Date.now();
   const { pathname } = request.nextUrl;
   
-  // Quick bypass for static assets
-  if (STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext)) || 
-      pathname.startsWith('/_next/') || 
-      pathname.startsWith('/api/health')) {
+  // Quick bypass for static assets and Next.js internals
+  if (
+    pathname.startsWith('/_next/') || 
+    pathname.startsWith('/api/auth/') ||
+    pathname.includes('.') ||
+    STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext))
+  ) {
     return NextResponse.next();
   }
 
   const response = NextResponse.next();
   
-  // Generate nonce for CSP
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  
   // Apply security headers
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
-  
-  // Set CSP with nonce
-  response.headers.set('Content-Security-Policy', generateCSP(nonce));
-  response.headers.set('X-Nonce', nonce);
 
   // Rate limiting
   const identifier = request.headers.get('x-forwarded-for') || 
                     request.headers.get('x-real-ip') || 
-                    request.ip || 
                     'anonymous';
   
   if (!checkRateLimit(identifier)) {
@@ -116,47 +85,50 @@ export async function middleware(request: NextRequest) {
         'Retry-After': '60',
         'X-RateLimit-Limit': String(DEFAULT_RATE_LIMIT),
         'X-RateLimit-Remaining': '0',
-        'Cache-Control': 'no-store',
       },
     });
   }
 
-  // Skip auth for public API routes
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
-    response.headers.set('X-Response-Time', String(Date.now() - startTime));
+  // Skip auth for API routes (except auth routes) and public routes
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
     return response;
   }
 
-  // Only check auth for protected routes
+  // Check if route is protected
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
   
-  if (!isProtectedRoute) {
-    response.headers.set('X-Response-Time', String(Date.now() - startTime));
+  // Allow public routes without auth check
+  if (isPublicRoute && !isProtectedRoute) {
     return response;
   }
 
-  // Auth check for protected routes
-  try {
-    const supabase = createMiddlewareClient({ req: request, res: response });
-    const { data: { session } } = await supabase.auth.getSession();
+  // Auth check for protected routes only
+  if (isProtectedRoute) {
+    try {
+      const supabase = createMiddlewareClient({ req: request, res: response });
+      const { data: { session }, error } = await supabase.auth.getSession();
 
-    if (!session) {
+      if (error || !session) {
+        const url = new URL('/login', request.url);
+        url.searchParams.set('redirectTo', pathname);
+        return NextResponse.redirect(url);
+      }
+
+      // Add user context to headers for downstream use
+      response.headers.set('X-User-Id', session.user.id);
+      if (session.user.email) {
+        response.headers.set('X-User-Email', session.user.email);
+      }
+      
+    } catch (error) {
+      console.error('Auth check error:', error);
+      // Redirect to login on auth errors for protected routes
       const url = new URL('/login', request.url);
       url.searchParams.set('redirectTo', pathname);
       return NextResponse.redirect(url);
     }
-
-    // Add user context to headers for downstream use
-    response.headers.set('X-User-Id', session.user.id);
-    response.headers.set('X-User-Email', session.user.email || '');
-    
-  } catch (error) {
-    console.error('Auth check error:', error);
-    // Allow request to continue even if auth check fails
   }
-
-  // Add performance header
-  response.headers.set('X-Response-Time', String(Date.now() - startTime));
   
   return response;
 }
@@ -168,9 +140,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)  
      * - favicon.ico, sitemap.xml, robots.txt (metadata files)
-     * - public folder
      * - .well-known (for various verifications)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|public|.well-known).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.well-known).*)',
   ],
 };
