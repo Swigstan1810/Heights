@@ -1,4 +1,4 @@
-// app/(protected)/dashboard/page.tsx - Enhanced with better loading and error handling
+// app/(protected)/dashboard/page.tsx - Fixed to use correct database structure
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -58,11 +58,11 @@ interface TransactionSummary {
   transactionCount: number;
 }
 
-interface DashboardStats {
+interface PortfolioSummary {
   portfolioValue: number;
   portfolioChange: number;
   totalPnL: number;
-  winRate: number;
+  holdingsCount: number;
 }
 
 // Enhanced loading skeleton components
@@ -131,11 +131,11 @@ export default function Dashboard() {
     totalWithdrawals: 0,
     transactionCount: 0
   });
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
     portfolioValue: 0,
     portfolioChange: 0,
     totalPnL: 0,
-    winRate: 0
+    holdingsCount: 0
   });
   const [loadingData, setLoadingData] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
@@ -208,6 +208,13 @@ export default function Dashboard() {
           .eq('status', 'completed')
           .then(result => ({ type: 'transactions', ...result })),
         
+        // Fetch portfolio holdings
+        supabase
+          .from('portfolio_holdings')
+          .select('current_value, profit_loss')
+          .eq('user_id', user.id)
+          .then(result => ({ type: 'portfolio', ...result })),
+        
         // Fetch news
         fetch('/api/news?category=business&pageSize=5')
           .then(res => res.json())
@@ -251,6 +258,32 @@ export default function Dashboard() {
               }
               break;
               
+            case 'portfolio':
+              if (data.error) {
+                console.error('[Dashboard] Portfolio error:', data.error);
+                // Set default values if no portfolio data
+                setPortfolioSummary({
+                  portfolioValue: 0,
+                  portfolioChange: 0,
+                  totalPnL: 0,
+                  holdingsCount: 0
+                });
+              } else if (data.data) {
+                console.log('[Dashboard] Portfolio loaded:', data.data.length, 'holdings');
+                const portfolioValue = data.data.reduce((sum: number, holding: any) => 
+                  sum + Number(holding.current_value), 0);
+                const totalPnL = data.data.reduce((sum: number, holding: any) => 
+                  sum + Number(holding.profit_loss), 0);
+                
+                setPortfolioSummary({
+                  portfolioValue,
+                  portfolioChange: portfolioValue > 0 ? (totalPnL / portfolioValue) * 100 : 0,
+                  totalPnL,
+                  holdingsCount: data.data.length
+                });
+              }
+              break;
+              
             case 'news':
               if (data.data && data.data.length > 0) {
                 console.log('[Dashboard] News loaded:', data.data.length, 'items');
@@ -261,14 +294,6 @@ export default function Dashboard() {
         } else {
           console.error('[Dashboard] Promise rejected:', result.reason);
         }
-      });
-
-      // Generate mock portfolio stats
-      setDashboardStats({
-        portfolioValue: totalBalance * 1.05, // Mock 5% growth
-        portfolioChange: 2.34,
-        totalPnL: totalBalance * 0.05,
-        winRate: 68.5
       });
 
       setDataLastUpdated(new Date());
@@ -294,7 +319,7 @@ export default function Dashboard() {
     if (user && isAuthenticated && !authLoading && isInitialized) {
       fetchDashboardData();
     }
-  }, [user, isAuthenticated, authLoading, isInitialized, totalBalance]);
+  }, [user, isAuthenticated, authLoading, isInitialized]);
 
   // Enhanced refresh function
   const handleRefresh = async () => {
@@ -401,7 +426,7 @@ export default function Dashboard() {
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">
-              Whats Up!, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
+              What's Up!, {profile?.full_name || user?.email?.split('@')[0] || 'User'}
             </h1>
             <div className="flex items-center gap-4 mt-2">
               <p className="text-muted-foreground flex items-center gap-2">
@@ -501,11 +526,17 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {showBalance ? formatCurrency(dashboardStats.portfolioValue) : "••••••"}
+                    {showBalance ? formatCurrency(portfolioSummary.portfolioValue) : "••••••"}
                   </div>
-                  <p className="text-xs text-green-500 flex items-center">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    +{dashboardStats.portfolioChange}% today
+                  <p className={`text-xs flex items-center ${
+                    portfolioSummary.portfolioChange >= 0 ? 'text-green-500' : 'text-red-500'
+                  }`}>
+                    {portfolioSummary.portfolioChange >= 0 ? (
+                      <ArrowUpRight className="h-3 w-3 mr-1" />
+                    ) : (
+                      <ArrowDownRight className="h-3 w-3 mr-1" />
+                    )}
+                    {portfolioSummary.portfolioChange >= 0 ? '+' : ''}{portfolioSummary.portfolioChange.toFixed(2)}% all time
                   </p>
                 </CardContent>
               </Card>
@@ -552,10 +583,10 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {showBalance ? formatCurrency(dashboardStats.totalPnL) : "••••••"}
+                    {showBalance ? formatCurrency(portfolioSummary.totalPnL) : "••••••"}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {dashboardStats.winRate}% win rate
+                    {portfolioSummary.holdingsCount} active positions
                   </p>
                 </CardContent>
               </Card>
@@ -772,7 +803,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {newsItems.slice(0, 4).map((article, index) => (
                       <motion.div
-                        key={article.id}
+                        key={article.id || index}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
@@ -784,7 +815,7 @@ export default function Dashboard() {
                           {article.description}
                         </p>
                         <div className="flex justify-between items-center text-xs text-muted-foreground">
-                          <span>{article.source.name}</span>
+                          <span>{article.source?.name || 'Unknown'}</span>
                           <span>{new Date(article.publishedAt).toLocaleDateString()}</span>
                         </div>
                       </motion.div>
@@ -823,17 +854,17 @@ export default function Dashboard() {
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button variant="outline" className="h-24 w-full flex-col" asChild>
-                      <a href="/news">
-                        <Activity className="h-6 w-6 mb-2" />
-                        <span>Read News</span>
+                      <a href="/portfolio">
+                        <PieChart className="h-6 w-6 mb-2" />
+                        <span>View Portfolio</span>
                       </a>
                     </Button>
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button variant="outline" className="h-24 w-full flex-col" asChild>
-                      <a href="/ai">
+                      <a href="/trade">
                         <Sparkles className="h-6 w-6 mb-2" />
-                        <span>AI Assistant</span>
+                        <span>Start Trading</span>
                       </a>
                     </Button>
                   </motion.div>
