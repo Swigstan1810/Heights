@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
-import { placeOrder } from "@/lib/market-data";
 import { useToast } from "@/components/ui/use-toast";
 import { Calculator, ArrowUp, ArrowDown } from "lucide-react";
 
@@ -280,4 +279,9 @@ function TradeFormContent({
       </Button>
     </>
   );
+}
+
+// Add a local mock placeOrder function
+async function placeOrder(params: any) {
+  return new Promise((resolve) => setTimeout(resolve, 500));
 }

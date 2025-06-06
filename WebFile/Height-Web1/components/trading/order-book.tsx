@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { marketDataService, OrderBook as OrderBookType } from "@/lib/market-data";
+import { marketDataService } from "@/lib/market-data";
 import { Loader2 } from "lucide-react";
+
+// Define OrderBook type locally
+interface OrderBookType {
+  bids: [number, number][];
+  asks: [number, number][];
+}
 
 interface OrderBookProps {
   symbol: string;
@@ -12,10 +18,23 @@ export function OrderBook({ symbol }: OrderBookProps) {
   const [orderBook, setOrderBook] = useState<OrderBookType | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Helper to generate a mock order book
+  function generateMockOrderBook(): OrderBookType {
+    const basePrice = 100;
+    const bids: [number, number][] = [];
+    const asks: [number, number][] = [];
+    for (let i = 0; i < 20; i++) {
+      bids.push([basePrice - i * 0.5, Math.random() * 5 + 1]);
+      asks.push([basePrice + i * 0.5, Math.random() * 5 + 1]);
+    }
+    return { bids, asks };
+  }
+
   useEffect(() => {
     const fetchOrderBook = async () => {
       setLoading(true);
-      const data = await marketDataService.getOrderBook(symbol);
+      // No getOrderBook on marketDataService, so use mock
+      const data = generateMockOrderBook();
       setOrderBook(data);
       setLoading(false);
     };
