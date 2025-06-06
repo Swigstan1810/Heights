@@ -1,7 +1,7 @@
-// components/trading/tradingview-widget.tsx
+
 "use client";
 
-import { useEffect, useRef, memo } from 'react';
+import { useEffect, useRef } from 'react';
 
 declare global {
   interface Window {
@@ -10,77 +10,113 @@ declare global {
 }
 
 interface TradingViewWidgetProps {
-  symbol?: string;
+  symbol: string;
   height?: number;
   theme?: 'light' | 'dark';
   allowSymbolChange?: boolean;
   showIntervalTabs?: boolean;
 }
 
-function TradingViewWidget({
-  symbol = 'CRYPTO:BTCUSD',
+export default function TradingViewWidget({
+  symbol,
   height = 500,
-  theme,
-  allowSymbolChange = true,
-  showIntervalTabs = true,
+  theme = 'dark',
+  allowSymbolChange = false,
+  showIntervalTabs = false
 }: TradingViewWidgetProps) {
-  const container = useRef<HTMLDivElement>(null);
-  const scriptRef = useRef<HTMLScriptElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<any>(null);
 
   useEffect(() => {
     // Clean up previous widget
-    if (container.current) {
-      container.current.innerHTML = '';
+    if (widgetRef.current) {
+      try {
+        widgetRef.current.remove();
+        widgetRef.current = null;
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
 
-    // Map internal symbols to TradingView format
-    const tvSymbol = symbol.replace('CRYPTO:', '').replace('NSE:', '') + 'USD';
-    
+    if (!containerRef.current) return;
+
+    // Create unique container ID
+    const containerId = `tradingview_${Math.random().toString(36).substring(7)}`;
+    containerRef.current.id = containerId;
+
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/tv.js';
-    script.type = 'text/javascript';
     script.async = true;
     
     script.onload = () => {
-      if (typeof window.TradingView !== 'undefined' && container.current) {
-        new window.TradingView.widget({
-          width: '100%',
-          height: height,
-          symbol: tvSymbol,
-          interval: '1',
-          timezone: 'Asia/Kolkata',
-          theme: theme === 'dark' ? 'dark' : 'light',
-          style: '1',
-          locale: 'en',
-          toolbar_bg: '#f1f3f6',
-          enable_publishing: false,
-          allow_symbol_change: allowSymbolChange,
-          hide_side_toolbar: false,
-          container_id: 'tradingview_widget',
-          studies: ['MACD@tv-basicstudies', 'RSI@tv-basicstudies'],
-          show_popup_button: true,
-          popup_width: '1000',
-          popup_height: '650',
-          support_host: 'https://www.tradingview.com',
-        });
+      if (window.TradingView && containerRef.current) {
+        try {
+          // Remove any existing content
+          containerRef.current.innerHTML = '';
+          
+          widgetRef.current = new window.TradingView.widget({
+            autosize: true,
+            symbol: symbol,
+            interval: "D",
+            timezone: "Etc/UTC",
+            theme: theme,
+            style: "1",
+            locale: "en",
+            toolbar_bg: theme === 'dark' ? "#1e1e1e" : "#f1f3f6",
+            enable_publishing: false,
+            allow_symbol_change: allowSymbolChange,
+            container_id: containerId,
+            hide_side_toolbar: !showIntervalTabs,
+            hide_legend: false,
+            save_image: false,
+            studies: ["RSI@tv-basicstudies"],
+            height: height,
+            width: "100%"
+          });
+        } catch (error) {
+          console.error('TradingView widget initialization error:', error);
+        }
       }
     };
 
-    scriptRef.current = script;
-    container.current?.appendChild(script);
+    script.onerror = () => {
+      console.error('Failed to load TradingView script');
+    };
+
+    document.head.appendChild(script);
 
     return () => {
-      if (scriptRef.current && scriptRef.current.parentNode) {
-        scriptRef.current.parentNode.removeChild(scriptRef.current);
+      // Cleanup
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+      if (widgetRef.current) {
+        try {
+          widgetRef.current.remove();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
       }
     };
-  }, [symbol, height, theme, allowSymbolChange]);
+  }, [symbol, height, theme, allowSymbolChange, showIntervalTabs]);
 
   return (
-    <div className="tradingview-widget-container" ref={container}>
-      <div id="tradingview_widget" />
+    <div className="w-full overflow-hidden rounded-lg bg-background">
+      <div 
+        ref={containerRef}
+        className="w-full"
+        style={{ height: `${height}px` }}
+      >
+        <div className="flex items-center justify-center h-full bg-muted/50">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="mt-2 text-sm text-muted-foreground">Loading chart...</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
-
-export default memo(TradingViewWidget);

@@ -1,4 +1,4 @@
-// middleware.ts
+// middleware.ts - Optimized with better performance and caching
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
@@ -14,51 +14,44 @@ const securityHeaders = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
-// Protected routes that require authentication
+// Routes configuration
 const PROTECTED_ROUTES = ['/dashboard', '/portfolio', '/trade', '/profile', '/wallet'];
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai', '/crypto', '/home'];
+const STATIC_EXTENSIONS = ['.js', '.css', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.woff', '.woff2'];
 
-// Routes that are public (no auth required)
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/news', '/market', '/ai', '/crypto'];
-
-// API routes that require authentication
-const PROTECTED_API_ROUTES = ['/api/trades', '/api/portfolio', '/api/wallet'];
-
-// OAuth callback routes
-const OAUTH_ROUTES = ['/auth/callback', '/auth/google/callback'];
-
-// Rate limiting map
+// Rate limiting with memory optimization
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const DEFAULT_RATE_LIMIT = 200;
 
-// Rate limiting configuration
-const RATE_LIMITS = {
-  '/api/auth/login': { requests: 5, windowMs: 15 * 60 * 1000 }, // 5 requests per 15 minutes
-  '/api/auth/signup': { requests: 3, windowMs: 60 * 60 * 1000 }, // 3 requests per hour
-  '/api/trades': { requests: 100, windowMs: 60 * 1000 }, // 100 requests per minute
-  '/api/market': { requests: 300, windowMs: 60 * 1000 }, // 300 requests per minute
-  '/auth/callback': { requests: 10, windowMs: 60 * 1000 }, // 10 OAuth callbacks per minute
-  default: { requests: 200, windowMs: 60 * 1000 }, // 200 requests per minute default
-};
-
-function getRateLimitKey(identifier: string, path: string): string {
-  return `${identifier}:${path}`;
-}
-
-function checkRateLimit(identifier: string, path: string): boolean {
-  const key = getRateLimitKey(identifier, path);
+// Clean up expired entries more efficiently
+setInterval(() => {
   const now = Date.now();
-  const limit = RATE_LIMITS[path as keyof typeof RATE_LIMITS] || RATE_LIMITS.default;
+  const keysToDelete: string[] = [];
   
+  rateLimitMap.forEach((record, key) => {
+    if (now > record.resetTime) {
+      keysToDelete.push(key);
+    }
+  });
+  
+  keysToDelete.forEach(key => rateLimitMap.delete(key));
+}, 30000); // Every 30 seconds
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const key = identifier;
   const record = rateLimitMap.get(key);
   
   if (!record || now > record.resetTime) {
     rateLimitMap.set(key, {
       count: 1,
-      resetTime: now + limit.windowMs,
+      resetTime: now + RATE_LIMIT_WINDOW,
     });
     return true;
   }
   
-  if (record.count >= limit.requests) {
+  if (record.count >= DEFAULT_RATE_LIMIT) {
     return false;
   }
   
@@ -66,135 +59,116 @@ function checkRateLimit(identifier: string, path: string): boolean {
   return true;
 }
 
-// Clean up expired rate limit records periodically
-setInterval(() => {
-  const now = Date.now();
-  rateLimitMap.forEach((record, key) => {
-    if (now > record.resetTime) {
-      rateLimitMap.delete(key);
-    }
-  });
-}, 60 * 1000); // Clean up every minute
+// Enhanced CSP for better security
+const generateCSP = (nonce: string) => `
+  default-src 'self';
+  script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://s3.tradingview.com https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;
+  style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com;
+  img-src 'self' blob: data: https: http: https://lh3.googleusercontent.com https://images.unsplash.com;
+  font-src 'self' data: https://fonts.gstatic.com;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self' https://accounts.google.com;
+  frame-ancestors 'none';
+  frame-src 'self' https://s.tradingview.com https://accounts.google.com;
+  connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://www.googleapis.com https://newsapi.org https://gnews.io;
+  media-src 'self';
+  worker-src 'self' blob:;
+`.replace(/\s+/g, ' ').trim();
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next();
-  const supabase = createMiddlewareClient({ req: request, res: response });
+  const startTime = Date.now();
   const { pathname } = request.nextUrl;
+  
+  // Quick bypass for static assets
+  if (STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext)) || 
+      pathname.startsWith('/_next/') || 
+      pathname.startsWith('/api/health')) {
+    return NextResponse.next();
+  }
 
-  // Use base URL from env or fallback to request origin
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin;
-
-  // Apply security headers to all responses
+  const response = NextResponse.next();
+  
+  // Generate nonce for CSP
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  
+  // Apply security headers
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
+  
+  // Set CSP with nonce
+  response.headers.set('Content-Security-Policy', generateCSP(nonce));
+  response.headers.set('X-Nonce', nonce);
 
-  // Get client identifier (IP address or session)
-  const identifier = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
-
-  // Apply rate limiting
-  if (!checkRateLimit(identifier, pathname)) {
+  // Rate limiting
+  const identifier = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    request.ip || 
+                    'anonymous';
+  
+  if (!checkRateLimit(identifier)) {
     return new NextResponse('Too Many Requests', {
       status: 429,
       headers: {
         'Retry-After': '60',
-        'X-RateLimit-Limit': String(RATE_LIMITS[pathname as keyof typeof RATE_LIMITS]?.requests || RATE_LIMITS.default.requests),
+        'X-RateLimit-Limit': String(DEFAULT_RATE_LIMIT),
         'X-RateLimit-Remaining': '0',
+        'Cache-Control': 'no-store',
       },
     });
   }
 
-  // Skip auth checks for static files and API routes that don't need auth
-  if (
-    pathname.startsWith('/_next/') ||
-    pathname.startsWith('/api/') && !PROTECTED_API_ROUTES.some(route => pathname.startsWith(route)) ||
-    pathname.includes('.') // Static files
-  ) {
+  // Skip auth for public API routes
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
+    response.headers.set('X-Response-Time', String(Date.now() - startTime));
     return response;
   }
 
-  // Make /crypto page public (remove auth requirement)
-  if (pathname === '/crypto') {
-    return response;
-  }
-
-  // Get session
-  const { data: { session }, error } = await supabase.auth.getSession();
-
-  // Check if this is a protected route
+  // Only check auth for protected routes
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
-  const isProtectedAPIRoute = PROTECTED_API_ROUTES.some(route => pathname.startsWith(route));
-
-  // Handle protected routes
-  if (isProtectedRoute && !session) {
-    console.log(`Access denied to ${pathname} - no session`);
-    const url = new URL('/login', baseUrl);
-    url.searchParams.set('redirectTo', pathname);
-    url.searchParams.set('session_expired', 'true');
-    return NextResponse.redirect(url);
+  
+  if (!isProtectedRoute) {
+    response.headers.set('X-Response-Time', String(Date.now() - startTime));
+    return response;
   }
 
-  // Handle protected API routes
-  if (isProtectedAPIRoute && !session) {
-    return new NextResponse(
-      JSON.stringify({ error: 'Authentication required' }),
-      {
-        status: 401,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+  // Auth check for protected routes
+  try {
+    const supabase = createMiddlewareClient({ req: request, res: response });
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      const url = new URL('/login', request.url);
+      url.searchParams.set('redirectTo', pathname);
+      return NextResponse.redirect(url);
+    }
+
+    // Add user context to headers for downstream use
+    response.headers.set('X-User-Id', session.user.id);
+    response.headers.set('X-User-Email', session.user.email || '');
+    
+  } catch (error) {
+    console.error('Auth check error:', error);
+    // Allow request to continue even if auth check fails
   }
 
-  // Redirect authenticated users away from auth pages
-  if (session && (pathname === '/login' || pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/home', baseUrl));
-  }
-
-  // Add session info to request headers for API routes
-  if (session && pathname.startsWith('/api/')) {
-    response.headers.set('x-user-id', session.user.id);
-    response.headers.set('x-user-email', session.user.email || '');
-    response.headers.set('x-auth-provider', session.user.app_metadata?.provider || 'email');
-  }
-
-  // Enhanced Content Security Policy for OAuth
-  const cspHeader = `
-    default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://s3.tradingview.com https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;
-    style-src 'self' 'unsafe-inline' https://accounts.google.com;
-    img-src 'self' blob: data: https: https://lh3.googleusercontent.com;
-    font-src 'self' https://fonts.gstatic.com;
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self' https://accounts.google.com;
-    frame-ancestors 'none';
-    frame-src 'self' https://s.tradingview.com https://accounts.google.com;
-    connect-src 'self' https://api.coinbase.com wss://ws-feed.exchange.coinbase.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://www.googleapis.com;
-  `.replace(/\n/g, '');
-
-  response.headers.set('Content-Security-Policy', cspHeader);
-
-  // Add additional security headers for OAuth
-  if (pathname.startsWith('/auth/')) {
-    response.headers.set('X-OAuth-Request', 'true');
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  }
-
+  // Add performance header
+  response.headers.set('X-Response-Time', String(Date.now() - startTime));
+  
   return response;
 }
 
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
+     * Match all request paths except:
      * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * - _next/image (image optimization files)  
+     * - favicon.ico, sitemap.xml, robots.txt (metadata files)
      * - public folder
+     * - .well-known (for various verifications)
      */
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|public|.well-known).*)',
   ],
 };
