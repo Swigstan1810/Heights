@@ -38,7 +38,7 @@ export default function Login() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/home'; // Changed default to /home
+  const redirectTo = searchParams.get('redirectTo') || '/ai'; // Changed default to /home
   const { signIn, signInWithGoogle, user, loading: authLoading } = useAuth();
   const supabase = createClientComponentClient<Database>();
   
@@ -52,8 +52,8 @@ export default function Login() {
   // Check if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      console.log("User already logged in, redirecting to: /home");
-      router.push('/home'); // Changed to /home
+      console.log("User already logged in, redirecting to: /ai");
+      router.push('/ai'); // Changed to /home
     }
   }, [user, authLoading, router]);
 
@@ -156,7 +156,7 @@ export default function Login() {
           setError(signInError.message);
         }
       } else {
-        console.log("Sign in successful, redirecting to: /home");
+        console.log("Sign in successful, redirecting to: /ai");
         
         // Clear login attempts on success
         sessionStorage.removeItem(`login_attempts_${email}`);

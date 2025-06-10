@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
           .single();
         
         // Always redirect to home page after successful login
-        return NextResponse.redirect(new URL('/home', baseUrl));
+        return NextResponse.redirect(new URL('/ai', baseUrl));
       }
     } catch (error) {
       console.error('Auth callback error:', error);

@@ -1,16 +1,11 @@
 // app/(protected)/trade/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Navbar } from "@/components/navbar";
-import TradingViewWidget from "@/components/trading/tradingview-widget";
-import { OrderBook } from "@/components/trading/order-book";
-import { TradeForm } from "@/components/trading/trade-form";
-import { MarketStats } from "@/components/trading/market-stats";
-import { RecentTrades } from "@/components/trading/recent-trades";
-import { marketDataService, MarketData } from "@/lib/market-data";
+import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
@@ -22,6 +17,21 @@ import {
   History,
   BookOpen
 } from "lucide-react";
+import { marketDataService, MarketData } from "@/lib/market-data";
+
+const TradingViewWidget = React.lazy(() => import("@/components/trading/tradingview-widget"));
+const OrderBook = React.lazy(() => import("@/components/trading/order-book").then(m => ({ default: m.OrderBook })));
+const TradeForm = React.lazy(() => import("@/components/trading/trade-form").then(m => ({ default: m.TradeForm })));
+const MarketStats = React.lazy(() => import("@/components/trading/market-stats").then(m => ({ default: m.MarketStats })));
+const RecentTrades = React.lazy(() => import("@/components/trading/recent-trades").then(m => ({ default: m.RecentTrades })));
+
+function WidgetSkeleton({ height = 200 }) {
+  return (
+    <div className="flex items-center justify-center w-full" style={{ minHeight: height }}>
+      <div className="animate-pulse w-12 h-12 rounded-full bg-muted" />
+    </div>
+  );
+}
 
 export default function TradePage() {
   const { user, loading } = useAuth();
@@ -41,7 +51,7 @@ export default function TradePage() {
     marketDataService.connect();
     
     // Subscribe to real-time updates
-    const unsubscribe = marketDataService.subscribe(selectedSymbol, (data) => {
+    const unsubscribe = marketDataService.subscribe(selectedSymbol, (data: MarketData) => {
       setMarketData(data);
     });
 
@@ -71,7 +81,9 @@ export default function TradePage() {
       <div className="container-fluid px-4 pt-20 pb-8">
         {/* Market Stats Bar */}
         <div className="mb-4">
-          <MarketStats symbol={selectedSymbol} marketData={marketData} />
+          <Suspense fallback={<WidgetSkeleton height={60} />}>
+            <MarketStats symbol={selectedSymbol} marketData={marketData} />
+          </Suspense>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
@@ -99,22 +111,26 @@ export default function TradePage() {
               
               <TabsContent value="chart" className="mt-4">
                 <div className="bg-card rounded-lg border border-border overflow-hidden">
-                  <TradingViewWidget
-                    symbol={selectedSymbol}
-                    height={600}
-                    theme={undefined}
-                    allowSymbolChange={true}
-                    showIntervalTabs={true}
-                  />
+                  <Suspense fallback={<WidgetSkeleton height={600} />}>
+                    <TradingViewWidget
+                      symbol={selectedSymbol}
+                      height={600}
+                      theme={undefined}
+                    />
+                  </Suspense>
                 </div>
               </TabsContent>
               
               <TabsContent value="orderbook" className="mt-4">
-                <OrderBook symbol={selectedSymbol} />
+                <Suspense fallback={<WidgetSkeleton height={300} />}>
+                  <OrderBook symbol={selectedSymbol} />
+                </Suspense>
               </TabsContent>
               
               <TabsContent value="trades" className="mt-4">
-                <RecentTrades symbol={selectedSymbol} />
+                <Suspense fallback={<WidgetSkeleton height={200} />}>
+                  <RecentTrades symbol={selectedSymbol} />
+                </Suspense>
               </TabsContent>
               
               <TabsContent value="history" className="mt-4">
@@ -130,11 +146,13 @@ export default function TradePage() {
           {/* Trading Panel */}
           <div className="xl:col-span-1">
             <div className="bg-card rounded-lg border border-border p-4 sticky top-20">
-              <TradeForm 
-                symbol={selectedSymbol} 
-                currentPrice={marketData?.price || 0}
-                userId={user.id}
-              />
+              <Suspense fallback={<WidgetSkeleton height={120} />}>
+                <TradeForm 
+                  symbol={selectedSymbol} 
+                  currentPrice={marketData?.price || 0}
+                  userId={user.id}
+                />
+              </Suspense>
               
               {/* Balance Info */}
               <div className="mt-6 pt-6 border-t border-border">

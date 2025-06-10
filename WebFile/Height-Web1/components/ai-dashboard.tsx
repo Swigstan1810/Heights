@@ -1,4 +1,4 @@
-// components/ai-dashboard.tsx - Futuristic AI Dashboard with Enhanced Features
+// components/ai-dashboard.tsx - Heights+ AI Dashboard with Enhanced Features
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/auth-context';
+import { HeightsLogo } from '@/components/ui/heights-logo';
 import { 
   Brain, 
   Send, 
@@ -56,6 +57,7 @@ import {
   MoreHorizontal,
   Bell
 } from 'lucide-react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface Message {
   id: string;
@@ -137,6 +139,17 @@ const SAMPLE_ALERTS: MarketAlert[] = [
   }
 ];
 
+// Helper for responsive alert card classes
+const alertCardClass = (severity: string) =>
+  `w-full p-4 rounded-lg border-l-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 ` +
+  (
+    severity === 'critical'
+      ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
+      : severity === 'warning'
+      ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10'
+      : 'border-[#255F38] bg-[#255F38]/10 dark:bg-[#255F38]/10'
+  );
+
 export default function AIDashboard() {
   const { user, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -145,19 +158,22 @@ export default function AIDashboard() {
   const [activeMode, setActiveMode] = useState<'chat' | 'analysis' | 'alerts'>('chat');
   const [analyses, setAnalyses] = useState<AIAnalysis[]>(SAMPLE_ANALYSES);
   const [alerts, setAlerts] = useState<MarketAlert[]>(SAMPLE_ALERTS);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [aiPersonality, setAiPersonality] = useState<'professional' | 'casual' | 'expert'>('professional');
   const [autoAnalysis, setAutoAnalysis] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const supabase = createClientComponentClient();
 
   // Initialize with welcome message
   useEffect(() => {
     const welcomeMessage: Message = {
       id: 'welcome',
       role: 'assistant',
-      content: `🚀 Welcome to Heights AI - Your Advanced Trading Intelligence!
+      content: `🚀 Welcome to Heights+ - Your Advanced Trading Intelligence!
 
 I'm your AI-powered trading assistant, equipped with:
 • Real-time market analysis and predictions
@@ -199,6 +215,41 @@ How can I help you dominate the markets today?`,
     return () => clearInterval(interval);
   }, [autoAnalysis]);
 
+  // Fetch real alerts from Supabase
+  useEffect(() => {
+    if (!user) return;
+    setAlertsLoading(true);
+    setAlertsError(null);
+    supabase
+      .from('ai_conversations')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data, error }) => {
+        if (error) {
+          setAlertsError('Failed to load alerts.');
+          setAlerts(SAMPLE_ALERTS);
+        } else if (data && data.length > 0) {
+          // Map Supabase data to MarketAlert[]
+          setAlerts(
+            data.map((row: any, i: number) => ({
+              id: row.id,
+              type: row.metadata?.type || 'news',
+              symbol: row.metadata?.symbol || 'N/A',
+              message: row.user_message || row.ai_response || 'Alert',
+              severity: row.metadata?.severity || 'info',
+              triggered: row.created_at ? new Date(row.created_at) : new Date(),
+              isRead: !!row.metadata?.isRead,
+            }))
+          );
+        } else {
+          setAlerts(SAMPLE_ALERTS);
+        }
+        setAlertsLoading(false);
+      });
+  }, [user]);
+
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
@@ -215,84 +266,45 @@ How can I help you dominate the markets today?`,
     setIsLoading(true);
 
     try {
-      // Simulate AI response
-      setTimeout(() => {
-        const responses = [
-          {
-            content: `Based on current market conditions, I'm analyzing ${content}. Here's my assessment:
+      // Call Claude API via your backend
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content })
+      });
 
-📊 **Technical Analysis**: Strong bullish momentum with RSI at 68
-📈 **Price Target**: $58,000 - $62,000 in next 2 weeks  
-⚠️ **Risk Level**: Medium - Watch for potential pullback at $55k resistance
-🎯 **Recommendation**: Consider DCA strategy with 30% position
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Unknown API error');
+      }
 
-*Analysis confidence: 82% | Last updated: ${new Date().toLocaleTimeString()}*`,
-            type: 'analysis' as const,
-            confidence: 0.82
-          },
-          {
-            content: `I've identified several key opportunities in the crypto market:
-
-🔥 **Hot Picks**:
-• **BTC**: Breakout imminent - Target $60K
-• **ETH**: Strong DeFi momentum - Watch for $4200
-• **SOL**: Technical consolidation complete
-
-⚡ **Quick Insights**:
-- Market sentiment: 72% bullish
-- Fear & Greed Index: 68 (Greed)
-- Institutional inflows: +$2.3B this week
-
-Want me to dive deeper into any specific asset?`,
-            type: 'prediction' as const,
-            confidence: 0.76
-          },
-          {
-            content: `🎯 **Personalized Trading Strategy for You**:
-
-Based on your portfolio and risk profile:
-
-**📈 Immediate Actions**:
-1. Reduce BTC exposure by 15% (take profits)
-2. Increase ETH allocation to 25% 
-3. Add 5% SOL position on next dip
-
-**🛡️ Risk Management**:
-- Set stop-loss at 8% below entry
-- Use position sizing: 2% risk per trade
-- Diversify across 5-7 assets max
-
-**📊 Expected Outcome**: 
-15-25% portfolio growth over next quarter with managed downside risk.
-
-Ready to execute these recommendations?`,
-            type: 'analysis' as const,
-            confidence: 0.89
-          }
-        ];
-
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: randomResponse.content,
-          timestamp: new Date(),
-          type: randomResponse.type,
-          metadata: {
-            confidence: randomResponse.confidence,
-            actionable: true,
-            category: 'market_analysis',
-            priority: 'high'
-          }
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-        setIsLoading(false);
-      }, 1500 + Math.random() * 1500); // 1.5-3s delay
-
+      const data = await response.json();
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.message || data.output || 'No response from AI.',
+        timestamp: new Date(),
+        type: 'analysis',
+        metadata: {
+          confidence: data.confidence || undefined,
+          actionable: true,
+          category: 'market_analysis',
+          priority: 'high'
+        }
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      // Optionally, handle data.suggestions, data.relatedSymbols, etc.
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error fetching AI response:', error);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        content: `Apologies, I encountered an error: ${error instanceof Error ? error.message : String(error)}. Please try again later.`,
+        timestamp: new Date(),
+        type: 'alert',
+        metadata: { actionable: false, category: 'error', priority: 'high' }
+      }]);
+    } finally {
       setIsLoading(false);
     }
   }, [isLoading]);
@@ -328,9 +340,9 @@ Ready to execute these recommendations?`,
           <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
             isUser 
               ? 'bg-primary text-primary-foreground' 
-              : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white'
+              : 'bg-gradient-to-br from-[#255F38] to-[#1F7D53] text-white'
           }`}>
-            {isUser ? <User size={20} /> : <Brain size={20} />}
+            {isUser ? <User size={20} /> : <HeightsLogo size="sm" className="text-white" animate={false} />}
           </div>
 
           {/* Message Content */}
@@ -344,7 +356,7 @@ Ready to execute these recommendations?`,
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs">
-                    Heights AI
+                    Heights+ AI
                   </Badge>
                   {message.metadata?.confidence && (
                     <Badge variant="outline" className="text-xs">
@@ -387,46 +399,43 @@ Ready to execute these recommendations?`,
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 dark:from-black dark:via-black dark:to-gray-900/20 p-2 sm:p-4 md:p-6">
+      <div className="max-w-7xl mx-auto w-full">
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
+          className="text-center mb-4 md:mb-8"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="relative">
-              <Brain className="h-12 w-12 text-primary" />
-              <motion.div
-                className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full"
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ repeat: Infinity, duration: 2 }}
-              />
-            </div>
+            <HeightsLogo size="xl" />
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                Heights AI
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
+                Heights+
               </h1>
-              <p className="text-muted-foreground">Advanced Trading Intelligence</p>
+              <p className="text-xs sm:text-sm md:text-base text-muted-foreground">Advanced Trading Intelligence</p>
             </div>
           </div>
           
           {/* Status Bar */}
-          <div className="flex items-center justify-center gap-4 p-3 bg-card border rounded-full max-w-md mx-auto">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 p-2 sm:p-3 bg-card dark:bg-gray-900 border rounded-full max-w-xs sm:max-w-md mx-auto text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs text-muted-foreground">Online</span>
+              <motion.div 
+                className="w-2 h-2 bg-green-500 rounded-full"
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              />
+              <span className="text-muted-foreground">Online</span>
             </div>
             <Separator orientation="vertical" className="h-4" />
             <div className="flex items-center gap-2">
-              <Activity className="h-3 w-3 text-blue-500" />
-              <span className="text-xs text-muted-foreground">Analyzing Markets</span>
+              <Activity className="h-3 w-3 text-[#1F7D53]" />
+              <span className="text-muted-foreground">Analyzing Markets</span>
             </div>
             <Separator orientation="vertical" className="h-4" />
             <div className="flex items-center gap-2">
               <Shield className="h-3 w-3 text-green-500" />
-              <span className="text-xs text-muted-foreground">Secure</span>
+              <span className="text-muted-foreground">Secure</span>
             </div>
           </div>
         </motion.div>
@@ -435,9 +444,9 @@ Ready to execute these recommendations?`,
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex justify-center mb-6"
+          className="flex justify-center mb-3 md:mb-6"
         >
-          <div className="flex bg-card border rounded-full p-1">
+          <div className="flex bg-card dark:bg-gray-900 border rounded-full p-1 w-full max-w-xs sm:max-w-md">
             {[
               { id: 'chat', label: 'AI Chat', icon: MessageSquare },
               { id: 'analysis', label: 'Market Analysis', icon: BarChart3 },
@@ -457,9 +466,9 @@ Ready to execute these recommendations?`,
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 md:gap-6">
           {/* Main Content */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 w-full">
             <AnimatePresence mode="wait">
               {activeMode === 'chat' && (
                 <motion.div
@@ -467,15 +476,15 @@ Ready to execute these recommendations?`,
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
-                  className="space-y-6"
+                  className="space-y-2 md:space-y-6"
                 >
                   {/* Chat Interface */}
-                  <Card className="h-[600px] flex flex-col">
-                    <CardHeader className="border-b">
+                  <Card className="flex flex-col bg-transparent backdrop-blur-sm border-[#255F38] dark:bg-transparent dark:border-[#255F38] md:h-[70vh] md:min-h-[400px]">
+                    <CardHeader className="border-b border-[#255F38] dark:border-[#255F38] bg-transparent">
                       <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
                           <Bot className="h-5 w-5" />
-                          AI Trading Assistant
+                          <span className="text-base sm:text-lg">AI Trading Assistant</span>
                         </CardTitle>
                         <div className="flex items-center gap-2">
                           <Button
@@ -498,7 +507,7 @@ Ready to execute these recommendations?`,
                     
                     <CardContent className="flex-1 p-0 flex flex-col">
                       {/* Messages */}
-                      <ScrollArea className="flex-1 p-6">
+                      <ScrollArea className="flex-1 p-2 sm:p-4 md:p-6">
                         {messages.map(renderMessage)}
                         {isLoading && (
                           <motion.div
@@ -507,10 +516,10 @@ Ready to execute these recommendations?`,
                             className="flex justify-start mb-6"
                           >
                             <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white flex items-center justify-center">
-                                <Brain size={20} />
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] text-white flex items-center justify-center">
+                                <HeightsLogo size="sm" className="text-white" animate={false} />
                               </div>
-                              <div className="bg-card border rounded-2xl p-4">
+                              <div className="bg-card dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-2 sm:p-4">
                                 <div className="flex items-center gap-2">
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                   <span className="text-sm text-muted-foreground">
@@ -525,10 +534,10 @@ Ready to execute these recommendations?`,
                       </ScrollArea>
 
                       {/* Input Area */}
-                      <div className="p-6 border-t border-border">
-                        <div className="flex flex-col gap-3">
+                      <div className="p-2 sm:p-4 border-t border-[#255F38] dark:border-[#255F38] bg-transparent">
+                        <div className="flex flex-col gap-2 sm:gap-3">
                           {/* Quick Prompts */}
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1 sm:gap-2">
                             {quickPrompts.slice(0, 3).map((prompt, index) => (
                               <Button
                                 key={index}
@@ -542,23 +551,22 @@ Ready to execute these recommendations?`,
                               </Button>
                             ))}
                           </div>
-
                           {/* Input Field */}
-                          <div className="flex gap-2">
+                          <div className="flex flex-col xs:flex-row gap-2 w-full items-stretch xs:items-end">
                             <Textarea
                               ref={inputRef}
                               value={input}
                               onChange={(e) => setInput(e.target.value)}
                               onKeyPress={handleKeyPress}
                               placeholder="Ask me about markets, trading strategies, or portfolio optimization..."
-                              className="flex-1 min-h-[60px] resize-none"
+                              className="w-full min-h-[48px] sm:min-h-[60px] max-h-[80px] resize-none bg-transparent border-[#255F38] dark:bg-transparent dark:border-[#255F38] text-xs sm:text-sm"
                               disabled={isLoading}
                             />
                             <Button
                               onClick={() => sendMessage(input)}
                               disabled={isLoading || !input.trim()}
                               size="lg"
-                              className="px-6"
+                              className="w-full xs:w-auto h-[48px] sm:h-[60px] px-4 sm:px-6 mt-2 xs:mt-0"
                             >
                               {isLoading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -591,11 +599,11 @@ Ready to execute these recommendations?`,
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
                       >
-                        <Card className="h-full">
+                        <Card className="h-full bg-transparent backdrop-blur-sm border-[#255F38] dark:bg-transparent dark:border-[#255F38]">
                           <CardHeader>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                <div className="w-8 h-8 bg-gradient-to-br from-[#255F38] to-[#1F7D53] rounded-full flex items-center justify-center text-white font-bold text-sm">
                                   {analysis.symbol}
                                 </div>
                                 <CardTitle className="text-lg">{analysis.symbol}</CardTitle>
@@ -613,10 +621,12 @@ Ready to execute these recommendations?`,
                                 <span className="text-sm text-muted-foreground">Confidence</span>
                                 <span className="text-sm font-medium">{Math.round(analysis.confidence * 100)}%</span>
                               </div>
-                              <div className="w-full bg-muted rounded-full h-2">
-                                <div 
-                                  className="bg-primary rounded-full h-2 transition-all duration-300"
-                                  style={{ width: `${analysis.confidence * 100}%` }}
+                                  <div className="w-full bg-muted dark:bg-gray-800 rounded-full h-2">
+                                <motion.div 
+                                  className="bg-[#1F7D53] rounded-full h-2"
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${analysis.confidence * 100}%` }}
+                                  transition={{ duration: 1, delay: index * 0.2 }}
                                 />
                               </div>
                             </div>
@@ -638,10 +648,10 @@ Ready to execute these recommendations?`,
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-2 border-t">
+                            <div className="flex items-center justify-between pt-2 border-t border-[#255F38] dark:border-[#255F38]">
                               <Badge variant="outline" className={
-                                analysis.riskLevel === 'low' ? 'text-green-600' :
-                                analysis.riskLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'
+                                analysis.riskLevel === 'low' ? 'text-green-600 dark:text-green-400' :
+                                analysis.riskLevel === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
                               }>
                                 {analysis.riskLevel.toUpperCase()} RISK
                               </Badge>
@@ -666,7 +676,7 @@ Ready to execute these recommendations?`,
                   className="space-y-6"
                 >
                   {/* Smart Alerts */}
-                  <Card>
+                  <Card className="bg-transparent backdrop-blur-sm border-[#255F38] dark:bg-transparent dark:border-[#255F38]">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <AlertCircle className="h-5 w-5" />
@@ -674,21 +684,31 @@ Ready to execute these recommendations?`,
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-4">
-                        {alerts.map((alert, index) => (
-                          <motion.div
-                            key={alert.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                            className={`p-4 rounded-lg border-l-4 ${
-                              alert.severity === 'critical' ? 'border-red-500 bg-red-50 dark:bg-red-900/10' :
-                              alert.severity === 'warning' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10' :
-                              'border-blue-500 bg-blue-50 dark:bg-blue-900/10'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
+                      {alertsLoading ? (
+                        <div className="flex items-center justify-center p-6">
+                          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                          <span className="text-muted-foreground">Loading alerts...</span>
+                        </div>
+                      ) : alertsError ? (
+                        <div className="flex items-center justify-center p-6 text-red-500">
+                          <AlertCircle className="h-5 w-5 mr-2" />
+                          {alertsError}
+                        </div>
+                      ) : alerts.length === 0 ? (
+                        <div className="flex items-center justify-center p-6 text-muted-foreground">
+                          No alerts found.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {alerts.map((alert, index) => (
+                            <motion.div
+                              key={alert.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                              className={alertCardClass(alert.severity)}
+                            >
+                              <div className="flex-1 flex flex-col gap-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <Badge variant="outline" className="text-xs">
                                     {alert.symbol}
@@ -697,18 +717,20 @@ Ready to execute these recommendations?`,
                                     {alert.type.toUpperCase()}
                                   </Badge>
                                 </div>
-                                <p className="text-sm font-medium mb-1">{alert.message}</p>
+                                <p className="text-sm font-medium mb-1 break-words">{alert.message}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {alert.triggered.toLocaleTimeString()} • {alert.triggered.toLocaleDateString()}
                                 </p>
                               </div>
-                              <Button size="sm" variant="outline">
-                                View Details
-                              </Button>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
+                              <div className="flex-shrink-0 flex items-center justify-end">
+                                <Button size="sm" variant="outline">
+                                  View Details
+                                </Button>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -719,54 +741,69 @@ Ready to execute these recommendations?`,
           {/* Sidebar */}
           <div className="space-y-6">
             {/* AI Stats */}
-            <Card>
+            <Card className="bg-transparent backdrop-blur-sm border-[#255F38] dark:bg-transparent dark:border-[#255F38]">
               <CardHeader>
                 <CardTitle className="text-sm">AI Performance</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Accuracy</span>
+                    <span className="text-sm text-muted-foreground">Accuracy</span>
                     <span className="font-medium">87.3%</span>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-1.5">
-                    <div className="bg-green-500 rounded-full h-1.5 w-[87%]" />
+                  <div className="w-full bg-muted/20 dark:bg-muted/20 rounded-full h-1.5">
+                    <motion.div 
+                      className="bg-[#1F7D53] rounded-full h-1.5"
+                      initial={{ width: 0 }}
+                      animate={{ width: "87%" }}
+                      transition={{ duration: 1 }}
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Confidence</span>
+                    <span className="text-sm text-muted-foreground">Confidence</span>
                     <span className="font-medium">92.1%</span>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-1.5">
-                    <div className="bg-blue-500 rounded-full h-1.5 w-[92%]" />
+                  <div className="w-full bg-muted/20 dark:bg-muted/20 rounded-full h-1.5">
+                    <motion.div 
+                      className="bg-[#255F38] rounded-full h-1.5"
+                      initial={{ width: 0 }}
+                      animate={{ width: "92%" }}
+                      transition={{ duration: 1, delay: 0.2 }}
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Response Speed</span>
+                    <span className="text-sm text-muted-foreground">Response Speed</span>
                     <span className="font-medium">1.2s avg</span>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-1.5">
-                    <div className="bg-purple-500 rounded-full h-1.5 w-[95%]" />
+                  <div className="w-full bg-muted dark:bg-gray-800 rounded-full h-1.5">
+                    <motion.div 
+                      className="bg-[#1F7D53] rounded-full h-1.5"
+                      initial={{ width: 0 }}
+                      animate={{ width: "95%" }}
+                      transition={{ duration: 1, delay: 0.4 }}
+                    />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Quick Actions */}
-            <Card>
+            <Card className="bg-transparent backdrop-blur-sm border-[#255F38] dark:bg-transparent dark:border-[#255F38]">
               <CardHeader>
                 <CardTitle className="text-sm">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {[
-                  { icon: TrendingUp, label: 'Portfolio Analysis', color: 'text-green-500' },
-                  { icon: BarChart3, label: 'Market Summary', color: 'text-blue-500' },
-                  { icon: Target, label: 'Risk Assessment', color: 'text-orange-500' },
-                  { icon: Lightbulb, label: 'Trading Ideas', color: 'text-purple-500' }
+                  { icon: TrendingUp, label: 'Portfolio Analysis', color: 'text-[#1F7D53]' },
+                  { icon: BarChart3, label: 'Market Summary', color: 'text-[#255F38]' },
+                  { icon: Target, label: 'Risk Assessment', color: 'text-[#27391C]' },
+                  { icon: Lightbulb, label: 'Trading Ideas', color: 'text-[#18230F]' }
                 ].map(({ icon: Icon, label, color }, index) => (
                   <Button
                     key={index}
@@ -782,7 +819,7 @@ Ready to execute these recommendations?`,
             </Card>
 
             {/* Settings */}
-            <Card>
+            <Card className="bg-transparent backdrop-blur-sm border-[#255F38] dark:bg-transparent dark:border-[#255F38]">
               <CardHeader>
                 <CardTitle className="text-sm">AI Settings</CardTitle>
               </CardHeader>
@@ -790,7 +827,7 @@ Ready to execute these recommendations?`,
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Personality</label>
                   <select 
-                    className="w-full p-2 text-sm border rounded"
+                    className="w-full p-2 text-sm border rounded bg-transparent border-[#255F38] dark:bg-transparent dark:border-[#255F38]"
                     value={aiPersonality}
                     onChange={(e) => setAiPersonality(e.target.value as any)}
                   >

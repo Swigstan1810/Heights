@@ -49,6 +49,8 @@ interface AuthState {
   isInitialized: boolean;
   error: string | null;
   profileError: string | null;
+  profileLoading?: boolean;
+  walletLoading?: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -77,7 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
     isInitialized: false,
     error: null,
-    profileError: null
+    profileError: null,
+    profileLoading: false,
+    walletLoading: false,
   });
 
   const router = useRouter();
@@ -231,23 +235,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Retry profile load function
   const retryProfileLoad = useCallback(async () => {
     if (!state.user) return;
-    
-    updateState({ profileError: null, loading: true });
-    
+    updateState({ profileError: null, profileLoading: true, walletLoading: true });
     try {
       const [profileData, walletData] = await Promise.all([
         fetchProfile(state.user.id),
         fetchWalletBalance(state.user.id)
       ]);
-
       updateState({
         profile: profileData,
         walletBalance: walletData,
-        loading: false
+        profileLoading: false,
+        walletLoading: false,
       });
     } catch (error) {
       console.error('[Auth] Retry profile load failed:', error);
-      updateState({ loading: false });
+      updateState({ profileLoading: false, walletLoading: false });
     }
   }, [state.user, fetchProfile, fetchWalletBalance, updateState]);
 
@@ -255,66 +257,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (initializationRef.current) return;
     initializationRef.current = true;
-
     const initializeAuth = async () => {
       try {
-        console.log('[Auth] Initializing auth state...');
         updateState({ loading: true, error: null, profileError: null });
-        
         const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('[Auth] Session fetch error:', error);
-          throw error;
-        }
-        
+        if (error) throw error;
         if (session?.user) {
-          console.log('[Auth] Active session found for user:', session.user.email);
-          
           updateState({
             session,
             user: session.user,
             isAuthenticated: true,
-            loading: true
+            loading: false,
+            isInitialized: true,
+            profileLoading: true,
+            walletLoading: true,
           });
-
-          // Fetch profile and wallet in parallel with timeout
-          const fetchPromise = Promise.all([
+          // Fetch profile and wallet in parallel
+          Promise.all([
             fetchProfile(session.user.id),
             fetchWalletBalance(session.user.id)
-          ]);
-
-          // Set a timeout for data fetching
-          const timeoutPromise = new Promise<[Profile | null, WalletBalance | null]>((_, reject) => {
-            setTimeout(() => reject(new Error('Data fetch timeout')), 15000);
-          });
-
-          try {
-            const [profileData, walletData] = await Promise.race([fetchPromise, timeoutPromise]);
-            
+          ]).then(([profileData, walletData]) => {
             updateState({
               profile: profileData,
               walletBalance: walletData,
-              loading: false,
-              isInitialized: true
+              profileLoading: false,
+              walletLoading: false,
             });
-          } catch (fetchError) {
-            console.error('[Auth] Data fetch error:', fetchError);
+          }).catch((fetchError) => {
             updateState({
-              loading: false,
-              isInitialized: true,
+              profileLoading: false,
+              walletLoading: false,
               profileError: fetchError instanceof Error ? fetchError.message : 'Failed to load user data'
             });
-          }
+          });
         } else {
-          console.log('[Auth] No active session found');
           updateState({
             loading: false,
             isInitialized: true
           });
         }
       } catch (error) {
-        console.error('[Auth] Auth initialization error:', error);
         updateState({
           error: error instanceof Error ? error.message : 'Failed to initialize authentication',
           loading: false,
@@ -322,7 +304,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
     };
-
     initializeAuth();
 
     // Set up auth state listener with enhanced error handling
@@ -516,7 +497,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Load profile and wallet data will be handled by the auth state change listener
         
         // REDIRECT TO HOME AFTER SUCCESSFUL LOGIN
-        router.push('/home');
+        router.push('/ai');
       }
 
       return { error: null };
@@ -658,6 +639,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resendVerificationEmail,
     clearError,
     retryProfileLoad,
+    // Expose profileLoading and walletLoading for skeletons
+    profileLoading: state.profileLoading,
+    walletLoading: state.walletLoading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

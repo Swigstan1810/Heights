@@ -1,48 +1,80 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable strict mode for better error handling
   reactStrictMode: true,
-  swcMinify: true,
-  // REMOVED: output: 'standalone' - this was causing the npm start issue
-  images: {
-    remotePatterns: [
+  
+  // Disable x-powered-by header
+  poweredByHeader: false,
+  
+  // Security headers
+  async headers() {
+    return [
       {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        pathname: '**',
+        // Apply these headers to all routes
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on'
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN'
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin'
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()'
+          }
+        ]
       },
       {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-        pathname: '**',
+        // Additional headers for API routes
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, max-age=0'
+          }
+        ]
       }
-    ],
+    ];
   },
-  // Handle punycode deprecation warnings
+  
+  // Configure allowed domains for images
+  images: {
+    domains: ['localhost'],
+    formats: ['image/avif', 'image/webp'],
+  },
+  
+  // Webpack configuration for additional security
   webpack: (config, { isServer }) => {
+    // Remove source maps in production
     if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@': './src',
       };
     }
     
-    // Suppress punycode warnings
-    config.ignoreWarnings = [
-      { module: /node_modules\/punycode/ },
-      { file: /node_modules\/punycode/ }
-    ];
-    
     return config;
   },
+  
+  // Environment variables validation
   env: {
-    // Claude API Configuration
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    CLAUDE_MODEL: process.env.CLAUDE_MODEL || 'claude-3-sonnet-20241022',
-    CLAUDE_MAX_TOKENS: process.env.CLAUDE_MAX_TOKENS || '1000',
-    CLAUDE_TEMPERATURE: process.env.CLAUDE_TEMPERATURE || '0.7',
+    // Add your environment variables here
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   },
+  
+  // Disable source maps in production
+  productionBrowserSourceMaps: false,
 }
 
-module.exports = nextConfig
+module.exports = nextConfig;

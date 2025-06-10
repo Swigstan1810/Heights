@@ -54,20 +54,58 @@ setInterval(() => {
 }, 60000);
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  // Clone the request headers
+  const requestHeaders = new Headers(request.headers);
   
-  // Quick bypass for static assets and Next.js internals
-  if (
-    pathname.startsWith('/_next/') || 
-    pathname.startsWith('/api/auth/') ||
-    pathname.includes('.') ||
-    STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext))
-  ) {
-    return NextResponse.next();
-  }
+  // Create response
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 
-  const response = NextResponse.next();
-  
+  // Security headers to fix the vulnerabilities
+  const securityHeaders = {
+    // Content Security Policy - Prevents XSS attacks
+    'Content-Security-Policy': 
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https: blob:; " +
+      "font-src 'self' data:; " +
+      "connect-src 'self' https: wss:; " +
+      "frame-ancestors 'none'; " +
+      "form-action 'self'; " +
+      "base-uri 'self';",
+    
+    // X-Frame-Options - Prevents clickjacking
+    'X-Frame-Options': 'DENY',
+    
+    // X-Content-Type-Options - Prevents MIME type sniffing
+    'X-Content-Type-Options': 'nosniff',
+    
+    // Referrer Policy - Controls referrer information
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    
+    // Permissions Policy - Controls browser features
+    'Permissions-Policy': 
+      'camera=(), microphone=(), geolocation=(), payment=()',
+    
+    // Strict Transport Security - Forces HTTPS
+    'Strict-Transport-Security': 
+      'max-age=31536000; includeSubDomains; preload',
+    
+    // X-XSS-Protection - Additional XSS protection for older browsers
+    'X-XSS-Protection': '1; mode=block',
+    
+    // Cache Control for sensitive data
+    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    
+    // Prevent information disclosure
+    'X-Powered-By': '',
+    'Server': '',
+  };
+
   // Apply security headers
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -90,13 +128,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // Skip auth for API routes (except auth routes) and public routes
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
+  if (request.nextUrl.pathname.startsWith('/api/') && !request.nextUrl.pathname.startsWith('/api/auth/')) {
     return response;
   }
 
   // Check if route is protected
-  const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => request.nextUrl.pathname.startsWith(route));
+  const isPublicRoute = PUBLIC_ROUTES.some(route => request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route));
   
   // Allow public routes without auth check
   if (isPublicRoute && !isProtectedRoute) {
@@ -111,7 +149,7 @@ export async function middleware(request: NextRequest) {
 
       if (error || !session) {
         const url = new URL('/login', request.url);
-        url.searchParams.set('redirectTo', pathname);
+        url.searchParams.set('redirectTo', request.nextUrl.pathname);
         return NextResponse.redirect(url);
       }
 
@@ -125,7 +163,7 @@ export async function middleware(request: NextRequest) {
       console.error('Auth check error:', error);
       // Redirect to login on auth errors for protected routes
       const url = new URL('/login', request.url);
-      url.searchParams.set('redirectTo', pathname);
+      url.searchParams.set('redirectTo', request.nextUrl.pathname);
       return NextResponse.redirect(url);
     }
   }
@@ -133,15 +171,16 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Configure which routes to apply middleware to
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
      * - _next/static (static files)
-     * - _next/image (image optimization files)  
-     * - favicon.ico, sitemap.xml, robots.txt (metadata files)
-     * - .well-known (for various verifications)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.well-known).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

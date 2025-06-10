@@ -35,7 +35,7 @@ export default function SignUp() {
   // Redirect if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      router.push('/home');
+      router.push('/ai');
     }
   }, [user, authLoading, router]);
 

@@ -1,76 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { AssistantDialog } from "./assistant-dialog";
-
-/**
- * Heights Logo SVG Component
- * A custom Heights AI logo for the assistant button
- */
-function HeightsAILogo() {
-  return (
-    <svg viewBox="0 0 800 800" className="h-full w-full">
-      {/* Background Circle */}
-      <circle cx="400" cy="400" r="360" className="fill-primary/10" />
-      <circle cx="400" cy="400" r="320" className="fill-primary/5" />
-      
-      {/* "H" Shape from Heights Logo */}
-      <g transform="translate(220, 180) scale(0.9)">
-        <path d="M80,80 L80,400" stroke="currentColor" strokeWidth="60" strokeLinecap="square" fill="none" />
-        <path d="M80,80 L380,80" stroke="currentColor" strokeWidth="60" strokeLinecap="square" fill="none" />
-      </g>
-      
-      {/* AI Brain Circuit Overlay */}
-      <g transform="translate(400, 400)" stroke="currentColor" strokeWidth="4" fill="none" className="text-primary/70">
-        {/* Circuit Board Pattern */}
-        <circle cx="0" cy="0" r="180" strokeDasharray="8 12" />
-        <circle cx="0" cy="0" r="140" strokeDasharray="5 10" />
-        <circle cx="0" cy="0" r="100" strokeDasharray="3 8" />
-        
-        {/* Connection Lines */}
-        <path d="M-160,0 L-120,0" />
-        <path d="M120,0 L160,0" />
-        <path d="M0,-160 L0,-120" />
-        <path d="M0,120 L0,160" />
-        
-        {/* Diagonal Lines */}
-        <path d="M-113,-113 L-85,-85" />
-        <path d="M113,-113 L85,-85" />
-        <path d="M-113,113 L-85,85" />
-        <path d="M113,113 L85,85" />
-        
-        {/* Brain Circuit Nodes */}
-        <circle cx="-60" cy="60" r="12" className="fill-primary" />
-        <circle cx="60" cy="-60" r="12" className="fill-primary" />
-        <circle cx="40" cy="80" r="8" className="fill-primary" />
-        <circle cx="-70" cy="-40" r="8" className="fill-primary" />
-        <circle cx="0" cy="0" r="15" className="fill-primary" />
-        
-        {/* Network Connections */}
-        <path d="M-60,60 L0,0" />
-        <path d="M60,-60 L0,0" />
-        <path d="M40,80 L0,0" />
-        <path d="M-70,-40 L0,0" />
-        
-        {/* Data Flow Dots Animation */}
-        <circle cx="-30" cy="30" r="3" className="fill-background">
-          <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite" begin="0s"/>
-        </circle>
-        <circle cx="30" cy="-30" r="3" className="fill-background">
-          <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite" begin="1s"/>
-        </circle>
-        <circle cx="20" cy="40" r="3" className="fill-background">
-          <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite" begin="1.5s"/>
-        </circle>
-        <circle cx="-35" cy="-20" r="3" className="fill-background">
-          <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite" begin="2s"/>
-        </circle>
-      </g>
-    </svg>
-  );
-}
+import { HeightsLogo } from "@/components/ui/heights-logo";
 
 /**
  * AssistantButton component
@@ -81,20 +15,38 @@ export function AssistantButton() {
   
   return (
     <>
-      <Button
-        onClick={() => setIsOpen(true)}
-        className="fixed right-6 bottom-6 h-14 w-14 rounded-full shadow-lg z-40 p-0 overflow-hidden"
-        size="icon"
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
+        className="fixed right-6 bottom-6 z-40"
       >
-        <div className="absolute inset-0">
-          <HeightsAILogo />
-        </div>
-        
-        {/* Animated pulse effect */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="absolute w-full h-full bg-primary rounded-full animate-ping opacity-20" />
-        </div>
-      </Button>
+        <Button
+          onClick={() => setIsOpen(true)}
+          className="h-14 w-14 rounded-full shadow-lg p-0 overflow-hidden relative group"
+          size="icon"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-[#27391C] to-[#1F7D53] transition-all duration-300 group-hover:scale-110" />
+          
+          <div className="relative z-10">
+            <HeightsLogo size="md" className="text-white" animate={false} />
+          </div>
+          
+          {/* Animated pulse effect */}
+          <motion.div 
+            className="absolute inset-0 rounded-full border-2 border-white/20"
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+          />
+          
+          {/* Ripple effect on hover */}
+          <motion.div 
+            className="absolute inset-0 bg-white rounded-full opacity-0 group-hover:opacity-20"
+            whileHover={{ scale: 1.2 }}
+            transition={{ duration: 0.3 }}
+          />
+        </Button>
+      </motion.div>
       
       <AnimatePresence>
         {isOpen && <AssistantDialog onClose={() => setIsOpen(false)} />}

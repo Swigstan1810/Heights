@@ -28,7 +28,7 @@ const AssistantContext = createContext<AssistantContextType>({
   addMessage: async () => {},
   clearMessages: () => {},
   isLoading: false,
-  assistantName: "Heights AI",
+  assistantName: "Heights+ AI",
   error: null
 });
 
@@ -36,7 +36,7 @@ const AssistantContext = createContext<AssistantContextType>({
 const initialSystemMessage = {
   id: generateId(),
   role: "system" as const,
-  content: "Hello! I'm Heights AI, your personal trading assistant. How can I help you today?",
+  content: "🚀 Hello! I'm Heights+ AI, your advanced trading intelligence assistant. How can I help you elevate your trading today?",
   timestamp: new Date(),
 };
 
@@ -45,7 +45,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([initialSystemMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const assistantName = "Heights AI";
+  const assistantName = "Heights+ AI";
 
   // Add a new message to the conversation
   const addMessage = useCallback(async (content: string, role: "user" | "assistant" | "system") => {
@@ -67,7 +67,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       try {
         // Filter out system welcome message when sending history
         const messageHistory = messages.filter(m => 
-          !(m.role === 'system' && m.content.includes("Hello! I'm Heights AI"))
+          !(m.role === 'system' && m.content.includes("Hello! I'm Heights+ AI"))
         );
         
         // Call the AI chat API
@@ -110,7 +110,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         const errorMessage = {
           id: generateId(),
           role: "assistant" as const,
-          content: "I'm sorry, I encountered an error processing your request. Please try again later.\n" + errorMsg,
+          content: "I apologize, but I'm experiencing some technical difficulties. Please try again in a moment.\n\n" + errorMsg,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
