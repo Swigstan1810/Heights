@@ -20,7 +20,6 @@ import { HeightsLogo } from '@/components/ui/heights-logo';
 import { useTheme } from 'next-themes';
 import { 
   Home, 
-  TrendingUp, 
   PieChart, 
   Globe, 
   User, 
@@ -29,7 +28,6 @@ import {
   Menu,
   X,
   Wallet,
-  BarChart3,
   Brain,
   Search,
   ChevronDown,
@@ -40,14 +38,15 @@ import {
   HelpCircle,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  BookmarkCheck
 } from 'lucide-react';
 
 const NAVIGATION_ITEMS = [
   { href: '/home', label: 'Dashboard', icon: Home },
-  { href: '/market', label: 'Markets', icon: TrendingUp },
-  { href: '/trade', label: 'Trade', icon: BarChart3 },
+  { href: '/watchlist', label: 'Watchlist', icon: BookmarkCheck },
   { href: '/portfolio', label: 'Portfolio', icon: PieChart },
+  { href: '/crypto', label: 'Crypto', icon: Star },
   { href: '/ai', label: 'AI Assistant', icon: Brain },
   { href: '/news', label: 'News', icon: Globe },
 ];
@@ -105,7 +104,7 @@ export function Navbar() {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo - Back to original Heights logo */}
+          {/* Logo */}
           <Link href={isAuthenticated ? "/home" : "/"} className="flex items-center gap-2">
             <HeightsLogo size="lg" />
             <span className="text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
@@ -255,7 +254,7 @@ export function Navbar() {
                     
                     <DropdownMenuItem>
                       <Star className="h-4 w-4 mr-2" />
-                      Watchlist
+                      Favorites
                     </DropdownMenuItem>
                     
                     <DropdownMenuItem>

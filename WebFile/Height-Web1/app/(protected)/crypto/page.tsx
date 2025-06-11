@@ -1,4 +1,3 @@
-// app/(protected)/crypto/page.tsx
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -8,41 +7,28 @@ import { Navbar } from '@/components/navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { motion } from 'framer-motion';
 import { 
   Search, 
   Star, 
   TrendingUp, 
   TrendingDown, 
-  Activity,
   Bitcoin,
   RefreshCw,
-  AlertCircle,
   Loader2,
-  ArrowUpRight,
-  ArrowDownRight,
+  ExternalLink,
+  BarChart3,
   DollarSign,
-  Info
+  Activity,
+  Plus,
+  Eye,
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-import dynamic from 'next/dynamic';
-
-// Dynamically import TradingView widget
-const TradingViewWidget = dynamic(
-  () => import('@/components/trading/tradingview-widget'),
-  { 
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center h-[500px] bg-muted/50 rounded-lg">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
-  }
-);
+import TradingViewWidget from '@/components/trading/tradingview-widget';
 
 interface CryptoData {
   id: string;
@@ -56,6 +42,7 @@ interface CryptoData {
   high_24h: number;
   low_24h: number;
   circulating_supply: number;
+  image: string;
   isFavorite?: boolean;
 }
 
@@ -82,9 +69,7 @@ export default function CryptoPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
-  const [orderAmount, setOrderAmount] = useState('');
-  const [showTradeModal, setShowTradeModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const supabase = createClientComponentClient<Database>();
 
@@ -94,19 +79,27 @@ export default function CryptoPage() {
     }
   }, [authLoading, user, router]);
 
-  // Fetch crypto data from CoinGecko API
+  // Fetch crypto data from CoinGecko API (free and reliable)
   const fetchCryptoData = async () => {
     try {
+      setError(null);
       const ids = MAIN_CRYPTOS.map(c => c.id).join(',');
       const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=10&page=1&sparkline=false`
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=20&page=1&sparkline=false&locale=en`,
+        {
+          headers: {
+            'Accept': 'application/json',
+          }
+        }
       );
       
-      if (!response.ok) throw new Error('Failed to fetch crypto data');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch crypto data`);
+      }
       
       const data = await response.json();
       
-      const formattedData = data.map((coin: any) => ({
+      const formattedData: CryptoData[] = data.map((coin: any) => ({
         id: coin.id,
         symbol: coin.symbol.toUpperCase(),
         name: coin.name,
@@ -118,6 +111,7 @@ export default function CryptoPage() {
         high_24h: coin.high_24h,
         low_24h: coin.low_24h,
         circulating_supply: coin.circulating_supply,
+        image: coin.image,
         isFavorite: favorites.includes(coin.symbol.toUpperCase())
       }));
       
@@ -127,6 +121,7 @@ export default function CryptoPage() {
       }
     } catch (error) {
       console.error('Error fetching crypto data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch crypto data');
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -139,7 +134,7 @@ export default function CryptoPage() {
     
     try {
       const { data, error } = await supabase
-        .from('crypto_favorites')
+        .from('crypto_watchlist')
         .select('symbol')
         .eq('user_id', user.id);
       
@@ -152,13 +147,13 @@ export default function CryptoPage() {
   };
 
   // Toggle favorite
-  const toggleFavorite = async (symbol: string) => {
+  const toggleFavorite = async (symbol: string, name: string) => {
     if (!user) return;
     
     try {
       if (favorites.includes(symbol)) {
         await supabase
-          .from('crypto_favorites')
+          .from('crypto_watchlist')
           .delete()
           .eq('user_id', user.id)
           .eq('symbol', symbol);
@@ -166,8 +161,8 @@ export default function CryptoPage() {
         setFavorites(prev => prev.filter(s => s !== symbol));
       } else {
         await supabase
-          .from('crypto_favorites')
-          .insert({ user_id: user.id, symbol });
+          .from('crypto_watchlist')
+          .insert({ user_id: user.id, symbol, name });
         
         setFavorites(prev => [...prev, symbol]);
       }
@@ -215,24 +210,26 @@ export default function CryptoPage() {
     crypto.symbol.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleTrade = () => {
-    // Open Coinbase OAuth flow
-    const clientId = process.env.NEXT_PUBLIC_COINBASE_CLIENT_ID;
-    const redirectUri = encodeURIComponent(`${window.location.origin}/api/coinbase/callback`);
-    const state = Math.random().toString(36).substring(7);
-    
-    // Store state for verification
-    sessionStorage.setItem('coinbase_oauth_state', state);
-    
-    const authUrl = `https://www.coinbase.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}&scope=wallet:accounts:read,wallet:transactions:send`;
-    
-    window.location.href = authUrl;
-  };
-
   if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Bitcoin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+          <h2 className="text-xl font-bold mb-2">Failed to Load Crypto Data</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <Button onClick={fetchCryptoData}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
@@ -251,21 +248,27 @@ export default function CryptoPage() {
                 Cryptocurrency Markets
               </h1>
               <p className="text-muted-foreground mt-2">
-                Real-time cryptocurrency prices powered by CoinGecko. Trade securely with our integrated platform.
+                Real-time cryptocurrency prices from CoinGecko API
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsRefreshing(true);
-                fetchCryptoData();
-              }}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-green-500 border-green-500">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
+                Live Data
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsRefreshing(true);
+                  fetchCryptoData();
+                }}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
           </div>
 
           {/* Search */}
@@ -286,24 +289,31 @@ export default function CryptoPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Top Cryptocurrencies</CardTitle>
-                <CardDescription>By market cap</CardDescription>
+                <CardDescription>By market cap • Live prices</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[600px] overflow-y-auto">
-                  {filteredCryptos.map((crypto) => (
+                  {filteredCryptos.map((crypto, index) => (
                     <motion.div
                       key={crypto.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
                       className={`p-4 border-b hover:bg-muted/50 cursor-pointer ${
                         selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
                       }`}
                       onClick={() => setSelectedCrypto(crypto)}
-                      whileHover={{ x: 4 }}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-bold">{crypto.symbol.slice(0, 3)}</span>
-                          </div>
+                          <img 
+                            src={crypto.image} 
+                            alt={crypto.name}
+                            className="w-8 h-8 rounded-full"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://via.placeholder.com/32/ff6b35/ffffff?text=${crypto.symbol.slice(0, 2)}`;
+                            }}
+                          />
                           <div>
                             <p className="font-medium">{crypto.name}</p>
                             <p className="text-sm text-muted-foreground">{crypto.symbol}</p>
@@ -313,7 +323,7 @@ export default function CryptoPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleFavorite(crypto.symbol);
+                              toggleFavorite(crypto.symbol, crypto.name);
                             }}
                             className="mb-1"
                           >
@@ -326,11 +336,11 @@ export default function CryptoPage() {
                             crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
                           }`}>
                             {crypto.price_change_percentage_24h >= 0 ? (
-                              <TrendingUp className="h-3 w-3 mr-1" />
+                              <ArrowUpRight className="h-3 w-3 mr-1" />
                             ) : (
-                              <TrendingDown className="h-3 w-3 mr-1" />
+                              <ArrowDownRight className="h-3 w-3 mr-1" />
                             )}
-                            {crypto.price_change_percentage_24h.toFixed(2)}%
+                            {crypto.price_change_percentage_24h >= 0 ? '+' : ''}{crypto.price_change_percentage_24h.toFixed(2)}%
                           </p>
                         </div>
                       </div>
@@ -350,9 +360,14 @@ export default function CryptoPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                          <span className="text-lg font-bold">{selectedCrypto.symbol.slice(0, 3)}</span>
-                        </div>
+                        <img 
+                          src={selectedCrypto.image} 
+                          alt={selectedCrypto.name}
+                          className="w-12 h-12 rounded-full"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = `https://via.placeholder.com/48/ff6b35/ffffff?text=${selectedCrypto.symbol.slice(0, 2)}`;
+                          }}
+                        />
                         <div>
                           <CardTitle className="text-2xl">{selectedCrypto.name}</CardTitle>
                           <p className="text-muted-foreground">{selectedCrypto.symbol}/USD</p>
@@ -371,7 +386,7 @@ export default function CryptoPage() {
                             <ArrowDownRight className="h-5 w-5 mr-1" />
                           )}
                           {formatCurrency(Math.abs(selectedCrypto.price_change_24h))} 
-                          ({selectedCrypto.price_change_percentage_24h.toFixed(2)}%)
+                          ({selectedCrypto.price_change_percentage_24h >= 0 ? '+' : ''}{selectedCrypto.price_change_percentage_24h.toFixed(2)}%)
                         </p>
                       </div>
                     </div>
@@ -402,121 +417,15 @@ export default function CryptoPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Price Chart</CardTitle>
+                    <CardDescription>Powered by TradingView</CardDescription>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="h-[500px] w-full">
                       <TradingViewWidget
                         symbol={`${selectedCrypto.symbol}USD`}
                         height={500}
-                        theme="dark"
                       />
                     </div>
-                  </CardContent>
-                </Card>
-
-                {/* Trading Section */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Trade {selectedCrypto.name}</CardTitle>
-                    <CardDescription>
-                      Execute trades securely through our integrated platform
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs value={orderType} onValueChange={(v) => setOrderType(v as 'buy' | 'sell')}>
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="buy">Buy</TabsTrigger>
-                        <TabsTrigger value="sell">Sell</TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="buy" className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium">Amount (USD)</label>
-                          <div className="relative mt-1">
-                            <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              value={orderAmount}
-                              onChange={(e) => setOrderAmount(e.target.value)}
-                              className="pl-10"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>You'll receive</span>
-                            <span className="font-medium">
-                              {orderAmount && selectedCrypto.current_price 
-                                ? (parseFloat(orderAmount) / selectedCrypto.current_price).toFixed(8)
-                                : '0.00000000'
-                              } {selectedCrypto.symbol}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span>Price per {selectedCrypto.symbol}</span>
-                            <span className="font-medium">{formatCurrency(selectedCrypto.current_price)}</span>
-                          </div>
-                        </div>
-                        
-                        <Button 
-                          className="w-full" 
-                          size="lg"
-                          onClick={handleTrade}
-                          disabled={!orderAmount || parseFloat(orderAmount) <= 0}
-                        >
-                          Buy {selectedCrypto.symbol}
-                        </Button>
-                      </TabsContent>
-                      
-                      <TabsContent value="sell" className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium">Amount ({selectedCrypto.symbol})</label>
-                          <Input
-                            type="number"
-                            placeholder="0.00000000"
-                            value={orderAmount}
-                            onChange={(e) => setOrderAmount(e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        
-                        <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>You'll receive</span>
-                            <span className="font-medium">
-                              {orderAmount && selectedCrypto.current_price 
-                                ? formatCurrency(parseFloat(orderAmount) * selectedCrypto.current_price)
-                                : '$0.00'
-                              }
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span>Price per {selectedCrypto.symbol}</span>
-                            <span className="font-medium">{formatCurrency(selectedCrypto.current_price)}</span>
-                          </div>
-                        </div>
-                        
-                        <Button 
-                          className="w-full" 
-                          size="lg"
-                          variant="destructive"
-                          onClick={handleTrade}
-                          disabled={!orderAmount || parseFloat(orderAmount) <= 0}
-                        >
-                          Sell {selectedCrypto.symbol}
-                        </Button>
-                      </TabsContent>
-                    </Tabs>
-                    
-                    <Alert className="mt-4">
-                      <Info className="h-4 w-4" />
-                      <AlertDescription>
-                        Trading is executed through secure integration with licensed exchanges. 
-                        All trades are subject to market conditions and exchange fees.
-                      </AlertDescription>
-                    </Alert>
                   </CardContent>
                 </Card>
               </>
