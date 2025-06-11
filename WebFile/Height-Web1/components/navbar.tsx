@@ -1,319 +1,367 @@
-// components/navbar.tsx
 "use client";
- 
-import { useState, useEffect } from "react";
-import { motion, useScroll, AnimatePresence } from "framer-motion";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { 
-  Menu, 
-  X, 
-  Sun, 
-  Moon, 
-  Wallet, 
-  Bell, 
-  User, 
-  LogOut, 
-  BarChart2, 
-  ChevronDown,
-  BrainCircuit,
-  Sparkles,
-  Plus,
-  Newspaper,
-  Bitcoin
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useHeightsTheme } from "@/components/theme-provider";
-import { useAuth } from "@/contexts/auth-context";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
- 
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAuth } from '@/contexts/auth-context';
+import { HeightsLogo } from '@/components/ui/heights-logo';
+import { 
+  Home, 
+  TrendingUp, 
+  PieChart, 
+  Globe, 
+  User, 
+  Settings, 
+  LogOut,
+  Bell,
+  Menu,
+  X,
+  Wallet,
+  CreditCard,
+  BarChart3,
+  Activity,
+  Brain,
+  Search,
+  Plus,
+  ChevronDown,
+  Star,
+  Bookmark,
+  History,
+  Shield,
+  HelpCircle
+} from 'lucide-react';
+
+const NAVIGATION_ITEMS = [
+  { href: '/home', label: 'Dashboard', icon: Home },
+  { href: '/market', label: 'Markets', icon: TrendingUp },
+  { href: '/trade', label: 'Trade', icon: BarChart3 },
+  { href: '/portfolio', label: 'Portfolio', icon: PieChart },
+  { href: '/ai', label: 'AI Assistant', icon: Brain },
+  { href: '/news', label: 'News', icon: Globe },
+];
+
 export function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [showPlusAnimation, setShowPlusAnimation] = useState(false);
-  const { theme, toggleTheme } = useHeightsTheme();
-  const { scrollY } = useScroll();
-  const { user, signOut } = useAuth();
+  const { user, isAuthenticated, signOut, walletBalance, profile } = useAuth();
   const router = useRouter();
-  
+  const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState(3); // Mock notification count
+
+  // Close mobile menu when route changes
   useEffect(() => {
-    const updateScrollState = () => {
-      setIsScrolled(scrollY.get() > 10);
-    };
-    
-    const unsubscribe = scrollY.on("change", updateScrollState);
-    return () => unsubscribe();
-  }, [scrollY]);
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
-  // Animate the Heights+ on hover
-  const handleAIHover = () => {
-    setShowPlusAnimation(true);
-  };
-
-  const handleAILeave = () => {
-    setShowPlusAnimation(false);
-  };
-
-  const handleLogout = async () => {
+  const handleSignOut = async () => {
     await signOut();
-    setIsOpen(false);
-    router.push('/');
+    router.push('/login');
   };
-  
-  const isAuthenticated = !!user;
-  
+
+  const formatBalance = (balance: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(balance);
+  };
+
   return (
-    <motion.header
-      className={cn(
-        "fixed top-0 left-0 right-0 z-40 transition-all duration-300",
-        isScrolled ? "bg-background/80 backdrop-blur-md border-b border-border/50" : "bg-transparent"
-      )}
+    <motion.nav 
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-b border-border"
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center">
-              <div className="relative flex items-center justify-center h-8 w-8 mr-2">
-                <svg viewBox="0 0 100 100" className="h-6 w-6">
-                  <path
-                    d="M30,20 L30,80"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="16"
-                    strokeLinecap="square"
-                  />
-                  <path
-                    d="M30,20 L80,20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="16"
-                    strokeLinecap="square"
-                  />
-                </svg>
-              </div>
-              <span className="text-xl font-bold">Heights</span>
-            </Link>
-          </div>
-          
-          <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/dashboard?tab=crypto" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
-              <Bitcoin className="h-4 w-4" />
-              Crypto
-            </Link>
-            <Link href="/dashboard?tab=stocks" className="text-sm font-medium hover:text-primary transition-colors">Stocks</Link>
-            <Link href="/dashboard?tab=mutual-funds" className="text-sm font-medium hover:text-primary transition-colors">Mutual Funds</Link>
-            
-            {/* Conditionally render protected links */}
-            {isAuthenticated && (
-              <>
-                <Link href="/portfolio" className="text-sm font-medium hover:text-primary transition-colors">Portfolio</Link>
-              </>
-            )}
-            
-            {/* Updated AI Assistant link with Heights+ animation */}
-            <Link 
-              href="/ai" 
-              className="text-sm font-medium hover:text-primary transition-colors"
-              onMouseEnter={handleAIHover}
-              onMouseLeave={handleAILeave}
-            >
-              <span className="relative flex items-center">
-                <BrainCircuit className="h-4 w-4 mr-1.5" />
-                <span className="relative">
-                  Heights
-                  <AnimatePresence>
-                    {showPlusAnimation && (
-                      <motion.span
-                        initial={{ opacity: 0, scale: 0, rotate: -180 }}
-                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                        exit={{ opacity: 0, scale: 0, rotate: 180 }}
-                        transition={{ duration: 0.3, type: "spring", stiffness: 200 }}
-                        className="absolute -right-3 -top-0.5 text-primary"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                  <motion.span
-                    animate={{ opacity: showPlusAnimation ? 0 : 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute -right-3 -top-1"
-                  >
-                    <Sparkles className="h-3 w-3 text-primary/50" />
-                  </motion.span>
-                </span>
-              </span>
-            </Link>
-            
-            {/* News section replacing Learn */}
-            <Link href="/news" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
-              <Newspaper className="h-4 w-4" />
-              News
-            </Link>
-          </nav>
-          
-          <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="icon" onClick={toggleTheme} className="hidden md:flex">
-              {theme === "dark" ? <Sun className="h-[1.2rem] w-[1.2rem]" /> : <Moon className="h-[1.2rem] w-[1.2rem]" />}
-            </Button>
-            
+          {/* Logo */}
+          <Link href={isAuthenticated ? "/home" : "/"} className="flex items-center gap-2">
+            <HeightsLogo size="lg" />
+            <span className="text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
+              Heights
+            </span>
+          </Link>
+
+          {/* Desktop Navigation */}
+          {isAuthenticated && (
+            <div className="hidden md:flex items-center gap-1">
+              {NAVIGATION_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || 
+                  (item.href !== '/home' && pathname.startsWith(item.href));
+                
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      className={`relative gap-2 ${
+                        isActive 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'hover:bg-muted'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                      {item.label === 'AI Assistant' && (
+                        <Badge variant="secondary" className="text-xs">
+                          New
+                        </Badge>
+                      )}
+                    </Button>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Right Side Actions */}
+          <div className="flex items-center gap-2">
             {isAuthenticated ? (
               <>
-                <Button variant="ghost" size="icon" className="hidden md:flex">
-                  <Bell className="h-[1.2rem] w-[1.2rem]" />
+                {/* Wallet Balance */}
+                {walletBalance && (
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-muted rounded-full">
+                    <Wallet className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">
+                      {formatBalance(walletBalance.balance)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Quick Actions */}
+                <div className="hidden lg:flex items-center gap-1">
+                  <Button variant="ghost" size="sm">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Notifications */}
+                <Button variant="ghost" size="sm" className="relative">
+                  <Bell className="h-4 w-4" />
+                  {notifications > 0 && (
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs">
+                      {notifications}
+                    </Badge>
+                  )}
                 </Button>
-                
+
+                {/* User Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="hidden md:flex">
-                      <User className="h-[1rem] w-[1rem] mr-2" />
-                      <span className="truncate max-w-[100px]">
-                        {user.email?.split('@')[0]}
-                      </span>
-                      <ChevronDown className="h-[1rem] w-[1rem] ml-2" />
+                    <Button variant="ghost" className="relative gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage 
+                          src={profile?.avatar_url || profile?.google_avatar_url || ''} 
+                          alt={profile?.full_name || user?.email || 'User'} 
+                        />
+                        <AvatarFallback>
+                          {(profile?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="hidden sm:block text-left">
+                        <p className="text-sm font-medium">
+                          {profile?.full_name || user?.email?.split('@')[0]}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {profile?.kyc_completed ? 'Verified' : 'Unverified'}
+                        </p>
+                      </div>
+                      <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuLabel>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage 
+                            src={profile?.avatar_url || profile?.google_avatar_url || ''} 
+                            alt={profile?.full_name || user?.email || 'User'} 
+                          />
+                          <AvatarFallback>
+                            {(profile?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">
+                            {profile?.full_name || user?.email?.split('@')[0]}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {user?.email}
+                          </p>
+                        </div>
+                      </div>
+                    </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                      <BarChart2 className="mr-2 h-4 w-4" />
-                      <span>Dashboard</span>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile" className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Profile
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/profile')}>
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Profile</span>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/wallet" className="flex items-center gap-2">
+                        <Wallet className="h-4 w-4" />
+                        Wallet
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/crypto')}>
-                      <Bitcoin className="mr-2 h-4 w-4" />
-                      <span>Crypto</span>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/portfolio" className="flex items-center gap-2">
+                        <PieChart className="h-4 w-4" />
+                        Portfolio
+                      </Link>
                     </DropdownMenuItem>
+                    
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Log out</span>
+                    
+                    <DropdownMenuItem>
+                      <Star className="h-4 w-4 mr-2" />
+                      Watchlist
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem>
+                      <History className="h-4 w-4 mr-2" />
+                      Order History
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem>
+                      <Bookmark className="h-4 w-4 mr-2" />
+                      Saved Analysis
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuSeparator />
+                    
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings" className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        Settings
+                      </Link>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem>
+                      <Shield className="h-4 w-4 mr-2" />
+                      Security
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem>
+                      <HelpCircle className="h-4 w-4 mr-2" />
+                      Help & Support
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuSeparator />
+                    
+                    <DropdownMenuItem 
+                      onClick={handleSignOut}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Sign Out
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                {/* Mobile Menu Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                >
+                  {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                </Button>
               </>
             ) : (
-              <>
-                <Link href="/login" className="hidden md:flex">
-                  <Button variant="outline">Log In</Button>
-                </Link>
-                <Link href="/signup" className="hidden md:flex">
-                  <Button>Sign Up</Button>
-                </Link>
-              </>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" asChild>
+                  <Link href="/login">Sign In</Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/signup">Get Started</Link>
+                </Button>
+              </div>
             )}
-            
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsOpen(!isOpen)}>
-              {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </Button>
           </div>
         </div>
-      </div>
-      
-      {/* Mobile menu */}
-      <motion.div
-        className="md:hidden"
-        initial={{ height: 0, opacity: 0 }}
-        animate={{
-          height: isOpen ? "auto" : 0,
-          opacity: isOpen ? 1 : 0,
-        }}
-        transition={{ duration: 0.2 }}
-      >
-        {isOpen && (
-          <div className="px-4 pt-2 pb-5 bg-background/95 backdrop-blur-md border-b border-border/50 space-y-1">
-            <Link href="/dashboard?tab=crypto" className="block py-2 text-base font-medium flex items-center gap-2" onClick={() => setIsOpen(false)}>
-              <Bitcoin className="h-4 w-4" />
-              Crypto
-            </Link>
-            <Link href="/dashboard?tab=stocks" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Stocks</Link>
-            <Link href="/dashboard?tab=mutual-funds" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Mutual Funds</Link>
-            
-            {/* Conditionally render protected links for mobile */}
-            {isAuthenticated && (
-              <>
-                <Link href="/portfolio" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>Portfolio</Link>
-              </>
-            )}
-            
-            {/* Updated AI Assistant link for mobile */}
-            <Link href="/ai" className="block py-2 text-base font-medium" onClick={() => setIsOpen(false)}>
-              <span className="flex items-center">
-                <BrainCircuit className="h-5 w-5 mr-2" />
-                Heights+
-                <Sparkles className="h-3 w-3 ml-1 text-primary" />
-              </span>
-            </Link>
-            
-            {/* News section for mobile */}
-            <Link href="/news" className="block py-2 text-base font-medium flex items-center gap-2" onClick={() => setIsOpen(false)}>
-              <Newspaper className="h-5 w-5" />
-              News
-            </Link>
-            
-            <div className="pt-4 flex flex-col space-y-2">
-              <Button onClick={toggleTheme} variant="outline" className="justify-start">
-                {theme === "dark" ? (
-                  <>
-                    <Sun className="mr-2 h-4 w-4" /> Light Mode
-                  </>
-                ) : (
-                  <>
-                    <Moon className="mr-2 h-4 w-4" /> Dark Mode
-                  </>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && isAuthenticated && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden border-t border-border"
+            >
+              <div className="py-4 space-y-2">
+                {/* Wallet Balance Mobile */}
+                {walletBalance && (
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Available Balance</span>
+                    </div>
+                    <span className="font-bold">
+                      {formatBalance(walletBalance.balance)}
+                    </span>
+                  </div>
                 )}
-              </Button>
-              
-              {isAuthenticated ? (
-                <>
-                  <Button variant="outline" className="justify-start" onClick={() => {
-                    setIsOpen(false);
-                    router.push('/profile');
-                  }}>
-                    <User className="mr-2 h-4 w-4" /> Profile
+
+                {/* Mobile Navigation Items */}
+                {NAVIGATION_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href || 
+                    (item.href !== '/home' && pathname.startsWith(item.href));
+                  
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <Button
+                        variant={isActive ? "default" : "ghost"}
+                        className="w-full justify-start gap-3"
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                        {item.label === 'AI Assistant' && (
+                          <Badge variant="secondary" className="text-xs ml-auto">
+                            New
+                          </Badge>
+                        )}
+                      </Button>
+                    </Link>
+                  );
+                })}
+
+                <div className="pt-4 border-t border-border">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 text-red-600 hover:text-red-600 hover:bg-red-50"
+                    onClick={handleSignOut}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out
                   </Button>
-                  <Button variant="outline" className="justify-start" onClick={() => {
-                    setIsOpen(false);
-                    router.push('/crypto');
-                  }}>
-                    <Bitcoin className="mr-2 h-4 w-4" /> Crypto
-                  </Button>
-                  <Button variant="outline" className="justify-start" onClick={() => {
-                    setIsOpen(false);
-                    router.push('/notifications');
-                  }}>
-                    <Bell className="mr-2 h-4 w-4" /> Notifications
-                  </Button>
-                  <Button variant="destructive" onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" /> Log Out
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Link href="/login" onClick={() => setIsOpen(false)}>
-                    <Button variant="outline" className="w-full">Log In</Button>
-                  </Link>
-                  <Link href="/signup" onClick={() => setIsOpen(false)}>
-                    <Button className="w-full">Sign Up</Button>
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </motion.div>
-    </motion.header>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.nav>
   );
 }

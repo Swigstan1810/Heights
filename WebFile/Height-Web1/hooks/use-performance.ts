@@ -1,79 +1,7 @@
-// hooks/use-performance.ts
-"use client";
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useEffect, useCallback, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
-
-// Performance monitoring hook
-export function usePerformanceMonitor() {
-  const pathname = usePathname();
-  const [metrics, setMetrics] = useState({
-    fcp: 0, // First Contentful Paint
-    lcp: 0, // Largest Contentful Paint
-    fid: 0, // First Input Delay
-    cls: 0, // Cumulative Layout Shift
-    ttfb: 0, // Time to First Byte
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('PerformanceObserver' in window)) return;
-
-    try {
-      // Observe paint timing
-      const paintObserver = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          if (entry.entryType === 'paint') {
-            if (entry.name === 'first-contentful-paint') {
-              setMetrics(prev => ({ ...prev, fcp: entry.startTime }));
-            }
-          }
-        }
-      });
-      paintObserver.observe({ entryTypes: ['paint'] });
-
-      // Observe largest contentful paint
-      const lcpObserver = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        const lastEntry = entries[entries.length - 1];
-        setMetrics(prev => ({ ...prev, lcp: lastEntry.startTime }));
-      });
-      lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
-
-      // Observe layout shift
-      let clsValue = 0;
-      const clsObserver = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          if (!(entry as any).hadRecentInput) {
-            clsValue += (entry as any).value;
-            setMetrics(prev => ({ ...prev, cls: clsValue }));
-          }
-        }
-      });
-      clsObserver.observe({ entryTypes: ['layout-shift'] });
-
-      // Log metrics in production
-      if (process.env.NODE_ENV === 'production') {
-        window.addEventListener('beforeunload', () => {
-          // Send metrics to analytics
-          console.log('Performance metrics:', metrics);
-        });
-      }
-
-      return () => {
-        paintObserver.disconnect();
-        lcpObserver.disconnect();
-        clsObserver.disconnect();
-      };
-    } catch (error) {
-      console.error('Performance monitoring error:', error);
-    }
-  }, [pathname]);
-
-  return metrics;
-}
-
-// Debounce hook for preventing excessive re-renders
-export function useDebounce<T>(value: T, delay: number = 300): T {
+// Debounce hook for search inputs
+export function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
   useEffect(() => {
@@ -89,106 +17,228 @@ export function useDebounce<T>(value: T, delay: number = 300): T {
   return debouncedValue;
 }
 
-// Throttle hook for rate limiting
-export function useThrottle<T extends (...args: any[]) => any>(
-  callback: T,
-  delay: number = 100
-): T {
-  const lastCall = useRef(0);
-  const timeout = useRef<NodeJS.Timeout | null>(null);
-
-  return useCallback((...args: Parameters<T>) => {
-    const now = Date.now();
-    const timeSinceLastCall = now - lastCall.current;
-
-    if (timeSinceLastCall >= delay) {
-      lastCall.current = now;
-      callback(...args);
-    } else {
-      if (timeout.current) clearTimeout(timeout.current);
-      
-      timeout.current = setTimeout(() => {
-        lastCall.current = Date.now();
-        callback(...args);
-      }, delay - timeSinceLastCall);
-    }
-  }, [callback, delay]) as T;
-}
-
-// Intersection observer hook for lazy loading
-export function useIntersectionObserver(
-  ref: React.RefObject<Element>,
-  options?: IntersectionObserverInit
+// Virtual scrolling for large lists
+export function useVirtualScrolling<T>(
+  items: T[],
+  itemHeight: number,
+  containerHeight: number
 ) {
-  const [isIntersecting, setIsIntersecting] = useState(false);
-  const [hasIntersected, setHasIntersected] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [startIndex, setStartIndex] = useState(0);
+  const [endIndex, setEndIndex] = useState(0);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsIntersecting(entry.isIntersecting);
-      if (entry.isIntersecting) {
-        setHasIntersected(true);
-      }
-    }, options);
+    const visibleCount = Math.ceil(containerHeight / itemHeight);
+    const buffer = Math.ceil(visibleCount * 0.5);
+    
+    const start = Math.max(0, Math.floor(scrollTop / itemHeight) - buffer);
+    const end = Math.min(items.length - 1, start + visibleCount + 2 * buffer);
+    
+    setStartIndex(start);
+    setEndIndex(end);
+  }, [scrollTop, itemHeight, containerHeight, items.length]);
 
-    const element = ref.current;
-    if (element) {
-      observer.observe(element);
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  }, []);
+
+  return {
+    startIndex,
+    endIndex,
+    onScroll,
+    totalHeight: items.length * itemHeight,
+    offsetY: startIndex * itemHeight,
+  };
+}
+
+// Optimized market data caching
+export class MarketDataCache {
+  private cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+  private readonly DEFAULT_TTL = 30000; // 30 seconds
+
+  set(key: string, data: any, ttl = this.DEFAULT_TTL) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl
+    });
+  }
+
+  get(key: string) {
+    const item = this.cache.get(key);
+    if (!item) return null;
+
+    if (Date.now() - item.timestamp > item.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return item.data;
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  cleanup() {
+    const now = Date.now();
+    this.cache.forEach((item, key) => {
+      if (now - item.timestamp > item.ttl) {
+        this.cache.delete(key);
+      }
+    });
+  }
+}
+
+// Real-time WebSocket manager with reconnection
+export class WebSocketManager {
+  private ws: WebSocket | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
+  private subscriptions = new Map<string, Set<(data: any) => void>>();
+  private url: string;
+
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  connect() {
+    try {
+      this.ws = new WebSocket(this.url);
+      
+      this.ws.onopen = () => {
+        console.log('WebSocket connected');
+        this.reconnectAttempts = 0;
+        // Re-subscribe to all channels
+        this.subscriptions.forEach((_, channel) => {
+          this.subscribe(channel);
+        });
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const channel = data.channel || data.symbol;
+          const callbacks = this.subscriptions.get(channel);
+          if (callbacks) {
+            callbacks.forEach(callback => callback(data));
+          }
+        } catch (error) {
+          console.error('WebSocket message parse error:', error);
+        }
+      };
+
+      this.ws.onclose = () => {
+        console.log('WebSocket closed');
+        this.handleReconnect();
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+    } catch (error) {
+      console.error('WebSocket connection error:', error);
+      this.handleReconnect();
+    }
+  }
+
+  private handleReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+      
+      this.reconnectTimeout = setTimeout(() => {
+        console.log(`Reconnecting... (attempt ${this.reconnectAttempts})`);
+        this.connect();
+      }, delay);
+    }
+  }
+
+  subscribe(channel: string, callback?: (data: any) => void) {
+    if (!this.subscriptions.has(channel)) {
+      this.subscriptions.set(channel, new Set());
+    }
+    
+    if (callback) {
+      this.subscriptions.get(channel)!.add(callback);
+    }
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'subscribe',
+        channel
+      }));
     }
 
     return () => {
-      if (element) {
-        observer.unobserve(element);
+      const callbacks = this.subscriptions.get(channel);
+      if (callbacks && callback) {
+        callbacks.delete(callback);
+        if (callbacks.size === 0) {
+          this.subscriptions.delete(channel);
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+              type: 'unsubscribe',
+              channel
+            }));
+          }
+        }
       }
     };
-  }, [ref, options]);
+  }
 
-  return { isIntersecting, hasIntersected };
+  disconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.subscriptions.clear();
+  }
 }
 
-// Network status hook
-export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState(true);
-  const [connectionType, setConnectionType] = useState<string>('unknown');
+// Optimized image loading
+export function useOptimizedImage(src: string, placeholder?: string) {
+  const [imageSrc, setImageSrc] = useState(placeholder || '');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    const updateNetworkStatus = () => {
-      setIsOnline(navigator.onLine);
-      
-      if ('connection' in navigator) {
-        const connection = (navigator as any).connection;
-        setConnectionType(connection.effectiveType || 'unknown');
-      }
+    const img = new Image();
+    img.onload = () => {
+      setImageSrc(src);
+      setLoading(false);
     };
-
-    updateNetworkStatus();
-
-    window.addEventListener('online', () => setIsOnline(true));
-    window.addEventListener('offline', () => setIsOnline(false));
+    img.onerror = () => {
+      setError(true);
+      setLoading(false);
+    };
+    img.src = src;
 
     return () => {
-      window.removeEventListener('online', () => setIsOnline(true));
-      window.removeEventListener('offline', () => setIsOnline(false));
+      img.onload = null;
+      img.onerror = null;
     };
-  }, []);
+  }, [src]);
 
-  return { isOnline, connectionType };
+  return { imageSrc, loading, error };
 }
 
-// Prefetch hook for improving navigation performance
-export function usePrefetch() {
-  const prefetchedUrls = useRef(new Set<string>());
-
-  const prefetch = useCallback((url: string) => {
-    if (prefetchedUrls.current.has(url)) return;
-    
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.href = url;
-    document.head.appendChild(link);
-    
-    prefetchedUrls.current.add(url);
-  }, []);
-
-  return prefetch;
+// Service worker for caching
+export function registerServiceWorker() {
+  if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    });
+  }
 }
