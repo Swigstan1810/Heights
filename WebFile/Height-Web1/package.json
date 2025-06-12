@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.50.3",
     "@auth/prisma-adapter": "^2.9.0",
     "@coinbase/cdp-sdk": "^1.11.0",
+    "@coinbase/wallet-sdk": "^4.3.4",
     "@hookform/resolvers": "^3.10.0",
     "@langchain/anthropic": "^0.3.21",
     "@langchain/core": "^0.3.57",
@@ -45,6 +46,7 @@
     "@radix-ui/react-tooltip": "^1.1.2",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.49.4",
+    "@tanstack/react-query": "^5.80.7",
     "@types/node": "20.6.2",
     "@types/react": "18.2.22",
     "@types/react-dom": "18.2.7",
@@ -87,6 +89,8 @@
     "typescript": "5.2.2",
     "utf-8-validate": "^6.0.5",
     "vaul": "^0.9.9",
+    "viem": "^2.31.0",
+    "wagmi": "^2.15.6",
     "zod": "^3.24.4"
   },
   "devDependencies": {

@@ -1,77 +1,70 @@
+// app/(protected)/crypto/page.tsx
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
+import { useAccount } from 'wagmi';
 import { Navbar } from '@/components/navbar';
+import { ConnectWalletButton } from '@/components/wallet/connect-wallet-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { motion } from 'framer-motion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { 
-  Search, 
-  Star, 
-  TrendingUp, 
-  TrendingDown, 
   Bitcoin,
   RefreshCw,
   Loader2,
-  ExternalLink,
-  BarChart3,
-  DollarSign,
-  Activity,
-  Plus,
-  Eye,
+  TrendingUp,
+  TrendingDown,
+  Star,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Wallet
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
-import TradingViewWidget from '@/components/trading/tradingview-widget';
+import { coinbaseService } from '@/lib/services/coinbase-service';
+import dynamic from 'next/dynamic';
+
+// Lazy load TradingView widget for better performance
+const TradingViewWidget = dynamic(
+  () => import('@/components/trading/tradingview-widget'),
+  { 
+    ssr: false,
+    loading: () => <div className="h-[500px] bg-muted animate-pulse rounded-lg" />
+  }
+);
 
 interface CryptoData {
   id: string;
   symbol: string;
   name: string;
   current_price: number;
-  price_change_24h: number;
   price_change_percentage_24h: number;
   market_cap: number;
-  total_volume: number;
-  high_24h: number;
-  low_24h: number;
-  circulating_supply: number;
   image: string;
   isFavorite?: boolean;
 }
 
-// Main cryptocurrencies to display
-const MAIN_CRYPTOS = [
-  { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin' },
-  { id: 'ethereum', symbol: 'ETH', name: 'Ethereum' },
-  { id: 'binancecoin', symbol: 'BNB', name: 'BNB' },
-  { id: 'ripple', symbol: 'XRP', name: 'Ripple' },
-  { id: 'solana', symbol: 'SOL', name: 'Solana' },
-  { id: 'cardano', symbol: 'ADA', name: 'Cardano' },
-  { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche' },
-  { id: 'polkadot', symbol: 'DOT', name: 'Polkadot' },
-  { id: 'chainlink', symbol: 'LINK', name: 'Chainlink' },
-  { id: 'polygon', symbol: 'MATIC', name: 'Polygon' }
-];
+// Optimized crypto list - only essential coins
+const MAIN_CRYPTOS = ['bitcoin', 'ethereum', 'binancecoin', 'solana', 'cardano'];
 
 export default function CryptoPage() {
   const { user, loading: authLoading } = useAuth();
+  const { address, isConnected } = useAccount();
   const router = useRouter();
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoData | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [tradeAmount, setTradeAmount] = useState('');
+  const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
+  const [isTrading, setIsTrading] = useState(false);
   
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -79,92 +72,137 @@ export default function CryptoPage() {
     }
   }, [authLoading, user, router]);
 
-  // Fetch crypto data from CoinGecko API (free and reliable)
-  const fetchCryptoData = async () => {
+  // Optimized data fetching with caching
+  const fetchCryptoData = useCallback(async () => {
     try {
-      setError(null);
-      const ids = MAIN_CRYPTOS.map(c => c.id).join(',');
+      const ids = MAIN_CRYPTOS.join(',');
       const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=20&page=1&sparkline=false&locale=en`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          }
-        }
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc`,
+        { next: { revalidate: 30 } } // Cache for 30 seconds
       );
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: Failed to fetch crypto data`);
-      }
+      if (!response.ok) throw new Error('Failed to fetch crypto data');
       
       const data = await response.json();
-      
       const formattedData: CryptoData[] = data.map((coin: any) => ({
         id: coin.id,
         symbol: coin.symbol.toUpperCase(),
         name: coin.name,
         current_price: coin.current_price,
-        price_change_24h: coin.price_change_24h,
         price_change_percentage_24h: coin.price_change_percentage_24h,
         market_cap: coin.market_cap,
-        total_volume: coin.total_volume,
-        high_24h: coin.high_24h,
-        low_24h: coin.low_24h,
-        circulating_supply: coin.circulating_supply,
         image: coin.image,
-        isFavorite: favorites.includes(coin.symbol.toUpperCase())
+        isFavorite: favorites.has(coin.symbol.toUpperCase())
       }));
       
       setCryptoData(formattedData);
       if (!selectedCrypto && formattedData.length > 0) {
         setSelectedCrypto(formattedData[0]);
       }
+      
+      // Update cache in database
+      await updateMarketCache(formattedData);
     } catch (error) {
       console.error('Error fetching crypto data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch crypto data');
+      toast.error('Failed to fetch crypto data');
+      // Try to load from cache
+      await loadFromCache();
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
+  }, [favorites, selectedCrypto]);
+
+  // Update market cache in database
+  const updateMarketCache = async (data: CryptoData[]) => {
+    try {
+      const updates = data.map(crypto => ({
+        symbol: crypto.symbol,
+        price: crypto.current_price,
+        change_24h_percent: crypto.price_change_percentage_24h,
+        market_cap: crypto.market_cap,
+        updated_at: new Date().toISOString()
+      }));
+
+      await supabase
+        .from('market_data_cache')
+        .upsert(updates, { onConflict: 'symbol' });
+    } catch (error) {
+      console.error('Error updating market cache:', error);
+    }
   };
 
-  // Load favorites from database
-  const loadFavorites = async () => {
+  // Load from cache when API fails
+  const loadFromCache = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('market_data_cache')
+        .select('*')
+        .in('symbol', MAIN_CRYPTOS.map(c => c.toUpperCase()));
+
+      if (!error && data) {
+        const formattedData: CryptoData[] = data.map(item => ({
+          id: item.symbol.toLowerCase(),
+          symbol: item.symbol,
+          name: item.symbol,
+          current_price: Number(item.price),
+          price_change_percentage_24h: Number(item.change_24h_percent),
+          market_cap: Number(item.market_cap),
+          image: `https://assets.coingecko.com/coins/images/1/small/${item.symbol.toLowerCase()}.png`,
+          isFavorite: favorites.has(item.symbol)
+        }));
+        setCryptoData(formattedData);
+      }
+    } catch (error) {
+      console.error('Error loading from cache:', error);
+    }
+  };
+
+  // Load favorites
+  const loadFavorites = useCallback(async () => {
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('crypto_watchlist')
         .select('symbol')
         .eq('user_id', user.id);
       
-      if (!error && data) {
-        setFavorites(data.map(item => item.symbol));
+      if (data) {
+        setFavorites(new Set(data.map(item => item.symbol)));
       }
     } catch (error) {
       console.error('Error loading favorites:', error);
     }
-  };
+  }, [user, supabase]);
 
   // Toggle favorite
   const toggleFavorite = async (symbol: string, name: string) => {
     if (!user) return;
     
     try {
-      if (favorites.includes(symbol)) {
+      if (favorites.has(symbol)) {
         await supabase
           .from('crypto_watchlist')
           .delete()
           .eq('user_id', user.id)
           .eq('symbol', symbol);
         
-        setFavorites(prev => prev.filter(s => s !== symbol));
+        setFavorites(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(symbol);
+          return newSet;
+        });
       } else {
         await supabase
           .from('crypto_watchlist')
           .insert({ user_id: user.id, symbol, name });
         
-        setFavorites(prev => [...prev, symbol]);
+        setFavorites(prev => {
+          const newSet = new Set(prev);
+          newSet.add(symbol);
+          return newSet;
+        });
       }
       
       // Update crypto data
@@ -175,6 +213,51 @@ export default function CryptoPage() {
       ));
     } catch (error) {
       console.error('Error toggling favorite:', error);
+      toast.error('Failed to update watchlist');
+    }
+  };
+
+  // Handle trade
+  const handleTrade = async () => {
+    if (!isConnected || !address || !selectedCrypto || !user) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    if (!tradeAmount || parseFloat(tradeAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    setIsTrading(true);
+    try {
+      const params = {
+        userId: user.id,
+        walletAddress: address,
+        currency: `${selectedCrypto.symbol}-USD`,
+      };
+
+      const result = tradeType === 'buy' 
+        ? await coinbaseService.createBuyOrder({
+            ...params,
+            amount: parseFloat(tradeAmount)
+          })
+        : await coinbaseService.createSellOrder({
+            ...params,
+            size: parseFloat(tradeAmount)
+          });
+
+      if (result.success) {
+        toast.success(result.message);
+        setTradeAmount('');
+      } else {
+        toast.error(result.error || 'Trade failed');
+      }
+    } catch (error) {
+      console.error('Trade error:', error);
+      toast.error('Failed to execute trade');
+    } finally {
+      setIsTrading(false);
     }
   };
 
@@ -187,49 +270,29 @@ export default function CryptoPage() {
       const interval = setInterval(fetchCryptoData, 30000);
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, loadFavorites, fetchCryptoData]);
 
-  const formatCurrency = (value: number) => {
+  // Memoized formatters
+  const formatCurrency = useMemo(() => (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: value < 1 ? 4 : 2,
       maximumFractionDigits: value < 1 ? 4 : 2,
     }).format(value);
-  };
+  }, []);
 
-  const formatMarketCap = (value: number) => {
-    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+  const formatMarketCap = useMemo(() => (value: number) => {
+    if (value >= 1e12) return `${(value / 1e12).toFixed(2)}T`;
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
     return formatCurrency(value);
-  };
-
-  const filteredCryptos = cryptoData.filter(crypto => 
-    crypto.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    crypto.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  }, [formatCurrency]);
 
   if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Bitcoin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-xl font-bold mb-2">Failed to Load Crypto Data</h2>
-          <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={fetchCryptoData}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
-          </Button>
-        </div>
       </div>
     );
   }
@@ -245,17 +308,14 @@ export default function CryptoPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <Bitcoin className="h-8 w-8 text-orange-500" />
-                Cryptocurrency Markets
+                Crypto Trading
               </h1>
               <p className="text-muted-foreground mt-2">
-                Real-time cryptocurrency prices from CoinGecko API
+                Connect your wallet and start trading
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-green-500 border-green-500">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
-                Live Data
-              </Badge>
+              <ConnectWalletButton />
               <Button
                 variant="outline"
                 size="sm"
@@ -270,17 +330,6 @@ export default function CryptoPage() {
               </Button>
             </div>
           </div>
-
-          {/* Search */}
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search cryptocurrencies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -288,18 +337,15 @@ export default function CryptoPage() {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle>Top Cryptocurrencies</CardTitle>
-                <CardDescription>By market cap • Live prices</CardDescription>
+                <CardTitle>Cryptocurrencies</CardTitle>
+                <CardDescription>Select to view details and trade</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[600px] overflow-y-auto">
-                  {filteredCryptos.map((crypto, index) => (
-                    <motion.div
+                <div className="divide-y">
+                  {cryptoData.map((crypto) => (
+                    <div
                       key={crypto.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`p-4 border-b hover:bg-muted/50 cursor-pointer ${
+                      className={`p-4 hover:bg-muted/50 cursor-pointer transition-colors ${
                         selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
                       }`}
                       onClick={() => setSelectedCrypto(crypto)}
@@ -310,9 +356,7 @@ export default function CryptoPage() {
                             src={crypto.image} 
                             alt={crypto.name}
                             className="w-8 h-8 rounded-full"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://via.placeholder.com/32/ff6b35/ffffff?text=${crypto.symbol.slice(0, 2)}`;
-                            }}
+                            loading="lazy"
                           />
                           <div>
                             <p className="font-medium">{crypto.name}</p>
@@ -336,22 +380,22 @@ export default function CryptoPage() {
                             crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
                           }`}>
                             {crypto.price_change_percentage_24h >= 0 ? (
-                              <ArrowUpRight className="h-3 w-3 mr-1" />
+                              <TrendingUp className="h-3 w-3 mr-1" />
                             ) : (
-                              <ArrowDownRight className="h-3 w-3 mr-1" />
+                              <TrendingDown className="h-3 w-3 mr-1" />
                             )}
-                            {crypto.price_change_percentage_24h >= 0 ? '+' : ''}{crypto.price_change_percentage_24h.toFixed(2)}%
+                            {crypto.price_change_percentage_24h.toFixed(2)}%
                           </p>
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Chart and Details */}
+          {/* Trading Interface */}
           <div className="lg:col-span-2 space-y-6">
             {selectedCrypto && (
               <>
@@ -364,9 +408,6 @@ export default function CryptoPage() {
                           src={selectedCrypto.image} 
                           alt={selectedCrypto.name}
                           className="w-12 h-12 rounded-full"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = `https://via.placeholder.com/48/ff6b35/ffffff?text=${selectedCrypto.symbol.slice(0, 2)}`;
-                          }}
                         />
                         <div>
                           <CardTitle className="text-2xl">{selectedCrypto.name}</CardTitle>
@@ -385,31 +426,77 @@ export default function CryptoPage() {
                           ) : (
                             <ArrowDownRight className="h-5 w-5 mr-1" />
                           )}
-                          {formatCurrency(Math.abs(selectedCrypto.price_change_24h))} 
-                          ({selectedCrypto.price_change_percentage_24h >= 0 ? '+' : ''}{selectedCrypto.price_change_percentage_24h.toFixed(2)}%)
+                          {selectedCrypto.price_change_percentage_24h.toFixed(2)}%
                         </p>
                       </div>
                     </div>
                   </CardHeader>
+                </Card>
+
+                {/* Trading Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Trade {selectedCrypto.symbol}</CardTitle>
+                    <CardDescription>
+                      {isConnected ? 'Enter amount to trade' : 'Connect wallet to start trading'}
+                    </CardDescription>
+                  </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Market Cap</p>
-                        <p className="font-medium">{formatMarketCap(selectedCrypto.market_cap)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">24h Volume</p>
-                        <p className="font-medium">{formatMarketCap(selectedCrypto.total_volume)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">24h High</p>
-                        <p className="font-medium">{formatCurrency(selectedCrypto.high_24h)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">24h Low</p>
-                        <p className="font-medium">{formatCurrency(selectedCrypto.low_24h)}</p>
-                      </div>
-                    </div>
+                    <Tabs value={tradeType} onValueChange={(v) => setTradeType(v as 'buy' | 'sell')}>
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="buy">Buy</TabsTrigger>
+                        <TabsTrigger value="sell">Sell</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="buy" className="space-y-4">
+                        <div>
+                          <label className="text-sm font-medium">Amount (USD)</label>
+                          <Input
+                            type="number"
+                            placeholder="100.00"
+                            value={tradeAmount}
+                            onChange={(e) => setTradeAmount(e.target.value)}
+                            disabled={!isConnected}
+                          />
+                        </div>
+                        <Button
+                          className="w-full"
+                          onClick={handleTrade}
+                          disabled={!isConnected || isTrading || !tradeAmount}
+                        >
+                          {isTrading ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Wallet className="h-4 w-4 mr-2" />
+                          )}
+                          {isConnected ? `Buy ${selectedCrypto.symbol}` : 'Connect Wallet to Trade'}
+                        </Button>
+                      </TabsContent>
+                      <TabsContent value="sell" className="space-y-4">
+                        <div>
+                          <label className="text-sm font-medium">Amount ({selectedCrypto.symbol})</label>
+                          <Input
+                            type="number"
+                            placeholder="0.001"
+                            value={tradeAmount}
+                            onChange={(e) => setTradeAmount(e.target.value)}
+                            disabled={!isConnected}
+                          />
+                        </div>
+                        <Button
+                          className="w-full"
+                          variant="destructive"
+                          onClick={handleTrade}
+                          disabled={!isConnected || isTrading || !tradeAmount}
+                        >
+                          {isTrading ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Wallet className="h-4 w-4 mr-2" />
+                          )}
+                          {isConnected ? `Sell ${selectedCrypto.symbol}` : 'Connect Wallet to Trade'}
+                        </Button>
+                      </TabsContent>
+                    </Tabs>
                   </CardContent>
                 </Card>
 
@@ -417,7 +504,6 @@ export default function CryptoPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Price Chart</CardTitle>
-                    <CardDescription>Powered by TradingView</CardDescription>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="h-[500px] w-full">

@@ -17,6 +17,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
 import { HeightsLogo } from '@/components/ui/heights-logo';
 import { useTheme } from 'next-themes';
+import { ConnectWalletButton } from '@/components/wallet/connect-wallet-button';
+import { useAccount } from 'wagmi';
 import { 
   Home, 
   PieChart, 
@@ -37,15 +39,16 @@ import {
   Sun,
   Moon,
   Monitor,
-  BookmarkCheck
+  BookmarkCheck,
+  Unplug
 } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
 
 const NAVIGATION_ITEMS = [
   { href: '/home', label: 'Dashboard', icon: Home },
+  { href: '/crypto', label: 'Trade', icon: Star },
   { href: '/watchlist', label: 'Watchlist', icon: BookmarkCheck },
   { href: '/portfolio', label: 'Portfolio', icon: PieChart },
-  { href: '/crypto', label: 'Crypto', icon: Star },
   { href: '/ai', label: 'AI Assistant', icon: Brain },
   { href: '/news', label: 'News', icon: Globe },
 ];
@@ -53,6 +56,7 @@ const NAVIGATION_ITEMS = [
 export function Navbar() {
   const { user, isAuthenticated, signOut, walletBalance, profile } = useAuth();
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { isConnected } = useAccount();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -192,6 +196,12 @@ export function Navbar() {
                           New
                         </Badge>
                       )}
+                      {item.label === 'Trade' && !isConnected && (
+                        <Badge variant="outline" className="text-xs">
+                          <Unplug className="h-3 w-3 mr-1" />
+                          Connect
+                        </Badge>
+                      )}
                     </Button>
                   </Link>
                 );
@@ -203,8 +213,13 @@ export function Navbar() {
           <div className="flex items-center gap-2">
             {isAuthenticated ? (
               <>
+                {/* Wallet Connection Button - Priority placement */}
+                <div className="hidden sm:block">
+                  <ConnectWalletButton />
+                </div>
+
                 {/* Wallet Balance */}
-                {walletBalance && (
+                {walletBalance && !isConnected && (
                   <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-muted rounded-full">
                     <Wallet className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">
@@ -295,6 +310,20 @@ export function Navbar() {
                         </div>
                       </div>
                     </DropdownMenuLabel>
+                    
+                    {/* Wallet Status in Dropdown */}
+                    {isConnected && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem disabled>
+                          <div className="flex items-center gap-2 text-xs">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                            <span>Wallet Connected</span>
+                          </div>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    
                     <DropdownMenuSeparator />
                     
                     <DropdownMenuItem asChild>
@@ -436,9 +465,14 @@ export function Navbar() {
               className="md:hidden border-t border-border"
             >
               <div className="py-4 space-y-2">
-                {/* Wallet Balance Mobile */}
-                {walletBalance && (
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4">
+                {/* Wallet Connection Mobile */}
+                <div className="px-4 pb-4">
+                  <ConnectWalletButton />
+                </div>
+
+                {/* Wallet Balance Mobile - Only show if not connected */}
+                {walletBalance && !isConnected && (
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4 mx-4">
                     <div className="flex items-center gap-2">
                       <Wallet className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium">Available Balance</span>
@@ -466,6 +500,12 @@ export function Navbar() {
                         {item.label === 'AI Assistant' && (
                           <Badge variant="secondary" className="text-xs ml-auto">
                             New
+                          </Badge>
+                        )}
+                        {item.label === 'Trade' && !isConnected && (
+                          <Badge variant="outline" className="text-xs ml-auto">
+                            <Unplug className="h-3 w-3 mr-1" />
+                            Connect
                           </Badge>
                         )}
                       </Button>

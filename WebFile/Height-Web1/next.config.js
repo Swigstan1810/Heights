@@ -278,6 +278,12 @@ const nextConfig = {
       }
     }
 
+    // Add Webpack rule to treat worker files as modules
+    config.module.rules.push({
+      test: /HeartbeatWorker\.js$/,
+      type: 'javascript/auto',
+    });
+
     return config;
   },
   
