@@ -1,23 +1,16 @@
 /** @type {import('next').NextConfig} */
+const crypto = require('crypto');
+
 const nextConfig = {
-  // React strict mode for better debugging
+  // Enable strict mode for better error handling
   reactStrictMode: true,
   
-  // Disable x-powered-by header for security
+  // Disable x-powered-by header
   poweredByHeader: false,
   
-  // Enable SWC minification (faster than Terser)
-  swcMinify: true,
-  
-  // Production optimizations
-  productionBrowserSourceMaps: false,
-  
-  // Compression
-  compress: true,
-  
-  // Experimental features for better performance
+  // Experimental features for optimization
   experimental: {
-    // Optimize package imports - tree shaking for specific packages
+    // Enable optimized package imports for better tree shaking
     optimizePackageImports: [
       'lucide-react',
       '@radix-ui/react-dropdown-menu',
@@ -26,53 +19,38 @@ const nextConfig = {
       'recharts',
       '@supabase/auth-helpers-nextjs',
       'wagmi',
-      'viem',
-      '@coinbase/wallet-sdk'
+      'viem'
     ],
     
-    // Enable optimized font loading
-    optimizeCss: true,
+    // Enable modern bundling
+    esmExternals: true,
     
-    // Reduce JavaScript size
-    serverMinification: true,
-    
-    // Better server components
-    serverActions: {
-      bodySizeLimit: '2mb',
+    // Enable turbo mode for faster builds
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
     },
   },
 
-  // Compiler options
+  // Compiler optimizations
   compiler: {
-    // Remove console logs in production (keep errors and warnings)
+    // Remove console logs in production
     removeConsole: process.env.NODE_ENV === 'production' ? {
       exclude: ['error', 'warn']
     } : false,
     
-    // Enable emotion optimization if you use it
-    // emotion: true,
-    
-    // Enable styled-components optimization if you use it
-    // styledComponents: true,
+    // Enable SWC minification
+    styledComponents: true,
   },
   
-  // Modularize imports for better tree shaking
-  modularizeImports: {
-    'lucide-react': {
-      transform: 'lucide-react/dist/esm/icons/{{member}}',
-    },
-    '@mui/material': {
-      transform: '@mui/material/{{member}}',
-    },
-    '@mui/icons-material': {
-      transform: '@mui/icons-material/{{member}}',
-    },
-    'lodash': {
-      transform: 'lodash/{{member}}',
-    },
-  },
+  // Enable compression
+  compress: true,
   
-  // Headers for security and caching
+  // Security headers
   async headers() {
     return [
       {
@@ -93,57 +71,9 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin'
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()'
-          },
-          // Preconnect to external domains
-          {
-            key: 'Link',
-            value: '<https://fonts.googleapis.com>; rel=preconnect; crossorigin'
           }
         ]
       },
-      // Aggressive caching for static assets
-      {
-        source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
-      },
-      {
-        source: '/images/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
-      },
-      {
-        source: '/fonts/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
-      },
-      // Service Worker
-      {
-        source: '/sw.js',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate'
-          }
-        ]
-      },
-      // API routes should not be cached
       {
         source: '/api/:path*',
         headers: [
@@ -152,112 +82,142 @@ const nextConfig = {
             value: 'no-store, max-age=0'
           }
         ]
+      },
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          }
+        ]
       }
     ];
   },
   
-  // Image optimization
+  // Configure images
   images: {
     domains: [
-      'localhost',
+      'localhost', 
+      'your-domain.com',
       'api.coingecko.com',
-      'assets.coingecko.com',
+      'via.placeholder.com',
       'images.unsplash.com',
-      'lh3.googleusercontent.com',
-      's3.tradingview.com',
-      'via.placeholder.com'
+      'assets.coingecko.com'
     ],
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60,
+    minimumCacheTTL: 300, // 5 minutes
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    // Enable image optimization
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
-  // Webpack configuration
-  webpack: (config, { dev, isServer }) => {
-    // Fix for wagmi/viem issues
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      net: false,
-      tls: false,
-      crypto: false,
-    };
-
-    // Fix for punycode deprecation warning
+  // Aggressive webpack optimization
+  webpack: (config, { dev, isServer, webpack }) => {
+    // Alias configuration
     config.resolve.alias = {
       ...config.resolve.alias,
-      punycode: 'punycode/',
+      '@': './src',
     };
-    
-    // Enable webpack 5 optimizations
+
+    // Production optimizations only
     if (!dev && !isServer) {
-      // Better minification
-      config.optimization = {
-        ...config.optimization,
-        moduleIds: 'deterministic',
-        runtimeChunk: 'single',
-        splitChunks: {
-          chunks: 'all',
-          maxInitialRequests: 25,
-          minSize: 20000,
-          maxSize: 244000,
-          cacheGroups: {
-            default: false,
-            vendors: false,
-            // Framework chunks
-            framework: {
-              name: 'framework',
-              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
-              priority: 40,
-              enforce: true,
-              reuseExistingChunk: true,
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          default: false,
+          vendors: false,
+          // Framework chunks
+          framework: {
+            name: 'framework',
+            test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
+            priority: 40,
+            chunks: 'all',
+          },
+          // Lib chunk
+          lib: {
+            test(module) {
+              return module.size() > 160000 && /node_modules[/\\]/.test(module.identifier());
             },
-            // Large libraries
-            lib: {
-              test(module) {
-                return module.size() > 160000 && /node_modules[/\\]/.test(module.identifier());
-              },
-              name(module) {
-                const hash = require('crypto').createHash('sha1');
-                hash.update(module.identifier());
-                return hash.digest('hex').substring(0, 8);
-              },
-              priority: 30,
-              minChunks: 1,
-              reuseExistingChunk: true,
+            name(module) {
+              const hash = crypto.createHash('sha1');
+              hash.update(module.identifier());
+              return hash.digest('hex').substring(0, 8);
             },
-            // Common chunks
-            commons: {
-              name: 'commons',
-              minChunks: 2,
-              priority: 20,
-              reuseExistingChunk: true,
+            priority: 30,
+            minChunks: 1,
+            reuseExistingChunk: true,
+          },
+          // Commons chunk
+          commons: {
+            name: 'commons',
+            minChunks: 2,
+            priority: 20,
+          },
+          // Shared chunk
+          shared: {
+            name(module, chunks) {
+              return crypto
+                .createHash('sha1')
+                .update(chunks.reduce((acc, chunk) => acc + chunk.name, ''))
+                .digest('hex') + (isServer ? '-server' : '');
             },
-            // Shared chunks
-            shared: {
-              name(module, chunks) {
-                return 'shared-' + require('crypto')
-                  .createHash('sha1')
-                  .update(chunks.reduce((acc, chunk) => acc + chunk.name, ''))
-                  .digest('hex')
-                  .substring(0, 8);
-              },
-              priority: 10,
-              minChunks: 2,
-              reuseExistingChunk: true,
-            },
+            priority: 10,
+            minChunks: 2,
+            reuseExistingChunk: true,
           },
         },
-        minimize: true,
+        maxAsyncRequests: 30,
+        maxInitialRequests: 25,
       };
+
+      // Module optimization
+      config.optimization.moduleIds = 'deterministic';
       
-      // Enable long term caching
-      config.optimization.realContentHash = true;
+      // Minimize bundle size
+      config.optimization.minimize = true;
+      
+      // Remove source maps in production
+      config.devtool = false;
+      
+      // Remove unused CSS
+      config.optimization.splitChunks.cacheGroups.styles = {
+        name: 'styles',
+        test: /\.(css|scss|sass)$/,
+        chunks: 'all',
+        enforce: true,
+        priority: 20,
+      };
     }
+
+    // Ignore moment.js locales to reduce bundle size
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^\.\/locale$/,
+        contextRegExp: /moment$/,
+      })
+    );
+
+    // Bundle analyzer
+    if (process.env.ANALYZE === 'true') {
+      try {
+        const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+        config.plugins.push(
+          new BundleAnalyzerPlugin({
+            analyzerMode: 'static',
+            openAnalyzer: true,
+            reportFilename: 'bundle-analyzer-report.html',
+          })
+        );
+      } catch (e) {
+        console.log('Bundle analyzer not available');
+      }
+    }
+
+    // Add Webpack rule to treat worker files as modules
+    config.module.rules.push({
+      test: /HeartbeatWorker\.js$/,
+      type: 'javascript/auto',
+    });
 
     return config;
   },
@@ -268,6 +228,15 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
+  
+  // Disable source maps in production
+  productionBrowserSourceMaps: false,
+  
+  // Output configuration
+  output: 'standalone',
+  
+  // Enable SWC minification
+  swcMinify: true,
   
   // Redirects
   async redirects() {
@@ -280,39 +249,15 @@ const nextConfig = {
     ];
   },
   
-  // Rewrites for API proxying
+  // Rewrites for API optimization
   async rewrites() {
     return [
       {
-        source: '/api/proxy/coingecko/:path*',
+        source: '/api/proxy/:path*',
         destination: 'https://api.coingecko.com/api/v3/:path*',
       },
     ];
   },
-
-  // TypeScript configuration
-  typescript: {
-    ignoreBuildErrors: false,
-  },
-
-  // ESLint configuration
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
-
-  // Output configuration
-  output: 'standalone',
-  
-  // Enable build cache
-  cacheDirectory: '.next/cache',
-  
-  // Optimize builds
-  optimizeFonts: true,
-  
-  // Bundle analyzer (uncomment to analyze bundle size)
-  // bundleAnalyzer: {
-  //   enabled: process.env.ANALYZE === 'true',
-  // },
 }
 
 module.exports = nextConfig;

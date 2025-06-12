@@ -6,7 +6,6 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WalletProvider } from "@/components/providers/wallet-provider";
 import { Toaster } from "sonner";
-import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,7 +22,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ServiceWorkerRegistration />
         <ThemeProvider attribute="class" defaultTheme="dark">
           <AuthProvider>
             <WalletProvider>

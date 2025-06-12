@@ -1,4 +1,4 @@
-// app/(protected)/crypto/page.tsx - Key optimizations
+// app/(protected)/crypto/page.tsx - Optimized for faster loading
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -51,12 +51,12 @@ interface CryptoData {
 // Reduce initial load - only top 3 cryptos
 const MAIN_CRYPTOS = ['bitcoin', 'ethereum', 'binancecoin'];
 
-// Add cache control
+// Cache management
 const CACHE_DURATION = 30000; // 30 seconds
 const CACHE_KEY = 'crypto_data_cache';
 
 export default function CryptoPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, isInitialized } = useAuth();
   const { address, isConnected } = useAccount();
   const router = useRouter();
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
@@ -70,13 +70,14 @@ export default function CryptoPage() {
   
   const supabase = createClientComponentClient();
   const abortControllerRef = useRef<AbortController | null>(null);
-  const cacheTimestampRef = useRef<number>(0);
+  const hasInitializedRef = useRef(false);
 
+  // Redirect check - only after initialization
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (isInitialized && !isAuthenticated) {
       router.push('/login?redirectTo=/crypto');
     }
-  }, [authLoading, user, router]);
+  }, [isInitialized, isAuthenticated, router]);
 
   // Check cache first
   const getCachedData = useCallback(() => {
@@ -102,12 +103,12 @@ export default function CryptoPage() {
     }));
   }, []);
 
-  // Optimized data fetching with abort control
+  // Optimized data fetching
   const fetchCryptoData = useCallback(async (skipCache = false) => {
     // Check cache first
     if (!skipCache) {
       const cached = getCachedData();
-      if (cached) {
+      if (cached && cached.length > 0) {
         setCryptoData(cached);
         if (!selectedCrypto && cached.length > 0) {
           setSelectedCrypto(cached[0]);
@@ -161,8 +162,6 @@ export default function CryptoPage() {
       if (error.name !== 'AbortError') {
         console.error('Error fetching crypto data:', error);
         toast.error('Failed to fetch crypto data');
-        // Try to load from database cache
-        await loadFromDatabaseCache();
       }
     } finally {
       setLoading(false);
@@ -170,37 +169,7 @@ export default function CryptoPage() {
     }
   }, [favorites, selectedCrypto, getCachedData, setCachedData]);
 
-  // Load from database cache when API fails
-  const loadFromDatabaseCache = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('market_data_cache')
-        .select('*')
-        .in('symbol', MAIN_CRYPTOS.map(c => c.toUpperCase()))
-        .order('market_cap', { ascending: false });
-
-      if (!error && data && data.length > 0) {
-        const formattedData: CryptoData[] = data.map(item => ({
-          id: item.symbol.toLowerCase(),
-          symbol: item.symbol,
-          name: item.symbol,
-          current_price: Number(item.price),
-          price_change_percentage_24h: Number(item.change_24h_percent),
-          market_cap: Number(item.market_cap),
-          image: `https://assets.coingecko.com/coins/images/1/small/${item.symbol.toLowerCase()}.png`,
-          isFavorite: favorites.has(item.symbol)
-        }));
-        setCryptoData(formattedData);
-        if (!selectedCrypto && formattedData.length > 0) {
-          setSelectedCrypto(formattedData[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading from cache:', error);
-    }
-  };
-
-  // Load favorites - optimized
+  // Load favorites
   const loadFavorites = useCallback(async () => {
     if (!user) return;
     
@@ -218,7 +187,7 @@ export default function CryptoPage() {
     }
   }, [user, supabase]);
 
-  // Debounced trade handler
+  // Handle trade
   const handleTrade = useCallback(async () => {
     if (!isConnected || !address || !selectedCrypto || !user) {
       toast.error('Please connect your wallet first');
@@ -262,11 +231,19 @@ export default function CryptoPage() {
     }
   }, [isConnected, address, selectedCrypto, user, tradeAmount, tradeType]);
 
-  // Initial load
+  // Initial load - load crypto data immediately without waiting for auth
+  useEffect(() => {
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      // Load crypto data immediately
+      fetchCryptoData();
+    }
+  }, [fetchCryptoData]);
+
+  // Load user-specific data after authentication
   useEffect(() => {
     if (user) {
       loadFavorites();
-      fetchCryptoData();
       
       // Set up interval with cleanup
       const interval = setInterval(() => {
@@ -280,7 +257,7 @@ export default function CryptoPage() {
         }
       };
     }
-  }, [user, loadFavorites]);
+  }, [user, loadFavorites, fetchCryptoData]);
 
   // Memoized formatters
   const formatCurrency = useMemo(() => (value: number) => {
@@ -299,51 +276,22 @@ export default function CryptoPage() {
     return formatCurrency(value);
   }, [formatCurrency]);
 
-  // Skeleton loader
-  if (loading || authLoading) {
+  // Show page immediately with skeleton while auth is checking
+  if (!isInitialized) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 pt-24 pb-16">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
-              <Card className="animate-pulse">
-                <CardHeader>
-                  <div className="h-6 bg-muted rounded w-3/4"></div>
-                  <div className="h-4 bg-muted rounded w-1/2 mt-2"></div>
-                </CardHeader>
-                <CardContent>
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="p-4 border-b last:border-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-muted rounded-full"></div>
-                          <div>
-                            <div className="h-4 bg-muted rounded w-20 mb-1"></div>
-                            <div className="h-3 bg-muted rounded w-12"></div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="h-4 bg-muted rounded w-16 mb-1"></div>
-                          <div className="h-3 bg-muted rounded w-12"></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="animate-pulse">
-                <CardHeader>
-                  <div className="h-8 bg-muted rounded w-1/3"></div>
-                </CardHeader>
-              </Card>
-              <Card className="animate-pulse">
-                <CardContent className="p-0">
-                  <div className="h-[500px] bg-muted rounded-lg"></div>
-                </CardContent>
-              </Card>
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded w-48 mb-8"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1">
+                <div className="h-96 bg-muted rounded-lg"></div>
+              </div>
+              <div className="lg:col-span-2 space-y-6">
+                <div className="h-32 bg-muted rounded-lg"></div>
+                <div className="h-64 bg-muted rounded-lg"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -395,45 +343,67 @@ export default function CryptoPage() {
                 <CardDescription>Select to view details and trade</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y">
-                  {cryptoData.map((crypto) => (
-                    <div
-                      key={crypto.id}
-                      className={`p-4 hover:bg-muted/50 cursor-pointer transition-colors ${
-                        selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
-                      }`}
-                      onClick={() => setSelectedCrypto(crypto)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <img 
-                            src={crypto.image} 
-                            alt={crypto.name}
-                            className="w-8 h-8 rounded-full"
-                            loading="lazy"
-                          />
+                {loading ? (
+                  <div className="divide-y">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="p-4 animate-pulse">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-muted rounded-full"></div>
+                            <div>
+                              <div className="h-4 bg-muted rounded w-20 mb-1"></div>
+                              <div className="h-3 bg-muted rounded w-12"></div>
+                            </div>
+                          </div>
                           <div>
-                            <p className="font-medium">{crypto.name}</p>
-                            <p className="text-sm text-muted-foreground">{crypto.symbol}</p>
+                            <div className="h-4 bg-muted rounded w-16 mb-1"></div>
+                            <div className="h-3 bg-muted rounded w-12"></div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium">{formatCurrency(crypto.current_price)}</p>
-                          <p className={`text-sm flex items-center justify-end ${
-                            crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
-                          }`}>
-                            {crypto.price_change_percentage_24h >= 0 ? (
-                              <TrendingUp className="h-3 w-3 mr-1" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3 mr-1" />
-                            )}
-                            {crypto.price_change_percentage_24h.toFixed(2)}%
-                          </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {cryptoData.map((crypto) => (
+                      <div
+                        key={crypto.id}
+                        className={`p-4 hover:bg-muted/50 cursor-pointer transition-colors ${
+                          selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
+                        }`}
+                        onClick={() => setSelectedCrypto(crypto)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <img 
+                              src={crypto.image} 
+                              alt={crypto.name}
+                              className="w-8 h-8 rounded-full"
+                              loading="lazy"
+                            />
+                            <div>
+                              <p className="font-medium">{crypto.name}</p>
+                              <p className="text-sm text-muted-foreground">{crypto.symbol}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{formatCurrency(crypto.current_price)}</p>
+                            <p className={`text-sm flex items-center justify-end ${
+                              crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
+                            }`}>
+                              {crypto.price_change_percentage_24h >= 0 ? (
+                                <TrendingUp className="h-3 w-3 mr-1" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3 mr-1" />
+                              )}
+                              {crypto.price_change_percentage_24h.toFixed(2)}%
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

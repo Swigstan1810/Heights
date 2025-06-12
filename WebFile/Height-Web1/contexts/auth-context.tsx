@@ -1,4 +1,4 @@
-// contexts/auth-context.tsx - Updated to redirect to home instead of dashboard
+// contexts/auth-context.tsx - Optimized version with caching and better performance
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
@@ -48,9 +48,6 @@ interface AuthState {
   isAuthenticated: boolean;
   isInitialized: boolean;
   error: string | null;
-  profileError: string | null;
-  profileLoading?: boolean;
-  walletLoading?: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -64,8 +61,11 @@ interface AuthContextType extends AuthState {
   checkSession: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<{ error: Error | null }>;
   clearError: () => void;
-  retryProfileLoad: () => Promise<void>;
 }
+
+// Cache for profile and wallet data
+const dataCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -79,16 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
     isInitialized: false,
     error: null,
-    profileError: null,
-    profileLoading: false,
-    walletLoading: false,
   });
 
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
   const initializationRef = useRef(false);
-  const profileFetchRef = useRef(false);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchingRef = useRef<Set<string>>(new Set());
 
   // Update state helper
   const updateState = useCallback((updates: Partial<AuthState>) => {
@@ -97,43 +93,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Clear error
   const clearError = useCallback(() => {
-    updateState({ error: null, profileError: null });
+    updateState({ error: null });
   }, [updateState]);
 
-  // Enhanced profile fetcher with exponential backoff retry
-  const fetchProfile = useCallback(async (userId: string, retries = 3, delay = 1000): Promise<Profile | null> => {
-    if (profileFetchRef.current) return null;
-    profileFetchRef.current = true;
+  // Get cached data
+  const getCachedData = useCallback((key: string) => {
+    const cached = dataCache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
+    dataCache.delete(key);
+    return null;
+  }, []);
+
+  // Set cached data
+  const setCachedData = useCallback((key: string, data: any) => {
+    dataCache.set(key, { data, timestamp: Date.now() });
+  }, []);
+
+  // Profile fetcher with caching and deduplication
+  const fetchProfile = useCallback(async (userId: string, forceRefresh = false): Promise<Profile | null> => {
+    const cacheKey = `profile:${userId}`;
+    
+    // Check cache first
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        console.log('[Auth] Using cached profile data');
+        return cached;
+      }
+    }
+
+    // Prevent duplicate fetches
+    if (fetchingRef.current.has(cacheKey)) {
+      console.log('[Auth] Profile fetch already in progress');
+      return null;
+    }
+
+    fetchingRef.current.add(cacheKey);
 
     try {
-      console.log(`[Auth] Fetching profile for user: ${userId}, attempt: ${4 - retries}`);
+      console.log('[Auth] Fetching profile for user:', userId);
       
-      // First check if profile exists
-      const { data: existingProfile, error: fetchError } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('[Auth] Profile fetch error:', fetchError);
-        throw fetchError;
+      if (error && error.code !== 'PGRST116') {
+        throw error;
       }
 
-      if (existingProfile) {
-        console.log('[Auth] Profile found:', existingProfile.email);
-        updateState({ profileError: null });
-        return existingProfile as Profile;
+      if (data) {
+        setCachedData(cacheKey, data);
+        return data as Profile;
       }
 
       // Create profile if it doesn't exist
       const currentUser = state.user;
-      if (!currentUser) {
-        console.log('[Auth] No current user for profile creation');
-        return null;
-      }
-
-      console.log('[Auth] Creating new profile for user:', userId);
+      if (!currentUser) return null;
 
       const newProfileData = {
         id: userId,
@@ -155,38 +174,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      if (insertError) {
-        console.error('[Auth] Profile creation error:', insertError);
-        throw insertError;
-      }
+      if (insertError) throw insertError;
 
-      console.log('[Auth] Profile created successfully');
-      updateState({ profileError: null });
+      setCachedData(cacheKey, newProfile);
       return newProfile as Profile;
 
     } catch (error) {
-      console.error('[Auth] Error in fetchProfile:', error);
-      
-      if (retries > 0) {
-        console.log(`[Auth] Retrying profile fetch in ${delay}ms, ${retries} attempts remaining`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        profileFetchRef.current = false;
-        return fetchProfile(userId, retries - 1, Math.min(delay * 2, 10000));
-      }
-      
-      updateState({ 
-        profileError: error instanceof Error ? error.message : 'Failed to load profile'
-      });
+      console.error('[Auth] Error fetching profile:', error);
       return null;
     } finally {
-      profileFetchRef.current = false;
+      fetchingRef.current.delete(cacheKey);
     }
-  }, [supabase, state.user, updateState]);
+  }, [supabase, state.user, getCachedData, setCachedData]);
 
-  // Enhanced wallet balance fetcher
-  const fetchWalletBalance = useCallback(async (userId: string, retries = 2): Promise<WalletBalance | null> => {
+  // Wallet balance fetcher with caching
+  const fetchWalletBalance = useCallback(async (userId: string, forceRefresh = false): Promise<WalletBalance | null> => {
+    const cacheKey = `wallet:${userId}`;
+    
+    // Check cache first
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        console.log('[Auth] Using cached wallet data');
+        return cached;
+      }
+    }
+
+    // Prevent duplicate fetches
+    if (fetchingRef.current.has(cacheKey)) {
+      console.log('[Auth] Wallet fetch already in progress');
+      return null;
+    }
+
+    fetchingRef.current.add(cacheKey);
+
     try {
-      console.log(`[Auth] Fetching wallet balance for user: ${userId}`);
+      console.log('[Auth] Fetching wallet balance for user:', userId);
       
       const { data, error } = await supabase
         .from('wallet_balance')
@@ -194,13 +217,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('[Auth] Wallet balance fetch error:', error);
-        throw error;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
 
       if (!data) {
-        console.log('[Auth] Creating wallet balance for user');
         const { data: newWallet, error: createError } = await supabase
           .from('wallet_balance')
           .insert({
@@ -212,67 +231,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .select()
           .single();
 
-        if (createError) {
-          console.error('[Auth] Wallet creation error:', createError);
-          throw createError;
-        }
+        if (createError) throw createError;
+        setCachedData(cacheKey, newWallet);
         return newWallet as WalletBalance;
       }
 
+      setCachedData(cacheKey, data);
       return data as WalletBalance;
     } catch (error) {
-      console.error('[Auth] Error in fetchWalletBalance:', error);
-      
-      if (retries > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return fetchWalletBalance(userId, retries - 1);
-      }
-      
+      console.error('[Auth] Error fetching wallet:', error);
       return null;
+    } finally {
+      fetchingRef.current.delete(cacheKey);
     }
-  }, [supabase]);
+  }, [supabase, getCachedData, setCachedData]);
 
-  // Retry profile load function
-  const retryProfileLoad = useCallback(async () => {
-    if (!state.user) return;
-    updateState({ profileError: null, profileLoading: true, walletLoading: true });
-    try {
-      const [profileData, walletData] = await Promise.all([
-        fetchProfile(state.user.id),
-        fetchWalletBalance(state.user.id)
-      ]);
-      updateState({
-        profile: profileData,
-        walletBalance: walletData,
-        profileLoading: false,
-        walletLoading: false,
-      });
-    } catch (error) {
-      console.error('[Auth] Retry profile load failed:', error);
-      updateState({ profileLoading: false, walletLoading: false });
-    }
-  }, [state.user, fetchProfile, fetchWalletBalance, updateState]);
-
-  // Initialize auth state with better error handling
+  // Initialize auth state
   useEffect(() => {
     if (initializationRef.current) return;
     initializationRef.current = true;
+
     const initializeAuth = async () => {
       try {
-        updateState({ loading: true, error: null, profileError: null });
         const { data: { session }, error } = await supabase.auth.getSession();
+        
         if (error) throw error;
+
         if (session?.user) {
+          // Set basic auth state immediately
           updateState({
             session,
             user: session.user,
             isAuthenticated: true,
             loading: false,
             isInitialized: true,
-            profileLoading: true,
-            walletLoading: true,
           });
-          // Fetch profile and wallet in parallel
+
+          // Load profile and wallet asynchronously without blocking
           Promise.all([
             fetchProfile(session.user.id),
             fetchWalletBalance(session.user.id)
@@ -280,16 +275,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             updateState({
               profile: profileData,
               walletBalance: walletData,
-              profileLoading: false,
-              walletLoading: false,
             });
-          }).catch((fetchError) => {
-            updateState({
-              profileLoading: false,
-              walletLoading: false,
-              profileError: fetchError instanceof Error ? fetchError.message : 'Failed to load user data'
-            });
-          });
+          }).catch(console.error);
         } else {
           updateState({
             loading: false,
@@ -297,59 +284,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
       } catch (error) {
+        console.error('[Auth] Initialization error:', error);
         updateState({
-          error: error instanceof Error ? error.message : 'Failed to initialize authentication',
+          error: error instanceof Error ? error.message : 'Failed to initialize',
           loading: false,
           isInitialized: true
         });
       }
     };
+
     initializeAuth();
 
-    // Set up auth state listener with enhanced error handling
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] Auth state changed:', event);
       
-      // Clear any existing retry timeout
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-      
       if (event === 'SIGNED_IN' && session) {
-        console.log('[Auth] User signed in:', session.user.email);
+        // Set basic auth state immediately
         updateState({
           session,
           user: session.user,
           isAuthenticated: true,
-          loading: true,
+          loading: false,
           error: null,
-          profileError: null
         });
         
-        try {
-          const [profileData, walletData] = await Promise.all([
-            fetchProfile(session.user.id),
-            fetchWalletBalance(session.user.id)
-          ]);
-          
+        // Load additional data asynchronously
+        Promise.all([
+          fetchProfile(session.user.id),
+          fetchWalletBalance(session.user.id)
+        ]).then(([profileData, walletData]) => {
           updateState({
             profile: profileData,
             walletBalance: walletData,
-            loading: false
           });
-        } catch (error) {
-          console.error('[Auth] Post-signin data fetch error:', error);
-          updateState({
-            loading: false,
-            profileError: error instanceof Error ? error.message : 'Failed to load user data'
-          });
-        }
+        }).catch(console.error);
         
       } else if (event === 'SIGNED_OUT') {
-        console.log('[Auth] User signed out');
+        // Clear cache on sign out
+        dataCache.clear();
+        fetchingRef.current.clear();
+        
         updateState({
           user: null,
           session: null,
@@ -358,41 +333,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isAuthenticated: false,
           loading: false,
           error: null,
-          profileError: null
         });
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        console.log('[Auth] Token refreshed');
         updateState({ session });
       }
     });
 
     return () => {
       subscription.unsubscribe();
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
     };
   }, [supabase, fetchProfile, fetchWalletBalance, updateState]);
 
-  // Enhanced sign out with cleanup
+  // Sign out
   const signOut = useCallback(async () => {
     try {
-      console.log('[Auth] Signing out user');
       updateState({ loading: true });
+      
+      // Clear cache
+      dataCache.clear();
+      fetchingRef.current.clear();
       
       await supabase.auth.signOut();
       
-      updateState({
-        user: null,
-        session: null,
-        profile: null,
-        walletBalance: null,
-        isAuthenticated: false,
-        loading: false,
-        error: null,
-        profileError: null
-      });
-
       // Clear browser storage
       if (typeof window !== 'undefined') {
         localStorage.removeItem('supabase.auth.token');
@@ -409,29 +371,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, router, updateState]);
 
-  // Enhanced session validation
+  // Check session
   const checkSession = useCallback(async (): Promise<boolean> => {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       
-      if (error || !session) {
-        console.log('[Auth] Session check failed - no valid session');
-        return false;
-      }
+      if (error || !session) return false;
 
       const expiresAt = new Date(session.expires_at! * 1000);
       const now = new Date();
       const timeUntilExpiry = expiresAt.getTime() - now.getTime();
       
       if (timeUntilExpiry <= 0) {
-        console.log('[Auth] Session expired');
         await signOut();
         return false;
       }
 
       // Refresh token if expiring within 5 minutes
       if (timeUntilExpiry < 5 * 60 * 1000) {
-        console.log('[Auth] Session expiring soon, refreshing...');
         await refreshSession();
       }
 
@@ -442,16 +399,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, signOut]);
 
-  // Enhanced session refresh
+  // Refresh session
   const refreshSession = useCallback(async () => {
     try {
-      console.log('[Auth] Refreshing session');
       const { data: { session }, error } = await supabase.auth.refreshSession();
       
-      if (error) {
-        console.error('[Auth] Session refresh error:', error);
-        throw error;
-      }
+      if (error) throw error;
       
       if (session) {
         updateState({ session, user: session.user });
@@ -462,23 +415,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, signOut, updateState]);
 
-  // Enhanced wallet balance refresh
+  // Refresh wallet balance
   const refreshWalletBalance = useCallback(async () => {
     if (!state.user) return;
     
     try {
-      console.log('[Auth] Refreshing wallet balance');
-      const balance = await fetchWalletBalance(state.user.id);
+      const balance = await fetchWalletBalance(state.user.id, true); // Force refresh
       updateState({ walletBalance: balance });
     } catch (error) {
-      console.error('[Auth] Error refreshing wallet balance:', error);
+      console.error('[Auth] Error refreshing wallet:', error);
     }
   }, [state.user, fetchWalletBalance, updateState]);
 
-  // Enhanced sign in - REDIRECT TO HOME
+  // Sign in
   const signIn = useCallback(async (email: string, password: string) => {
     try {
-      updateState({ loading: true, error: null, profileError: null });
+      updateState({ loading: true, error: null });
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -488,16 +440,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       if (data.session && data.user) {
+        // Clear any stale cache for this user
+        dataCache.delete(`profile:${data.user.id}`);
+        dataCache.delete(`wallet:${data.user.id}`);
+        
         updateState({
           session: data.session,
           user: data.user,
-          isAuthenticated: true
+          isAuthenticated: true,
+          loading: false,
         });
 
-        // Load profile and wallet data will be handled by the auth state change listener
-        
-        // REDIRECT TO HOME AFTER SUCCESSFUL LOGIN
+        // Redirect immediately, don't wait for profile/wallet
         router.push('/ai');
+        
+        // Load profile and wallet in background
+        Promise.all([
+          fetchProfile(data.user.id),
+          fetchWalletBalance(data.user.id)
+        ]).then(([profileData, walletData]) => {
+          updateState({
+            profile: profileData,
+            walletBalance: walletData,
+          });
+        }).catch(console.error);
       }
 
       return { error: null };
@@ -510,12 +476,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return { error: error as Error };
     }
-  }, [supabase, updateState, router]);
+  }, [supabase, updateState, router, fetchProfile, fetchWalletBalance]);
 
-  // Enhanced Google sign in - with home redirect in callback
+  // Google sign in
   const signInWithGoogle = useCallback(async () => {
     try {
-      updateState({ loading: true, error: null, profileError: null });
+      updateState({ loading: true, error: null });
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -543,10 +509,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, updateState]);
 
-  // Enhanced sign up
+  // Sign up
   const signUp = useCallback(async (email: string, password: string) => {
     try {
-      updateState({ loading: true, error: null, profileError: null });
+      updateState({ loading: true, error: null });
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -575,7 +541,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, updateState]);
 
-  // Enhanced update profile
+  // Update profile
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {
     try {
       if (!state.user) {
@@ -595,6 +561,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       if (data) {
+        // Update cache
+        setCachedData(`profile:${state.user.id}`, data);
         updateState({ profile: data as Profile });
       }
 
@@ -603,9 +571,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('[Auth] Update profile error:', error);
       return { error: error as Error };
     }
-  }, [state.user, supabase, updateState]);
+  }, [state.user, supabase, updateState, setCachedData]);
 
-  // Enhanced resend verification email
+  // Resend verification email
   const resendVerificationEmail = useCallback(async () => {
     try {
       if (!state.user?.email) {
@@ -638,10 +606,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkSession,
     resendVerificationEmail,
     clearError,
-    retryProfileLoad,
-    // Expose profileLoading and walletLoading for skeletons
-    profileLoading: state.profileLoading,
-    walletLoading: state.walletLoading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

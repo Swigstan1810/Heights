@@ -1,7 +1,7 @@
-// app/(protected)/profile/page.tsx
+// app/(protected)/profile/page.tsx - Optimized version
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Navbar } from '@/components/navbar';
@@ -12,9 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { motion } from 'framer-motion';
 import { 
   User, 
   Mail, 
@@ -60,9 +58,8 @@ interface ProfileData {
 }
 
 export default function ProfilePage() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, profile: authProfile, isAuthenticated, isInitialized } = useAuth();
   const router = useRouter();
-  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -79,54 +76,31 @@ export default function ProfilePage() {
 
   const supabase = createClientComponentClient<Database>();
 
+  // Redirect check - only after initialization
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
+    if (isInitialized && !isAuthenticated) {
+      router.push('/login?redirectTo=/profile');
     }
-  }, [loading, isAuthenticated, router]);
+  }, [isInitialized, isAuthenticated, router]);
 
-  // Load profile data
+  // Load profile data from auth context
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!user) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error loading profile:', error);
-          return;
-        }
-
-        if (data) {
-          setProfile(data);
-          setFormData({
-            full_name: data.full_name || '',
-            username: data.username || '',
-            bio: data.bio || '',
-            phone_number: data.phone_number || '',
-            date_of_birth: data.date_of_birth || '',
-            location: data.location || '',
-            website: data.website || '',
-            timezone: data.timezone || 'Asia/Kolkata'
-          });
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error);
-      }
-    };
-
-    if (user) {
-      loadProfile();
+    if (authProfile) {
+      setFormData({
+        full_name: authProfile.full_name || '',
+        username: authProfile.username || '',
+        bio: authProfile.bio || '',
+        phone_number: authProfile.phone_number || '',
+        date_of_birth: authProfile.date_of_birth || '',
+        location: authProfile.location || '',
+        website: authProfile.website || '',
+        timezone: authProfile.timezone || 'Asia/Kolkata'
+      });
     }
-  }, [user, supabase]);
+  }, [authProfile]);
 
   const handleSave = async () => {
-    if (!user || !profile) return;
+    if (!user || !authProfile) return;
 
     setIsSaving(true);
     setMessage(null);
@@ -145,7 +119,6 @@ export default function ProfilePage() {
         return;
       }
 
-      setProfile(prev => prev ? { ...prev, ...formData, updated_at: new Date().toISOString() } : null);
       setIsEditing(false);
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
     } catch (error) {
@@ -181,22 +154,36 @@ export default function ProfilePage() {
     return `${Math.floor(diffDays / 365)} years ago`;
   };
 
-  if (loading) {
+  // Show minimal skeleton while auth is initializing
+  if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading profile...</p>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 pt-24 pb-16">
+          <div className="max-w-4xl mx-auto">
+            <div className="h-8 bg-muted rounded w-48 mb-8 animate-pulse"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1">
+                <div className="h-96 bg-muted rounded-lg animate-pulse"></div>
+              </div>
+              <div className="lg:col-span-2">
+                <div className="h-96 bg-muted rounded-lg animate-pulse"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated || !profile) {
+  // Don't render if not authenticated
+  if (!isAuthenticated || !user) {
     return null;
   }
 
-  const avatarUrl = profile.google_avatar_url || profile.avatar_url;
+  // Use authProfile if available, otherwise show loading state for profile data
+  const profile = authProfile;
+  const avatarUrl = profile?.google_avatar_url || profile?.avatar_url;
 
   return (
     <main className="min-h-screen bg-background">
@@ -233,64 +220,78 @@ export default function ProfilePage() {
                   <CardTitle>Profile Summary</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
-                  <div className="relative mx-auto mb-4">
-                    <Avatar className="w-24 h-24 mx-auto">
-                      <AvatarImage 
-                        src={avatarUrl || undefined} 
-                        alt={profile.full_name || user?.email || ''}
-                        referrerPolicy="no-referrer"
-                      />
-                      <AvatarFallback className="text-lg bg-primary/10">
-                        {getInitials(profile.full_name, profile.email)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="absolute -bottom-2 -right-2 h-8 w-8 p-0 rounded-full"
-                      disabled // Avatar upload disabled for this demo
-                    >
-                      <Camera className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  
-                  <h3 className="text-xl font-semibold mb-1">
-                    {profile.full_name || 'User'}
-                  </h3>
-                  {profile.username && (
-                    <p className="text-sm text-muted-foreground mb-2">@{profile.username}</p>
-                  )}
-                  <p className="text-sm text-muted-foreground mb-4">{profile.email}</p>
-                  
-                  <div className="flex justify-center gap-2 mb-4">
-                    <Badge variant={profile.email_verified ? "default" : "secondary"}>
-                      {profile.email_verified ? (
-                        <>
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Verified
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="h-3 w-3 mr-1" />
-                          Unverified
-                        </>
+                  {profile ? (
+                    <>
+                      <div className="relative mx-auto mb-4">
+                        <Avatar className="w-24 h-24 mx-auto">
+                          <AvatarImage 
+                            src={avatarUrl || undefined} 
+                            alt={profile.full_name || user.email || ''}
+                            referrerPolicy="no-referrer"
+                          />
+                          <AvatarFallback className="text-lg bg-primary/10">
+                            {getInitials(profile.full_name, profile.email)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="absolute -bottom-2 -right-2 h-8 w-8 p-0 rounded-full"
+                          disabled
+                        >
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <h3 className="text-xl font-semibold mb-1">
+                        {profile.full_name || 'User'}
+                      </h3>
+                      {profile.username && (
+                        <p className="text-sm text-muted-foreground mb-2">@{profile.username}</p>
                       )}
-                    </Badge>
-                    <Badge variant="outline">
-                      {profile.auth_provider === 'google' ? 'Google' : 'Email'}
-                    </Badge>
-                  </div>
+                      <p className="text-sm text-muted-foreground mb-4">{profile.email}</p>
+                      
+                      <div className="flex justify-center gap-2 mb-4">
+                        <Badge variant={profile.email_verified ? "default" : "secondary"}>
+                          {profile.email_verified ? (
+                            <>
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Verified
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="h-3 w-3 mr-1" />
+                              Unverified
+                            </>
+                          )}
+                        </Badge>
+                        <Badge variant="outline">
+                          {profile.auth_provider === 'google' ? 'Google' : 'Email'}
+                        </Badge>
+                      </div>
 
-                  {profile.bio && (
-                    <p className="text-sm text-center mb-4 p-3 bg-muted/50 rounded-lg">
-                      {profile.bio}
-                    </p>
+                      {profile.bio && (
+                        <p className="text-sm text-center mb-4 p-3 bg-muted/50 rounded-lg">
+                          {profile.bio}
+                        </p>
+                      )}
+
+                      <div className="text-xs text-muted-foreground">
+                        <p>Member since {getTimeSinceJoined(profile.created_at)}</p>
+                        <p>Last updated {formatDate(profile.updated_at)}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="animate-pulse">
+                      <div className="w-24 h-24 bg-muted rounded-full mx-auto mb-4"></div>
+                      <div className="h-6 bg-muted rounded w-32 mx-auto mb-2"></div>
+                      <div className="h-4 bg-muted rounded w-48 mx-auto mb-4"></div>
+                      <div className="flex justify-center gap-2 mb-4">
+                        <div className="h-6 bg-muted rounded w-20"></div>
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </div>
                   )}
-
-                  <div className="text-xs text-muted-foreground">
-                    <p>Member since {getTimeSinceJoined(profile.created_at)}</p>
-                    <p>Last updated {formatDate(profile.updated_at)}</p>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -342,21 +343,23 @@ export default function ProfilePage() {
                         if (isEditing && !isSaving) {
                           setIsEditing(false);
                           // Reset form data
-                          setFormData({
-                            full_name: profile.full_name || '',
-                            username: profile.username || '',
-                            bio: profile.bio || '',
-                            phone_number: profile.phone_number || '',
-                            date_of_birth: profile.date_of_birth || '',
-                            location: profile.location || '',
-                            website: profile.website || '',
-                            timezone: profile.timezone || 'Asia/Kolkata'
-                          });
+                          if (profile) {
+                            setFormData({
+                              full_name: profile.full_name || '',
+                              username: profile.username || '',
+                              bio: profile.bio || '',
+                              phone_number: profile.phone_number || '',
+                              date_of_birth: profile.date_of_birth || '',
+                              location: profile.location || '',
+                              website: profile.website || '',
+                              timezone: profile.timezone || 'Asia/Kolkata'
+                            });
+                          }
                         } else {
                           setIsEditing(true);
                         }
                       }}
-                      disabled={isSaving}
+                      disabled={isSaving || !profile}
                     >
                       {isEditing ? (
                         <>Cancel</>
@@ -407,7 +410,7 @@ export default function ProfilePage() {
                         <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="email"
-                          value={profile.email}
+                          value={user.email || ''}
                           disabled
                           className="pl-10 bg-muted"
                         />
@@ -555,63 +558,73 @@ export default function ProfilePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-medium">Email Verification</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {profile.email_verified 
-                          ? 'Your email address has been verified' 
-                          : 'Please verify your email address'
-                        }
-                      </p>
-                    </div>
-                    <Badge variant={profile.email_verified ? "default" : "secondary"}>
-                      {profile.email_verified ? 'Verified' : 'Unverified'}
-                    </Badge>
-                  </div>
+                  {profile ? (
+                    <>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h4 className="font-medium">Email Verification</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {profile.email_verified 
+                              ? 'Your email address has been verified' 
+                              : 'Please verify your email address'
+                            }
+                          </p>
+                        </div>
+                        <Badge variant={profile.email_verified ? "default" : "secondary"}>
+                          {profile.email_verified ? 'Verified' : 'Unverified'}
+                        </Badge>
+                      </div>
 
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-medium">Two-Factor Authentication</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Add an extra layer of security to your account
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm" disabled>
-                      Enable 2FA
-                    </Button>
-                  </div>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h4 className="font-medium">Two-Factor Authentication</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Add an extra layer of security to your account
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" disabled>
+                          Enable 2FA
+                        </Button>
+                      </div>
 
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-medium">Login Method</h4>
-                      <p className="text-sm text-muted-foreground">
-                        You're signed in with {profile.auth_provider === 'google' ? 'Google' : 'email and password'}
-                      </p>
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h4 className="font-medium">Login Method</h4>
+                          <p className="text-sm text-muted-foreground">
+                            You're signed in with {profile.auth_provider === 'google' ? 'Google' : 'email and password'}
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {profile.auth_provider === 'google' ? (
+                            <>
+                              <svg className="mr-1 h-3 w-3" viewBox="0 0 24 24">
+                                <path
+                                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                                  fill="#4285F4"
+                                />
+                                <path
+                                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                                  fill="#34A853"
+                                />
+                              </svg>
+                              Google
+                            </>
+                          ) : (
+                            <>
+                              <Mail className="mr-1 h-3 w-3" />
+                              Email
+                            </>
+                          )}
+                        </Badge>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="h-20 bg-muted rounded-lg animate-pulse"></div>
+                      ))}
                     </div>
-                    <Badge variant="outline">
-                      {profile.auth_provider === 'google' ? (
-                        <>
-                          <svg className="mr-1 h-3 w-3" viewBox="0 0 24 24">
-                            <path
-                              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                              fill="#4285F4"
-                            />
-                            <path
-                              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                              fill="#34A853"
-                            />
-                          </svg>
-                          Google
-                        </>
-                      ) : (
-                        <>
-                          <Mail className="mr-1 h-3 w-3" />
-                          Email
-                        </>
-                      )}
-                    </Badge>
-                  </div>
+                  )}
 
                   <div className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
@@ -644,33 +657,40 @@ export default function ProfilePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">Account created</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(profile.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {profile.updated_at !== profile.created_at && (
+                  {profile ? (
+                    <div className="space-y-3">
                       <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                         <div className="flex-1">
-                          <p className="text-sm font-medium">Profile updated</p>
+                          <p className="text-sm font-medium">Account created</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDate(profile.updated_at)}
+                            {formatDate(profile.created_at)}
                           </p>
                         </div>
                       </div>
-                    )}
+                      
+                      {profile.updated_at !== profile.created_at && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">Profile updated</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(profile.updated_at)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
-                    <div className="text-center py-4 text-sm text-muted-foreground">
-                      No recent trading activity
+                      <div className="text-center py-4 text-sm text-muted-foreground">
+                        No recent trading activity
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="h-16 bg-muted rounded-lg animate-pulse"></div>
+                      <div className="h-16 bg-muted rounded-lg animate-pulse"></div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
