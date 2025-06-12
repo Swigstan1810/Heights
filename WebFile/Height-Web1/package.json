@@ -58,6 +58,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "critters": "^0.0.23",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
     "encoding": "^0.1.13",
@@ -103,6 +104,10 @@
     "@typescript-eslint/eslint-plugin": "^8.33.0",
     "@typescript-eslint/parser": "^8.33.0",
     "babel-preset-next": "^1.4.0",
-    "eslint": "^8.57.1"
+    "eslint": "^8.57.1",
+    "patch-package": "^8.0.0"
+  },
+  "overrides": {
+    "@coinbase/wallet-sdk": "^4.3.4"
   }
 }
