@@ -55,7 +55,7 @@ const NAVIGATION_ITEMS = [
 
 export function Navbar() {
   const { user, isAuthenticated, signOut, walletBalance, profile } = useAuth();
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { isConnected } = useAccount();
   const router = useRouter();
   const pathname = usePathname();
@@ -63,12 +63,10 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Ensure component is mounted before showing theme
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Close mobile menu when route changes
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
@@ -78,24 +76,20 @@ export function Navbar() {
       setIsLoggingOut(true);
       console.log('[Navbar] Starting logout process...');
       
-      // Call the signOut function from auth context
       await signOut();
       
       console.log('[Navbar] Logout successful, redirecting...');
       
-      // Clear any local storage items
       if (typeof window !== 'undefined') {
         localStorage.removeItem('heights_remember_email');
         localStorage.removeItem('supabase.auth.token');
         sessionStorage.clear();
       }
       
-      // Force navigation to login page
       window.location.href = '/login';
       
     } catch (error) {
       console.error('[Navbar] Error during logout:', error);
-      // Force redirect even if there's an error
       window.location.href = '/login';
     } finally {
       setIsLoggingOut(false);
@@ -113,11 +107,7 @@ export function Navbar() {
 
   const getThemeIcon = () => {
     if (!mounted) return <Monitor className="h-4 w-4" />;
-    
-    // Use resolvedTheme for actual theme, fallback to theme
-    const currentTheme = resolvedTheme || theme;
-    
-    switch (currentTheme) {
+    switch (theme) {
       case 'light':
         return <Sun className="h-4 w-4" />;
       case 'dark':
@@ -128,11 +118,9 @@ export function Navbar() {
   };
 
   const handleThemeChange = (newTheme: string) => {
-    console.log('Changing theme to:', newTheme);
     setTheme(newTheme);
   };
 
-  // Show loading state until mounted to prevent hydration mismatch
   if (!mounted) {
     return (
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
@@ -163,7 +151,6 @@ export function Navbar() {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <Link href={isAuthenticated ? "/home" : "/"} className="flex items-center gap-2">
             <HeightsLogo size="lg" />
             <span className="text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
@@ -171,7 +158,6 @@ export function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
           {isAuthenticated && (
             <div className="hidden md:flex items-center gap-1">
               {NAVIGATION_ITEMS.map((item) => {
@@ -209,16 +195,13 @@ export function Navbar() {
             </div>
           )}
 
-          {/* Right Side Actions */}
           <div className="flex items-center gap-2">
             {isAuthenticated ? (
               <>
-                {/* Wallet Connection Button - Priority placement */}
                 <div className="hidden sm:block">
                   <ConnectWalletButton />
                 </div>
 
-                {/* Wallet Balance */}
                 {walletBalance && !isConnected && (
                   <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-muted rounded-full">
                     <Wallet className="h-4 w-4 text-primary" />
@@ -228,7 +211,6 @@ export function Navbar() {
                   </div>
                 )}
 
-                {/* Theme Toggle */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="relative">
@@ -264,7 +246,6 @@ export function Navbar() {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* User Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative gap-2">
@@ -311,7 +292,6 @@ export function Navbar() {
                       </div>
                     </DropdownMenuLabel>
                     
-                    {/* Wallet Status in Dropdown */}
                     {isConnected && (
                       <>
                         <DropdownMenuSeparator />
@@ -396,7 +376,6 @@ export function Navbar() {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Mobile Menu Button */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -408,7 +387,6 @@ export function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-2">
-                {/* Theme Toggle for non-authenticated users */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm">
@@ -455,7 +433,6 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         <AnimatePresence>
           {mobileMenuOpen && isAuthenticated && (
             <motion.div
@@ -465,12 +442,10 @@ export function Navbar() {
               className="md:hidden border-t border-border"
             >
               <div className="py-4 space-y-2">
-                {/* Wallet Connection Mobile */}
                 <div className="px-4 pb-4">
                   <ConnectWalletButton />
                 </div>
 
-                {/* Wallet Balance Mobile - Only show if not connected */}
                 {walletBalance && !isConnected && (
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg mb-4 mx-4">
                     <div className="flex items-center gap-2">
@@ -483,7 +458,6 @@ export function Navbar() {
                   </div>
                 )}
 
-                {/* Mobile Navigation Items */}
                 {NAVIGATION_ITEMS.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href || 

@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const crypto = require('crypto');
+
 const nextConfig = {
   // Enable strict mode for better error handling
   reactStrictMode: true,
@@ -11,14 +13,13 @@ const nextConfig = {
     // Enable optimized package imports for better tree shaking
     optimizePackageImports: [
       'lucide-react',
-      '@radix-ui/react-icons',
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-avatar',
-      '@radix-ui/react-button',
-      '@radix-ui/react-tabs',
-      '@radix-ui/react-card',
       'framer-motion',
-      'recharts'
+      'recharts',
+      '@supabase/auth-helpers-nextjs',
+      'wagmi',
+      'viem'
     ],
     
     // Enable modern bundling
@@ -120,119 +121,53 @@ const nextConfig = {
 
     // Production optimizations only
     if (!dev && !isServer) {
-      // Tree shaking optimization
-      config.optimization.usedExports = true;
-      config.optimization.sideEffects = false;
-      
-      // Custom splitChunks for maximum optimization
       config.optimization.splitChunks = {
         chunks: 'all',
-        minSize: 20000,
-        maxSize: 60000, // Reduced from 80k
-        minChunks: 1,
+        cacheGroups: {
+          default: false,
+          vendors: false,
+          // Framework chunks
+          framework: {
+            name: 'framework',
+            test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
+            priority: 40,
+            chunks: 'all',
+          },
+          // Lib chunk
+          lib: {
+            test(module) {
+              return module.size() > 160000 && /node_modules[/\\]/.test(module.identifier());
+            },
+            name(module) {
+              const hash = crypto.createHash('sha1');
+              hash.update(module.identifier());
+              return hash.digest('hex').substring(0, 8);
+            },
+            priority: 30,
+            minChunks: 1,
+            reuseExistingChunk: true,
+          },
+          // Commons chunk
+          commons: {
+            name: 'commons',
+            minChunks: 2,
+            priority: 20,
+          },
+          // Shared chunk
+          shared: {
+            name(module, chunks) {
+              return crypto
+                .createHash('sha1')
+                .update(chunks.reduce((acc, chunk) => acc + chunk.name, ''))
+                .digest('hex') + (isServer ? '-server' : '');
+            },
+            priority: 10,
+            minChunks: 2,
+            reuseExistingChunk: true,
+          },
+        },
         maxAsyncRequests: 30,
         maxInitialRequests: 25,
-        cacheGroups: {
-          // React core (highest priority)
-          react: {
-            name: 'react',
-            test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
-            chunks: 'all',
-            priority: 30,
-            enforce: true,
-            reuseExistingChunk: true,
-          },
-          
-          // Next.js core
-          nextjs: {
-            name: 'nextjs',
-            test: /[\\/]node_modules[\\/]next[\\/]/,
-            chunks: 'all',
-            priority: 25,
-            enforce: true,
-            reuseExistingChunk: true,
-          },
-          
-          // UI components (split into smaller chunks)
-          radixUI: {
-            name: 'radix-ui',
-            test: /[\\/]node_modules[\\/]@radix-ui[\\/]/,
-            chunks: 'all',
-            priority: 20,
-            enforce: true,
-            maxSize: 40000, // Smaller chunks
-          },
-          
-          // Icons (separate chunk)
-          icons: {
-            name: 'icons',
-            test: /[\\/]node_modules[\\/](lucide-react|@radix-ui\/react-icons)[\\/]/,
-            chunks: 'all',
-            priority: 18,
-            enforce: true,
-            maxSize: 30000,
-          },
-          
-          // Supabase (essential but can be separate)
-          supabase: {
-            name: 'supabase',
-            test: /[\\/]node_modules[\\/]@supabase[\\/]/,
-            chunks: 'all',
-            priority: 15,
-            enforce: true,
-            maxSize: 50000,
-          },
-          
-          // Charts (async loaded - these are heavy)
-          charts: {
-            name: 'charts',
-            test: /[\\/]node_modules[\\/](recharts|d3)[\\/]/,
-            chunks: 'async',
-            priority: 12,
-            enforce: true,
-            maxSize: 40000,
-          },
-          
-          // Animation (async loaded)
-          framerMotion: {
-            name: 'framer-motion',
-            test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
-            chunks: 'async',
-            priority: 10,
-            enforce: true,
-            maxSize: 35000,
-          },
-          
-          // Utilities
-          utils: {
-            name: 'utils',
-            test: /[\\/]node_modules[\\/](lodash|date-fns|clsx|class-variance-authority)[\\/]/,
-            chunks: 'all',
-            priority: 8,
-            maxSize: 25000,
-          },
-          
-          // Default vendor (smaller chunks)
-          vendor: {
-            name: 'vendor',
-            test: /[\\/]node_modules[\\/]/,
-            chunks: 'all',
-            priority: 5,
-            enforce: true,
-            maxSize: 30000,
-            minChunks: 1,
-          },
-          
-          // Common components (your own code)
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            priority: 3,
-            reuseExistingChunk: true,
-            maxSize: 25000,
-          }
-        }
       };
 
       // Module optimization
