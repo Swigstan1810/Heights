@@ -1,8 +1,9 @@
-// app/(protected)/portfolio/page.tsx
+// app/(protected)/portfolio/page.tsx - Fixed with proper dynamic imports
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from 'next/dynamic';
 import { useAuth } from "@/contexts/auth-context";
 import { Navbar } from "@/components/navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
@@ -27,7 +27,12 @@ import {
 } from "lucide-react";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-import { motion } from 'framer-motion';
+
+// Dynamic import for the entire chart component (better approach)
+const PortfolioChart = dynamic(() => import('@/components/portfolio/portfolio-chart'), {
+  loading: () => <div className="h-[300px] bg-muted animate-pulse rounded-lg" />,
+  ssr: false
+});
 
 interface PortfolioHolding {
   id: string;
@@ -167,7 +172,6 @@ export default function PortfolioPage() {
     const totalPnLPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
 
     // For monthly P&L, we'll use a simple approximation based on recent performance
-    // In a real app, you'd track daily portfolio values
     const monthlyPnL = totalPnL * 0.3; // Approximate 30% of total gains happened this month
     const monthlyPnLPercentage = totalInvested > 0 ? (monthlyPnL / totalInvested) * 100 : 0;
 
@@ -293,80 +297,62 @@ export default function PortfolioPage() {
         
         {/* Portfolio Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Portfolio Value</CardTitle>
-                <PieChart className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(portfolioStats.totalValue)}
-                </div>
-                <p className={`text-xs flex items-center mt-1 ${
-                  portfolioStats.totalPnLPercentage >= 0 ? 'text-green-500' : 'text-red-500'
-                }`}>
-                  {portfolioStats.totalPnLPercentage >= 0 ? (
-                    <ArrowUpRight className="h-4 w-4 mr-1" />
-                  ) : (
-                    <ArrowDownRight className="h-4 w-4 mr-1" />
-                  )}
-                  {formatPercentage(portfolioStats.totalPnLPercentage)} all time
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Portfolio Value</CardTitle>
+              <PieChart className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(portfolioStats.totalValue)}
+              </div>
+              <p className={`text-xs flex items-center mt-1 ${
+                portfolioStats.totalPnLPercentage >= 0 ? 'text-green-500' : 'text-red-500'
+              }`}>
+                {portfolioStats.totalPnLPercentage >= 0 ? (
+                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                ) : (
+                  <ArrowDownRight className="h-4 w-4 mr-1" />
+                )}
+                {formatPercentage(portfolioStats.totalPnLPercentage)} all time
+              </p>
+            </CardContent>
+          </Card>
           
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Profit/Loss</CardTitle>
-                <BarChart2 className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(portfolioStats.totalPnL)}
-                </div>
-                <p className={`text-xs flex items-center mt-1 ${
-                  portfolioStats.monthlyPnLPercentage >= 0 ? 'text-green-500' : 'text-red-500'
-                }`}>
-                  {portfolioStats.monthlyPnLPercentage >= 0 ? (
-                    <ArrowUpRight className="h-4 w-4 mr-1" />
-                  ) : (
-                    <ArrowDownRight className="h-4 w-4 mr-1" />
-                  )}
-                  {formatPercentage(portfolioStats.monthlyPnLPercentage)} this month
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Profit/Loss</CardTitle>
+              <BarChart2 className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(portfolioStats.totalPnL)}
+              </div>
+              <p className={`text-xs flex items-center mt-1 ${
+                portfolioStats.monthlyPnLPercentage >= 0 ? 'text-green-500' : 'text-red-500'
+              }`}>
+                {portfolioStats.monthlyPnLPercentage >= 0 ? (
+                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                ) : (
+                  <ArrowDownRight className="h-4 w-4 mr-1" />
+                )}
+                {formatPercentage(portfolioStats.monthlyPnLPercentage)} this month
+              </p>
+            </CardContent>
+          </Card>
           
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Holdings</CardTitle>
-                <Activity className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{portfolioStats.holdingsCount}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Active positions
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Holdings</CardTitle>
+              <Activity className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{portfolioStats.holdingsCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Active positions
+              </p>
+            </CardContent>
+          </Card>
         </div>
         
         {/* Portfolio Chart */}
@@ -388,57 +374,7 @@ export default function PortfolioPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 12 }}
-                      tickMargin={10}
-                      minTickGap={30}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 12 }}
-                      tickMargin={10}
-                      tickFormatter={(value) => formatCurrency(value)}
-                      width={80}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                      }}
-                      formatter={(value: number) => [formatCurrency(value), "Portfolio Value"]}
-                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="hsl(var(--primary))"
-                      fillOpacity={1}
-                      fill="url(#colorValue)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+              <PortfolioChart data={chartData} formatCurrency={formatCurrency} />
             </CardContent>
           </Card>
         )}
@@ -596,54 +532,6 @@ export default function PortfolioPage() {
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Wallet Info */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5" />
-              Wallet Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">Available Balance</p>
-                <p className="text-xl font-bold">
-                  {formatCurrency(Number(walletBalance?.balance || 0))}
-                </p>
-              </div>
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">Locked Balance</p>
-                <p className="text-xl font-bold">
-                  {formatCurrency(Number(walletBalance?.locked_balance || 0))}
-                </p>
-              </div>
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">Total Balance</p>
-                <p className="text-xl font-bold">
-                  {formatCurrency(
-                    Number(walletBalance?.balance || 0) + Number(walletBalance?.locked_balance || 0)
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" asChild>
-                <a href="/wallet">
-                  <Wallet className="h-4 w-4 mr-2" />
-                  Manage Wallet
-                </a>
-              </Button>
-              <Button asChild>
-                <a href="/trade">
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Start Trading
-                </a>
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

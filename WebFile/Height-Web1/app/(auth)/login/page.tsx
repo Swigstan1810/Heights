@@ -109,8 +109,12 @@ export default function Login() {
       // Check if account is locked
       const isLocked = await checkAccountLockout(email);
       if (isLocked) {
-        const attempts = sessionStorage.getItem(`login_attempts_${email}`);
-        const lastAttempt = sessionStorage.getItem(`last_attempt_${email}`);
+        let attempts = null;
+        let lastAttempt = null;
+        if (typeof window !== 'undefined') {
+          attempts = sessionStorage.getItem(`login_attempts_${email}`);
+          lastAttempt = sessionStorage.getItem(`last_attempt_${email}`);
+        }
         
         if (attempts && lastAttempt) {
           const timeSinceLastAttempt = Date.now() - parseInt(lastAttempt);
@@ -130,28 +134,39 @@ export default function Login() {
         console.error("Sign in error:", signInError);
         
         // Log failed attempt
+        let p_ip_address = '';
+        let p_user_agent = '';
+        if (typeof window !== 'undefined') {
+          p_ip_address = window.location.hostname;
+          p_user_agent = navigator.userAgent;
+        }
         await supabase.rpc('handle_failed_login', {
           p_email: email,
-          p_ip_address: window.location.hostname,
-          p_user_agent: navigator.userAgent
+          p_ip_address,
+          p_user_agent
         });
         
         // Check if it's an invalid credentials error
         if (signInError.message.includes('Invalid login credentials')) {
-          const attempts = sessionStorage.getItem(`login_attempts_${email}`);
-          const attemptCount = attempts ? parseInt(attempts) : 0;
+          let attempts = 0;
+          if (typeof window !== 'undefined') {
+            const storedAttempts = sessionStorage.getItem(`login_attempts_${email}`);
+            attempts = storedAttempts ? parseInt(storedAttempts) : 0;
+          }
           
-          if (attemptCount >= 4) {
+          if (attempts >= 4) {
             setError("Invalid credentials. Next failed attempt will lock your account for 15 minutes.");
-          } else if (attemptCount >= 2) {
-            setError(`Invalid credentials. ${5 - attemptCount} attempts remaining.`);
+          } else if (attempts >= 2) {
+            setError(`Invalid credentials. ${5 - attempts} attempts remaining.`);
           } else {
             setError("Invalid email or password. Please try again.");
           }
           
           // Update attempt count in session storage
-          sessionStorage.setItem(`login_attempts_${email}`, (attemptCount + 1).toString());
-          sessionStorage.setItem(`last_attempt_${email}`, Date.now().toString());
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(`login_attempts_${email}`, (attempts + 1).toString());
+            sessionStorage.setItem(`last_attempt_${email}`, Date.now().toString());
+          }
         } else {
           setError(signInError.message);
         }
@@ -159,13 +174,15 @@ export default function Login() {
         console.log("Sign in successful, redirecting to: /ai");
         
         // Clear login attempts on success
-        sessionStorage.removeItem(`login_attempts_${email}`);
-        sessionStorage.removeItem(`last_attempt_${email}`);
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem(`login_attempts_${email}`);
+          sessionStorage.removeItem(`last_attempt_${email}`);
+        }
         
         // Handle remember me
-        if (rememberMe) {
+        if (rememberMe && typeof window !== 'undefined') {
           localStorage.setItem('heights_remember_email', email);
-        } else {
+        } else if (typeof window !== 'undefined') {
           localStorage.removeItem('heights_remember_email');
         }
         
@@ -206,10 +223,12 @@ export default function Login() {
   
   // Load remembered email
   useEffect(() => {
-    const rememberedEmail = localStorage.getItem('heights_remember_email');
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
-      setRememberMe(true);
+    if (typeof window !== 'undefined') {
+      const rememberedEmail = localStorage.getItem('heights_remember_email');
+      if (rememberedEmail) {
+        setEmail(rememberedEmail);
+        setRememberMe(true);
+      }
     }
   }, []);
   

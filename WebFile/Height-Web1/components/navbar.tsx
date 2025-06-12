@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -29,7 +28,6 @@ import {
   X,
   Wallet,
   Brain,
-  Search,
   ChevronDown,
   Star,
   Bookmark,
@@ -41,6 +39,7 @@ import {
   Monitor,
   BookmarkCheck
 } from 'lucide-react';
+import { motion, AnimatePresence } from "framer-motion";
 
 const NAVIGATION_ITEMS = [
   { href: '/home', label: 'Dashboard', icon: Home },
@@ -53,11 +52,12 @@ const NAVIGATION_ITEMS = [
 
 export function Navbar() {
   const { user, isAuthenticated, signOut, walletBalance, profile } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Ensure component is mounted before showing theme
   useEffect(() => {
@@ -70,8 +70,32 @@ export function Navbar() {
   }, [pathname]);
 
   const handleSignOut = async () => {
-    await signOut();
-    router.push('/login');
+    try {
+      setIsLoggingOut(true);
+      console.log('[Navbar] Starting logout process...');
+      
+      // Call the signOut function from auth context
+      await signOut();
+      
+      console.log('[Navbar] Logout successful, redirecting...');
+      
+      // Clear any local storage items
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('heights_remember_email');
+        localStorage.removeItem('supabase.auth.token');
+        sessionStorage.clear();
+      }
+      
+      // Force navigation to login page
+      window.location.href = '/login';
+      
+    } catch (error) {
+      console.error('[Navbar] Error during logout:', error);
+      // Force redirect even if there's an error
+      window.location.href = '/login';
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const formatBalance = (balance: number) => {
@@ -86,7 +110,10 @@ export function Navbar() {
   const getThemeIcon = () => {
     if (!mounted) return <Monitor className="h-4 w-4" />;
     
-    switch (theme) {
+    // Use resolvedTheme for actual theme, fallback to theme
+    const currentTheme = resolvedTheme || theme;
+    
+    switch (currentTheme) {
       case 'light':
         return <Sun className="h-4 w-4" />;
       case 'dark':
@@ -95,6 +122,34 @@ export function Navbar() {
         return <Monitor className="h-4 w-4" />;
     }
   };
+
+  const handleThemeChange = (newTheme: string) => {
+    console.log('Changing theme to:', newTheme);
+    setTheme(newTheme);
+  };
+
+  // Show loading state until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-center gap-2">
+              <HeightsLogo size="lg" />
+              <span className="text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
+                Heights
+              </span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" disabled>
+                <Monitor className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <motion.nav 
@@ -161,22 +216,35 @@ export function Navbar() {
                 {/* Theme Toggle */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" className="relative">
                       {getThemeIcon()}
+                      <span className="sr-only">Toggle theme</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setTheme('light')}>
+                  <DropdownMenuContent align="end" className="min-w-[120px]">
+                    <DropdownMenuItem 
+                      onClick={() => handleThemeChange('light')}
+                      className={`cursor-pointer ${theme === 'light' ? 'bg-accent' : ''}`}
+                    >
                       <Sun className="h-4 w-4 mr-2" />
                       Light
+                      {theme === 'light' && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setTheme('dark')}>
+                    <DropdownMenuItem 
+                      onClick={() => handleThemeChange('dark')}
+                      className={`cursor-pointer ${theme === 'dark' ? 'bg-accent' : ''}`}
+                    >
                       <Moon className="h-4 w-4 mr-2" />
                       Dark
+                      {theme === 'dark' && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setTheme('system')}>
+                    <DropdownMenuItem 
+                      onClick={() => handleThemeChange('system')}
+                      className={`cursor-pointer ${theme === 'system' ? 'bg-accent' : ''}`}
+                    >
                       <Monitor className="h-4 w-4 mr-2" />
                       System
+                      {theme === 'system' && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -290,10 +358,11 @@ export function Navbar() {
                     
                     <DropdownMenuItem 
                       onClick={handleSignOut}
-                      className="text-red-600 focus:text-red-600"
+                      disabled={isLoggingOut}
+                      className="text-red-600 focus:text-red-600 cursor-pointer"
                     >
                       <LogOut className="h-4 w-4 mr-2" />
-                      Sign Out
+                      {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -315,20 +384,33 @@ export function Navbar() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm">
                       {getThemeIcon()}
+                      <span className="sr-only">Toggle theme</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setTheme('light')}>
+                  <DropdownMenuContent align="end" className="min-w-[120px]">
+                    <DropdownMenuItem 
+                      onClick={() => handleThemeChange('light')}
+                      className={`cursor-pointer ${theme === 'light' ? 'bg-accent' : ''}`}
+                    >
                       <Sun className="h-4 w-4 mr-2" />
                       Light
+                      {theme === 'light' && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setTheme('dark')}>
+                    <DropdownMenuItem 
+                      onClick={() => handleThemeChange('dark')}
+                      className={`cursor-pointer ${theme === 'dark' ? 'bg-accent' : ''}`}
+                    >
                       <Moon className="h-4 w-4 mr-2" />
                       Dark
+                      {theme === 'dark' && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setTheme('system')}>
+                    <DropdownMenuItem 
+                      onClick={() => handleThemeChange('system')}
+                      className={`cursor-pointer ${theme === 'system' ? 'bg-accent' : ''}`}
+                    >
                       <Monitor className="h-4 w-4 mr-2" />
                       System
+                      {theme === 'system' && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -394,11 +476,12 @@ export function Navbar() {
                 <div className="pt-4 border-t border-border">
                   <Button
                     variant="ghost"
-                    className="w-full justify-start gap-3 text-red-600 hover:text-red-600 hover:bg-red-50"
+                    className="w-full justify-start gap-3 text-red-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                     onClick={handleSignOut}
+                    disabled={isLoggingOut}
                   >
                     <LogOut className="h-4 w-4" />
-                    Sign Out
+                    {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
                   </Button>
                 </div>
               </div>
