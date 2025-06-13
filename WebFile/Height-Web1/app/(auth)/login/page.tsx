@@ -38,7 +38,7 @@ export default function Login() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams && searchParams.get('redirectTo') ? searchParams.get('redirectTo')! : '/ai';
+  const redirectTo = searchParams.get('redirectTo') || '/ai'; // Changed default to /home
   const { signIn, signInWithGoogle, user, loading: authLoading } = useAuth();
   const supabase = createClientComponentClient<Database>();
   
@@ -59,8 +59,8 @@ export default function Login() {
 
   // Check for OAuth error in URL
   useEffect(() => {
-    const error = searchParams?.get('error');
-    const errorDescription = searchParams?.get('error_description');
+    const error = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
     
     if (error) {
       setError(errorDescription || 'Authentication failed. Please try again.');
