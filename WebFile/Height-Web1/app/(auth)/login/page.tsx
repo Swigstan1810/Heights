@@ -59,8 +59,8 @@ export default function Login() {
 
   // Check for OAuth error in URL
   useEffect(() => {
-    const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
+    const error = searchParams?.get('error');
+    const errorDescription = searchParams?.get('error_description');
     
     if (error) {
       setError(errorDescription || 'Authentication failed. Please try again.');
