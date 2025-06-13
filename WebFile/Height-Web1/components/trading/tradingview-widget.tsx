@@ -20,8 +20,8 @@ function TradingViewWidget({
   useEffect(() => {
     // Ensure we're in the browser
     if (typeof window === 'undefined' || !container.current) return;
-
-    // Clear any existing content
+      
+      // Clear any existing content
     container.current.innerHTML = '';
 
     // Create the inner container div

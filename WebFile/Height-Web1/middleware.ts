@@ -63,7 +63,7 @@ export async function middleware(request: NextRequest) {
       headers: requestHeaders,
     },
   });
-
+  
   // Security headers to fix the vulnerabilities
   const securityHeaders = {
     // Content Security Policy - Prevents XSS attacks
@@ -105,7 +105,7 @@ export async function middleware(request: NextRequest) {
     'X-Powered-By': '',
     'Server': '',
   };
-
+  
   // Apply security headers
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -178,7 +178,7 @@ export const config = {
      * Match all request paths except for the ones starting with:
      * - api (API routes)
      * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - _next/image (image optimization files)  
      * - favicon.ico (favicon file)
      */
     '/((?!_next/static|_next/image|favicon.ico).*)',

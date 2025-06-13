@@ -365,7 +365,7 @@ export default function CryptoPage() {
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
-      }
+    }
     };
   }, [user, loadFavorites, fetchCryptoData]);
 
@@ -405,7 +405,7 @@ export default function CryptoPage() {
                 <div className="h-64 bg-muted rounded-lg"></div>
               </div>
             </div>
-          </div>
+      </div>
         </div>
       </div>
     );
@@ -537,19 +537,19 @@ export default function CryptoPage() {
                     <div className="divide-y">
                       {filteredData.map((crypto) => (
                         <div
-                          key={crypto.id}
+                      key={crypto.id}
                           className={`p-4 hover:bg-muted/50 cursor-pointer transition-colors ${
-                            selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
-                          }`}
-                          onClick={() => setSelectedCrypto(crypto)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
+                        selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
+                      }`}
+                      onClick={() => setSelectedCrypto(crypto)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
                               <div className="relative">
-                                <img 
-                                  src={crypto.image} 
-                                  alt={crypto.name}
-                                  className="w-8 h-8 rounded-full"
+                          <img 
+                            src={crypto.image} 
+                            alt={crypto.name}
+                            className="w-8 h-8 rounded-full"
                                   loading="lazy"
                                 />
                                 <Button
@@ -564,28 +564,28 @@ export default function CryptoPage() {
                                   <Star className={`h-3 w-3 ${crypto.isFavorite ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'}`} />
                                 </Button>
                               </div>
-                              <div>
+                          <div>
                                 <p className="font-medium text-sm">{crypto.name}</p>
                                 <p className="text-xs text-muted-foreground">{crypto.symbol}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium text-sm">{formatCurrency(crypto.current_price)}</p>
-                              <p className={`text-xs flex items-center justify-end ${
-                                crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
-                              }`}>
-                                {crypto.price_change_percentage_24h >= 0 ? (
-                                  <TrendingUp className="h-3 w-3 mr-1" />
-                                ) : (
-                                  <TrendingDown className="h-3 w-3 mr-1" />
-                                )}
-                                {crypto.price_change_percentage_24h.toFixed(2)}%
-                              </p>
-                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-right">
+                              <p className="font-medium text-sm">{formatCurrency(crypto.current_price)}</p>
+                              <p className={`text-xs flex items-center justify-end ${
+                            crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
+                          }`}>
+                            {crypto.price_change_percentage_24h >= 0 ? (
+                                  <TrendingUp className="h-3 w-3 mr-1" />
+                            ) : (
+                                  <TrendingDown className="h-3 w-3 mr-1" />
+                            )}
+                                {crypto.price_change_percentage_24h.toFixed(2)}%
+                          </p>
+                        </div>
+                      </div>
+                        </div>
+                  ))}
+                </div>
                   </ScrollArea>
                 )}
               </CardContent>
@@ -617,13 +617,13 @@ export default function CryptoPage() {
                         </p>
                         <div className="flex items-center justify-end gap-4 mt-1">
                           <div className={`flex items-center ${
-                            selectedCrypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
-                          }`}>
-                            {selectedCrypto.price_change_percentage_24h >= 0 ? (
+                          selectedCrypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
+                        }`}>
+                          {selectedCrypto.price_change_percentage_24h >= 0 ? (
                               <ArrowUpRight className="h-4 w-4 mr-1" />
-                            ) : (
+                          ) : (
                               <ArrowDownRight className="h-4 w-4 mr-1" />
-                            )}
+                          )}
                             <span className="text-sm font-medium">
                               {selectedCrypto.price_change_percentage_24h.toFixed(2)}% (24h)
                             </span>
@@ -715,11 +715,11 @@ export default function CryptoPage() {
                       {/* Chart Tab */}
                       <TabsContent value="chart" className="p-0">
                         <div className="h-[600px] w-full">
-                          <TradingViewWidget
+                      <TradingViewWidget
                             symbol={`COINBASE:${selectedCrypto.symbol}USD`}
                             height={600}
-                          />
-                        </div>
+                      />
+                    </div>
                       </TabsContent>
 
                       {/* Trade Tab */}

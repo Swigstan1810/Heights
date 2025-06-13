@@ -20,8 +20,8 @@ import {
   DollarSign, 
   PieChart,
   Activity,
-  ArrowUpRight,
-  ArrowDownRight,
+  ArrowUpRight, 
+  ArrowDownRight, 
   RefreshCw,
   AlertCircle,
   Wallet,
@@ -412,7 +412,7 @@ export default function PortfolioPage() {
             </Button>
           </div>
         </div>
-
+        
         {loading ? (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -426,7 +426,7 @@ export default function PortfolioPage() {
           <div className="space-y-6">
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
+          <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -447,10 +447,10 @@ export default function PortfolioPage() {
                       <DollarSign className="h-6 w-6 text-primary" />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
+            </CardContent>
+          </Card>
+          
+          <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -461,7 +461,7 @@ export default function PortfolioPage() {
                       <p className={`text-sm mt-1 ${metrics.totalProfitLossPercentage >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {formatPercentage(metrics.totalProfitLossPercentage)}
                       </p>
-                    </div>
+              </div>
                     <div className={`p-3 rounded-full ${metrics.totalProfitLoss >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
                       {metrics.totalProfitLoss >= 0 ? (
                         <TrendingUp className="h-6 w-6 text-green-500" />
@@ -485,10 +485,10 @@ export default function PortfolioPage() {
                       <Percent className="h-6 w-6 text-blue-500" />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
+            </CardContent>
+          </Card>
+          
+          <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -502,10 +502,10 @@ export default function PortfolioPage() {
                       <Shield className="h-6 w-6 text-orange-500" />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-
+            </CardContent>
+          </Card>
+        </div>
+        
             {/* Main Content Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-4">
@@ -518,9 +518,9 @@ export default function PortfolioPage() {
               {/* Overview Tab */}
               <TabsContent value="overview" className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Portfolio Chart */}
+        {/* Portfolio Chart */}
                   <Card>
-                    <CardHeader>
+            <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle>Portfolio Value</CardTitle>
                         <div className="flex gap-1">
@@ -534,50 +534,50 @@ export default function PortfolioPage() {
                               {tf}
                             </Button>
                           ))}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={portfolioHistory}>
-                            <defs>
-                              <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
                                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
+                      </linearGradient>
+                    </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis 
-                              dataKey="date" 
+                    <XAxis
+                      dataKey="date"
                               stroke="#9ca3af"
-                              tick={{ fontSize: 12 }}
-                            />
-                            <YAxis 
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis
                               stroke="#9ca3af"
-                              tick={{ fontSize: 12 }}
+                      tick={{ fontSize: 12 }}
                               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                            />
-                            <Tooltip 
-                              contentStyle={{ 
+                    />
+                    <Tooltip
+                      contentStyle={{
                                 backgroundColor: '#1f2937', 
                                 border: 'none',
                                 borderRadius: '8px'
                               }}
                               formatter={(value: any) => formatCurrency(value)}
-                            />
-                            <Area
-                              type="monotone"
-                              dataKey="value"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
                               stroke="#10b981"
-                              fillOpacity={1}
-                              fill="url(#colorValue)"
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      fillOpacity={1}
+                      fill="url(#colorValue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
                   {/* Asset Allocation */}
                   <Card>
@@ -731,14 +731,14 @@ export default function PortfolioPage() {
               {/* Holdings Tab */}
               <TabsContent value="holdings">
                 <Card>
-                  <CardHeader>
+          <CardHeader>
                     <CardTitle>Current Holdings</CardTitle>
                     <CardDescription>Your cryptocurrency positions</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
+          </CardHeader>
+          <CardContent>
+              <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead>
+                  <thead>
                           <tr className="border-b">
                             <th className="text-left p-4">Asset</th>
                             <th className="text-right p-4">Quantity</th>
@@ -747,9 +747,9 @@ export default function PortfolioPage() {
                             <th className="text-right p-4">Current Value</th>
                             <th className="text-right p-4">P&L</th>
                             <th className="text-right p-4">Allocation</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    </tr>
+                  </thead>
+                  <tbody>
                           {holdings.map((holding: Holding) => (
                             <motion.tr
                               key={holding.id}
@@ -762,12 +762,12 @@ export default function PortfolioPage() {
                                   <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                                     <Bitcoin className="h-4 w-4" />
                                   </div>
-                                  <div>
-                                    <p className="font-medium">{holding.symbol}</p>
+                          <div>
+                            <p className="font-medium">{holding.symbol}</p>
                                     <p className="text-sm text-muted-foreground">{holding.name}</p>
                                   </div>
-                                </div>
-                              </td>
+                          </div>
+                        </td>
                               <td className="text-right p-4">{holding.quantity.toFixed(4)}</td>
                               <td className="text-right p-4">{formatCurrency(holding.averageBuyPrice)}</td>
                               <td className="text-right p-4">{formatCurrency(holding.currentPrice)}</td>
@@ -777,7 +777,7 @@ export default function PortfolioPage() {
                                   <p className="font-medium">{formatCurrency(Math.abs(holding.profitLoss))}</p>
                                   <p className="text-sm">{formatPercentage(holding.profitLossPercentage)}</p>
                                 </div>
-                              </td>
+                        </td>
                               <td className="text-right p-4">
                                 <div className="flex items-center justify-end gap-2">
                                   <span>{holding.allocation.toFixed(1)}%</span>
@@ -785,12 +785,12 @@ export default function PortfolioPage() {
                                     <Progress value={holding.allocation} className="h-2" />
                                   </div>
                                 </div>
-                              </td>
+                        </td>
                             </motion.tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -836,10 +836,10 @@ export default function PortfolioPage() {
                             className="h-2" 
                           />
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
+              </div>
+          </CardContent>
+        </Card>
+        
                   {/* Risk Analysis */}
                   <Card>
                     <CardHeader>
@@ -920,8 +920,8 @@ export default function PortfolioPage() {
 
               {/* Transactions Tab */}
               <TabsContent value="transactions">
-                <Card>
-                  <CardHeader>
+        <Card>
+          <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>Transaction History</CardTitle>
                       <Button variant="outline" size="sm">
@@ -929,8 +929,8 @@ export default function PortfolioPage() {
                         Filter
                       </Button>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+          </CardHeader>
+          <CardContent>
                     <ScrollArea className="h-[600px]">
                       <div className="space-y-2">
                         {transactions.map((tx: Transaction) => (
@@ -947,37 +947,37 @@ export default function PortfolioPage() {
                                     <ArrowDownRight className="h-4 w-4 text-green-500" />
                                   ) : (
                                     <ArrowUpRight className="h-4 w-4 text-red-500" />
-                                  )}
-                                </div>
-                                <div>
-                                  <p className="font-medium">
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium">
                                     {tx.type === 'buy' ? 'Bought' : 'Sold'} {tx.quantity} {tx.symbol}
                                   </p>
                                   <p className="text-sm text-muted-foreground">
                                     {new Date(tx.date).toLocaleString()}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="text-right">
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
                                 <p className="font-medium">{formatCurrency(tx.total)}</p>
                                 <p className="text-sm text-muted-foreground">
                                   @ {formatCurrency(tx.price)}
                                 </p>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                    </div>
+                  </div>
+                ))}
                       </div>
                     </ScrollArea>
                   </CardContent>
                 </Card>
               </TabsContent>
             </Tabs>
-          </div>
-        ) : (
+              </div>
+            ) : (
           <Card className="max-w-2xl mx-auto">
             <CardHeader className="text-center">
-              <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <CardTitle>No Holdings Yet</CardTitle>
               <CardDescription>
                 Start building your portfolio by purchasing cryptocurrencies
@@ -987,9 +987,9 @@ export default function PortfolioPage() {
               <Button onClick={() => router.push('/crypto')} className="gap-2">
                 <Bitcoin className="h-4 w-4" />
                 Start Trading
-              </Button>
-            </CardContent>
-          </Card>
+                </Button>
+          </CardContent>
+        </Card>
         )}
       </div>
     </main>

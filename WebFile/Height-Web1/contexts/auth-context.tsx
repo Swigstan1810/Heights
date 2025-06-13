@@ -256,7 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) throw error;
-
+        
         if (session?.user) {
           // Set basic auth state immediately
           updateState({
@@ -311,8 +311,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Load additional data asynchronously
         Promise.all([
-          fetchProfile(session.user.id),
-          fetchWalletBalance(session.user.id)
+            fetchProfile(session.user.id),
+            fetchWalletBalance(session.user.id)
         ]).then(([profileData, walletData]) => {
           updateState({
             profile: profileData,
@@ -354,7 +354,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fetchingRef.current.clear();
       
       await supabase.auth.signOut();
-      
+
       // Clear browser storage
       if (typeof window !== 'undefined') {
         localStorage.removeItem('supabase.auth.token');
@@ -512,35 +512,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sign up
   const signUp = useCallback(
     async (email: string, password: string, captchaToken?: string) => {
-      try {
+    try {
         updateState({ loading: true, error: null });
-
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
             captchaToken,
             emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
-            data: {
-              email: email,
-              auth_provider: 'email'
-            }
-          },
-        });
+          data: {
+            email: email,
+            auth_provider: 'email'
+          }
+        },
+      });
 
-        if (error) throw error;
-        
-        updateState({ loading: false });
-        return { error: null };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
-        console.error('[Auth] Sign up error:', errorMessage);
-        updateState({ 
-          error: errorMessage,
-          loading: false 
-        });
-        return { error: error as Error };
-      }
+      if (error) throw error;
+      
+      updateState({ loading: false });
+      return { error: null };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
+      console.error('[Auth] Sign up error:', errorMessage);
+      updateState({ 
+        error: errorMessage,
+        loading: false 
+      });
+      return { error: error as Error };
+    }
     },
     [supabase, updateState, router, fetchProfile, fetchWalletBalance]
   );
