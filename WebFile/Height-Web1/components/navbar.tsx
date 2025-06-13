@@ -163,7 +163,7 @@ export function Navbar() {
               {NAVIGATION_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href || 
-                  (item.href !== '/home' && pathname.startsWith(item.href));
+                  (item.href !== '/home' && pathname && pathname.startsWith(item.href));
                 
                 return (
                   <Link key={item.href} href={item.href}>
@@ -461,7 +461,7 @@ export function Navbar() {
                 {NAVIGATION_ITEMS.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href || 
-                    (item.href !== '/home' && pathname.startsWith(item.href));
+                    (item.href !== '/home' && pathname && pathname.startsWith(item.href));
                   
                   return (
                     <Link key={item.href} href={item.href}>

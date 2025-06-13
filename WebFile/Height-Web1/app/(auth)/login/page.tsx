@@ -38,7 +38,7 @@ export default function Login() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/ai'; // Changed default to /home
+  const redirectTo = searchParams?.get('redirectTo') || '/ai'; // Changed default to /home
   const { signIn, signInWithGoogle, user, loading: authLoading } = useAuth();
   const supabase = createClientComponentClient<Database>();
   
@@ -59,8 +59,8 @@ export default function Login() {
 
   // Check for OAuth error in URL
   useEffect(() => {
-    const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
+    const error = searchParams?.get('error');
+    const errorDescription = searchParams?.get('error_description');
     
     if (error) {
       setError(errorDescription || 'Authentication failed. Please try again.');
@@ -293,7 +293,7 @@ export default function Login() {
         )}
         
         {/* Security Notice */}
-        {searchParams.get('session_expired') && (
+        {searchParams?.get('session_expired') && (
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
@@ -303,7 +303,7 @@ export default function Login() {
         )}
 
         {/* Success message for account creation */}
-        {searchParams.get('registered') && (
+        {searchParams?.get('registered') && (
           <Alert className="bg-green-100 border-green-200 dark:bg-green-900/20 dark:border-green-900">
             <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             <AlertDescription className="text-green-800 dark:text-green-400">

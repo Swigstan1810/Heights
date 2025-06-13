@@ -190,7 +190,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('code')) {
+    if (searchParams?.get('code')) {
       router.replace('/dashboard');
     }
   }, [searchParams, router]);
