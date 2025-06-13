@@ -14,10 +14,10 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/auth-context';
 import { HeightsLogo } from '@/components/ui/heights-logo';
-import { 
-  Brain, 
-  Send, 
-  Sparkles, 
+import {
+  Brain,
+  Send,
+  Sparkles,
   Activity,
   BarChart3,
   TrendingUp,
@@ -145,50 +145,50 @@ interface QuickAction {
 
 // Quick actions configuration
 const QUICK_ACTIONS: QuickAction[] = [
-  { 
-    id: 'portfolio', 
-    label: 'Portfolio Analysis', 
-    icon: PieChart, 
+  {
+    id: 'portfolio',
+    label: 'Portfolio Analysis',
+    icon: PieChart,
     color: 'text-[#1F7D53]',
     prompt: 'Analyze my current portfolio performance and provide optimization suggestions',
     category: 'portfolio'
   },
-  { 
-    id: 'market', 
-    label: 'Market Summary', 
-    icon: BarChart3, 
+  {
+    id: 'market',
+    label: 'Market Summary',
+    icon: BarChart3,
     color: 'text-[#255F38]',
     prompt: 'Give me a comprehensive market summary including major indices and trends',
     category: 'market'
   },
-  { 
-    id: 'risk', 
-    label: 'Risk Assessment', 
-    icon: Shield, 
+  {
+    id: 'risk',
+    label: 'Risk Assessment',
+    icon: Shield,
     color: 'text-[#27391C]',
     prompt: 'Assess current market risks and my portfolio exposure',
     category: 'analysis'
   },
-  { 
-    id: 'ideas', 
-    label: 'Trading Ideas', 
-    icon: Lightbulb, 
+  {
+    id: 'ideas',
+    label: 'Trading Ideas',
+    icon: Lightbulb,
     color: 'text-[#18230F]',
     prompt: 'Generate top trading ideas based on current market conditions',
     category: 'trading'
   },
-  { 
-    id: 'technical', 
-    label: 'Technical Analysis', 
-    icon: CandlestickChart, 
+  {
+    id: 'technical',
+    label: 'Technical Analysis',
+    icon: CandlestickChart,
     color: 'text-[#1F7D53]',
     prompt: 'Perform technical analysis on my watchlist stocks',
     category: 'analysis'
   },
-  { 
-    id: 'news', 
-    label: 'News Impact', 
-    icon: Newspaper, 
+  {
+    id: 'news',
+    label: 'News Impact',
+    icon: Newspaper,
     color: 'text-[#255F38]',
     prompt: 'Analyze latest news and its potential market impact',
     category: 'market'
@@ -198,13 +198,13 @@ const QUICK_ACTIONS: QuickAction[] = [
 // Animated components
 const AnimatedNumber = ({ value, prefix = '', suffix = '', decimals = 0 }: any) => {
   const [displayValue, setDisplayValue] = useState(0);
-  
+
   useEffect(() => {
     const duration = 1000;
     const steps = 60;
     const increment = value / steps;
     let current = 0;
-    
+
     const timer = setInterval(() => {
       current += increment;
       if (current >= value) {
@@ -214,10 +214,10 @@ const AnimatedNumber = ({ value, prefix = '', suffix = '', decimals = 0 }: any) 
         setDisplayValue(current);
       }
     }, duration / steps);
-    
+
     return () => clearInterval(timer);
   }, [value]);
-  
+
   return (
     <span className="font-mono">
       {prefix}{displayValue.toFixed(decimals)}{suffix}
@@ -230,7 +230,7 @@ const useTypingPlaceholder = (phrases: string[]) => {
   const [placeholder, setPlaceholder] = useState('');
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   useEffect(() => {
     const currentPhrase = phrases[phraseIndex];
     const timeout = setTimeout(() => {
@@ -249,10 +249,10 @@ const useTypingPlaceholder = (phrases: string[]) => {
         }
       }
     }, isDeleting ? 50 : 100);
-    
+
     return () => clearTimeout(timeout);
   }, [placeholder, phraseIndex, isDeleting, phrases]);
-  
+
   return placeholder;
 };
 
@@ -309,7 +309,7 @@ export default function EnhancedAIDashboard() {
     "Assess current market risks...",
     "Generate investment recommendations..."
   ];
-  
+
   const animatedPlaceholder = useTypingPlaceholder(placeholderPhrases);
 
   // Initialize with enhanced welcome message
@@ -337,7 +337,7 @@ Type a question or select a quick action to get started!`,
         confidence: 1.0
       }
     };
-    
+
     setMessages([welcomeMessage]);
   }, []);
 
@@ -360,7 +360,7 @@ Type a question or select a quick action to get started!`,
         inputRef.current?.focus();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
@@ -375,7 +375,7 @@ Type a question or select a quick action to get started!`,
         responseTime: Math.max(0.8, Math.min(2.0, (prev.responseTime ?? 1.2) + (Math.random() - 0.5) * 0.2))
       }));
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -395,7 +395,7 @@ Type a question or select a quick action to get started!`,
           .order('created_at', { ascending: false });
         // Calculate real AI performance metrics
         if (aiMetrics && aiMetrics.length > 0) {
-          const successfulAnalyses = aiMetrics.filter(m => m.metadata?.confidence > 0.7).length;
+          const successfulAnalyses = aiMetrics.filter(m => (m.metadata?.confidence || 0) > 0.7).length; // Ensure confidence is treated as number
           const avgResponseTime = aiMetrics.reduce((acc, m) => acc + (m.metadata?.responseTime || 0), 0) / aiMetrics.length;
           const confidenceScores = aiMetrics.map(m => m.metadata?.confidence || 0).filter(c => c > 0);
           setAiPerformanceMetrics({
@@ -423,7 +423,7 @@ Type a question or select a quick action to get started!`,
     fetchRealTimeData();
     const interval = setInterval(fetchRealTimeData, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, supabase]); // Added supabase to dependencies
 
   // 3. Replace the metrics state update with real data
   useEffect(() => {
@@ -432,7 +432,7 @@ Type a question or select a quick action to get started!`,
         ...prev,
         totalAnalyses: aiPerformanceMetrics.totalRequests,
         successRate: (aiPerformanceMetrics.successfulAnalyses / aiPerformanceMetrics.totalRequests) * 100,
-        averageConfidence: aiPerformanceMetrics.confidenceScores.length > 0 
+        averageConfidence: aiPerformanceMetrics.confidenceScores.length > 0
           ? (aiPerformanceMetrics.confidenceScores.reduce((a, b) => a + b, 0) / aiPerformanceMetrics.confidenceScores.length) * 100
           : prev.averageConfidence,
         responseTime: aiPerformanceMetrics.averageResponseTime || prev.responseTime,
@@ -482,7 +482,7 @@ Type a question or select a quick action to get started!`,
     fetchPortfolioValue();
     const interval = setInterval(fetchPortfolioValue, 60000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, supabase, realTimeData.btc]); // Added supabase and realTimeData.btc to dependencies
 
   // 9. Real Active Alerts Count
   useEffect(() => {
@@ -499,9 +499,10 @@ Type a question or select a quick action to get started!`,
           ...prev,
           activeAlerts: count || 0
         }));
-        // Update the alerts display
-        const criticalAlerts = alerts?.filter(a => a.severity === 'critical').length || 0;
-        document.getElementById('critical-alerts-count')?.setAttribute('data-count', criticalAlerts.toString());
+        // Update the alerts display - This element needs to exist in your HTML.
+        // For a more robust solution, manage this count in state or pass it via props.
+        // const criticalAlerts = alerts?.filter(a => a.severity === 'critical').length || 0;
+        // document.getElementById('critical-alerts-count')?.setAttribute('data-count', criticalAlerts.toString());
       } catch (error) {
         console.error('Error fetching alerts:', error);
       }
@@ -509,7 +510,7 @@ Type a question or select a quick action to get started!`,
     fetchActiveAlerts();
     const interval = setInterval(fetchActiveAlerts, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, supabase]); // Added supabase to dependencies
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -530,7 +531,7 @@ Type a question or select a quick action to get started!`,
       // Check if this is a financial analysis request
       const isFinancialAnalysis = /analyze|prediction|forecast|technical|fundamental/i.test(content);
       const symbols = content.match(/\b[A-Z]{2,5}\b/g) || [];
-      
+
       if (isFinancialAnalysis && symbols.length > 0) {
         // Call the enhanced financial analysis endpoint
         const response = await fetch('/api/ai/analyze', {
@@ -547,10 +548,10 @@ Type a question or select a quick action to get started!`,
         if (!response.ok) throw new Error('Analysis failed');
 
         const data = await response.json();
-        
+
         setFinancialAnalysisData(data.analysis);
         setShowFinancialAnalysis(true);
-        
+
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
@@ -572,14 +573,14 @@ Click on the analysis card below for detailed insights including technical indic
             symbols
           }
         };
-        
+
         setMessages(prev => [...prev, aiMessage]);
       } else {
         // Regular chat endpoint
         const response = await fetch('/api/ai/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             message: content,
             history: messages.slice(-10)
           })
@@ -588,7 +589,7 @@ Click on the analysis card below for detailed insights including technical indic
         if (!response.ok) throw new Error('Chat failed');
 
         const data = await response.json();
-        
+
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
@@ -602,17 +603,17 @@ Click on the analysis card below for detailed insights including technical indic
             priority: 'medium'
           }
         };
-        
+
         setMessages(prev => [...prev, aiMessage]);
       }
-      
+
       // Update metrics
       setMetrics(prev => ({
         ...prev,
         totalAnalyses: prev.totalAnalyses + 1,
         averageConfidence: (prev.averageConfidence * prev.totalAnalyses + 85) / (prev.totalAnalyses + 1)
       }));
-      
+
     } catch (error) {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
@@ -643,7 +644,7 @@ Click on the analysis card below for detailed insights including technical indic
 
   const renderMessage = (message: Message) => {
     const isUser = message.role === 'user';
-    
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -652,10 +653,10 @@ Click on the analysis card below for detailed insights including technical indic
       >
         <div className={`max-w-[85%] flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
-          <motion.div 
+          <motion.div
             className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-              isUser 
-                ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53]' 
+              isUser
+                ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53]'
                 : 'bg-gradient-to-br from-[#255F38] to-[#1F7D53]'
             } shadow-lg`}
           >
@@ -663,17 +664,17 @@ Click on the analysis card below for detailed insights including technical indic
           </motion.div>
 
           {/* Message Content */}
-          <motion.div 
+          <motion.div
             className={`rounded-2xl p-4 shadow-lg backdrop-blur-sm ${
               isUser
-                ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white' 
+                ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white'
                 : 'bg-card/90 border border-[#255F38]/30 dark:bg-gray-900/90 dark:border-[#255F38]/20'
             }`}
           >
             {/* Message Header */}
             {!isUser && (
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2"> {/* Added flex-wrap for badges on small screens */}
+                <div className="flex items-center flex-wrap gap-2"> {/* Added flex-wrap */}
                   <Badge variant="secondary" className="text-xs bg-[#255F38]/20 text-[#255F38] dark:bg-[#255F38]/10">
                     Heights+ AI
                   </Badge>
@@ -702,7 +703,7 @@ Click on the analysis card below for detailed insights including technical indic
 
             {/* Financial Analysis Card */}
             {message.type === 'financial' && message.metadata?.analysis && (
-              <motion.div 
+              <motion.div
                 className="mt-4 p-4 bg-white/10 dark:bg-black/20 rounded-lg cursor-pointer"
                 whileHover={{ scale: 1.02 }}
                 onClick={() => {
@@ -722,9 +723,9 @@ Click on the analysis card below for detailed insights including technical indic
 
             {/* Message Actions */}
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/10 dark:border-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button 
-                size="sm" 
-                variant="ghost" 
+              <Button
+                size="sm"
+                variant="ghost"
                 className="h-7 text-xs hover:bg-white/10"
                 onClick={() => copyToClipboard(message.content, message.id)}
               >
@@ -762,7 +763,7 @@ Click on the analysis card below for detailed insights including technical indic
     <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-[#255F38]/5 dark:from-black dark:via-gray-950 dark:to-[#255F38]/10">
       <div className="max-w-[1600px] mx-auto p-4 md:p-6">
         {/* Enhanced Header with Metrics */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6"
@@ -783,11 +784,11 @@ Click on the analysis card below for detailed insights including technical indic
                 <p className="text-sm text-muted-foreground">Advanced Trading Intelligence</p>
               </div>
             </div>
-            
-            {/* Live Status Indicators */}
-            <div className="flex items-center gap-4">
+
+            {/* Live Status Indicators - flex-wrap for smaller screens */}
+            <div className="flex flex-wrap justify-center md:justify-start items-center gap-4"> {/* Added flex-wrap, justify-center */}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 backdrop-blur-sm border border-[#255F38]/20 rounded-full">
-                <motion.div 
+                <motion.div
                   className="w-2 h-2 bg-green-500 rounded-full"
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ repeat: Infinity, duration: 2 }}
@@ -805,8 +806,8 @@ Click on the analysis card below for detailed insights including technical indic
             </div>
           </div>
 
-          {/* Metrics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* Metrics Cards - Responsive grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"> {/* Adjusted for small screens */}
             <motion.div whileHover={{ y: -2 }} className="col-span-1">
               <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
                 <CardContent className="p-4">
@@ -909,18 +910,19 @@ Click on the analysis card below for detailed insights including technical indic
         </motion.div>
 
         {/* Main Content Area */}
+        {/* Adjusted grid to stack columns on small screens */}
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          {/* Chat Section - Takes up 3 columns */}
+          {/* Chat Section - Takes up 3 columns on xl, full width on others */}
           <div className="xl:col-span-3">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
             >
-              <Card className="h-[calc(100vh-320px)] flex flex-col bg-card/80 backdrop-blur-sm border-[#255F38]/20">
+              <Card className="min-h-[400px] md:min-h-[500px] xl:h-[calc(100vh-320px)] flex flex-col bg-card/80 backdrop-blur-sm border-[#255F38]/20"> {/* Adjusted height */}
                 <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full">
                   <CardHeader className="border-b border-[#255F38]/20 pb-3">
-                    <div className="flex items-center justify-between">
-                      <TabsList className="grid w-full max-w-md grid-cols-3 bg-[#255F38]/10">
+                    <div className="flex items-center justify-between flex-wrap"> {/* Added flex-wrap */}
+                      <TabsList className="grid w-full grid-cols-3 max-w-md bg-[#255F38]/10 mb-2 md:mb-0"> {/* Added mb-2 for mobile spacing */}
                         <TabsTrigger value="chat" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white">
                           <MessageSquare className="h-4 w-4 mr-2" />
                           Chat
@@ -934,17 +936,18 @@ Click on the analysis card below for detailed insights including technical indic
                           Insights
                         </TabsTrigger>
                       </TabsList>
+                      {/* Optional: Add settings/voice buttons here if needed, considering space */}
                     </div>
                   </CardHeader>
-                  
+
                   <CardContent className="flex-1 p-0 flex flex-col">
-                    <TabsContent value="chat" className="flex-1 m-0">
+                    <TabsContent value="chat" className="flex-1 m-0 h-full"> {/* Ensure TabsContent takes full height */}
                       {/* Messages Area */}
-                      <ScrollArea className="flex-1 p-4 md:p-6">
+                      <ScrollArea className="flex-1 p-4 md:p-6 h-full"> {/* h-full for ScrollArea */}
                         <AnimatePresence>
                           {messages.map(renderMessage)}
                         </AnimatePresence>
-                        
+
                         {isLoading && (
                           <motion.div
                             initial={{ opacity: 0 }}
@@ -968,17 +971,17 @@ Click on the analysis card below for detailed insights including technical indic
                                   </span>
                                 </div>
                                 <div className="flex gap-1 mt-2">
-                                  <motion.div 
+                                  <motion.div
                                     className="h-2 w-2 rounded-full bg-[#255F38]"
                                     animate={{ scale: [1, 1.5, 1] }}
                                     transition={{ repeat: Infinity, duration: 0.6 }}
                                   />
-                                  <motion.div 
+                                  <motion.div
                                     className="h-2 w-2 rounded-full bg-[#1F7D53]"
                                     animate={{ scale: [1, 1.5, 1] }}
                                     transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
                                   />
-                                  <motion.div 
+                                  <motion.div
                                     className="h-2 w-2 rounded-full bg-[#27391C]"
                                     animate={{ scale: [1, 1.5, 1] }}
                                     transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
@@ -994,7 +997,7 @@ Click on the analysis card below for detailed insights including technical indic
                       {/* Enhanced Input Area */}
                       <div className="p-4 border-t border-[#255F38]/20 bg-gradient-to-r from-card/50 to-[#255F38]/5">
                         {/* Quick Actions */}
-                        <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+                        <div className="flex gap-2 mb-3 overflow-x-auto pb-2 custom-scrollbar"> {/* Added custom-scrollbar for styling */}
                           {QUICK_ACTIONS.slice(0, 4).map((action) => (
                             <motion.div key={action.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                               <Button
@@ -1010,7 +1013,7 @@ Click on the analysis card below for detailed insights including technical indic
                             </motion.div>
                           ))}
                         </div>
-                        
+
                         {/* Input Field with Animation */}
                         <div className="relative">
                           <motion.div
@@ -1050,9 +1053,9 @@ Click on the analysis card below for detailed insights including technical indic
                             </motion.div>
                           </div>
                         </div>
-                        
+
                         {/* Input Helper Text */}
-                        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                        <div className="flex flex-col sm:flex-row items-center justify-between mt-2 text-xs text-muted-foreground gap-2"> {/* Added flex-col/row for responsiveness */}
                           <span>Press Enter to send, Shift+Enter for new line</span>
                           <div className="flex items-center gap-2">
                             <kbd className="px-2 py-0.5 bg-muted rounded text-xs">⌘K</kbd>
@@ -1062,20 +1065,24 @@ Click on the analysis card below for detailed insights including technical indic
                       </div>
                     </TabsContent>
 
-                    <TabsContent value="analysis" className="flex-1 m-0 p-6">
+                    <TabsContent value="analysis" className="flex-1 m-0 p-6 h-full"> {/* Ensure TabsContent takes full height */}
                       <div className="space-y-4">
                         <h3 className="text-lg font-semibold mb-4">Market Analysis Overview</h3>
-                        {/* Add your analysis content here */}
+                        <p className="text-muted-foreground">
+                          Market analysis content would be displayed here. This section is under development.
+                        </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Analysis cards */}
                         </div>
                       </div>
                     </TabsContent>
 
-                    <TabsContent value="insights" className="flex-1 m-0 p-6">
+                    <TabsContent value="insights" className="flex-1 m-0 p-6 h-full"> {/* Ensure TabsContent takes full height */}
                       <div className="space-y-4">
                         <h3 className="text-lg font-semibold mb-4">AI-Generated Insights</h3>
-                        {/* Add your insights content here */}
+                        <p className="text-muted-foreground">
+                          AI-generated insights and trading recommendations would be displayed here. This section is under development.
+                        </p>
                       </div>
                     </TabsContent>
                   </CardContent>
@@ -1084,7 +1091,7 @@ Click on the analysis card below for detailed insights including technical indic
             </motion.div>
           </div>
 
-          {/* Sidebar - Quick Actions & Insights */}
+          {/* Sidebar - Quick Actions & Insights (stacks below chat on small screens) */}
           <div className="space-y-4">
             {/* Quick Actions */}
             <motion.div
@@ -1144,7 +1151,7 @@ Click on the analysis card below for detailed insights including technical indic
                       </p>
                     </motion.div>
                   )}
-                  
+
                   {realTimeData.eth && (
                     <motion.div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                       <div className="flex items-center justify-between mb-1">
@@ -1158,7 +1165,7 @@ Click on the analysis card below for detailed insights including technical indic
                       </p>
                     </motion.div>
                   )}
-                  
+
                   <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">Gold Hedge</span>
@@ -1188,10 +1195,12 @@ Click on the analysis card below for detailed insights including technical indic
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {messages.filter(m => m.type === 'analysis').map((message) => (
+                  {messages.filter(m => m.type === 'analysis').slice(-3).reverse().map((message) => ( // Show last 3 analyses
                     <div key={message.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">{message.metadata?.symbols?.[0]}</Badge>
+                        {message.metadata?.symbols?.[0] && (
+                          <Badge variant="outline" className="text-xs">{message.metadata.symbols[0]}</Badge>
+                        )}
                         <span className="text-xs text-muted-foreground">
                           {new Date(message.timestamp).toLocaleTimeString()}
                         </span>
@@ -1204,7 +1213,7 @@ Click on the analysis card below for detailed insights including technical indic
                     </div>
                   ))}
                   {messages.filter(m => m.type === 'analysis').length === 0 && (
-                    <p>No recent analyses</p>
+                    <p className="text-sm text-muted-foreground">No recent analyses</p>
                   )}
                 </CardContent>
               </Card>
@@ -1226,11 +1235,11 @@ Click on the analysis card below for detailed insights including technical indic
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-card border border-[#255F38]/30 rounded-2xl p-6 max-w-4xl max-h-[90vh] overflow-y-auto"
+                className="bg-card border border-[#255F38]/30 rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto" // Added w-full for small screens
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold">
+                  <h2 className="text-xl md:text-2xl font-bold"> {/* Adjusted text size */}
                     {financialAnalysisData.asset} - Comprehensive Analysis
                   </h2>
                   <Button
@@ -1241,13 +1250,27 @@ Click on the analysis card below for detailed insights including technical indic
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                
+
                 {/* Add your financial analysis display component here */}
                 <div className="space-y-6">
                   {/* Analysis content */}
                   <p className="text-muted-foreground">
-                    Full financial analysis visualization would go here...
+                    Full financial analysis visualization would go here. This section is under development.
                   </p>
+                  {/* Example content structure if you were to expand it: */}
+                  {financialAnalysisData.recommendation && (
+                    <Card className="p-4 bg-green-500/10 border-green-500/20">
+                      <h4 className="font-semibold text-green-600">Recommendation: {financialAnalysisData.recommendation.action}</h4>
+                      <p className="text-sm text-green-700">{financialAnalysisData.recommendation.reason}</p>
+                    </Card>
+                  )}
+                  {financialAnalysisData.marketSentiment && (
+                    <Card className="p-4 bg-blue-500/10 border-blue-500/20">
+                      <h4 className="font-semibold text-blue-600">Market Sentiment: {financialAnalysisData.marketSentiment.overall}</h4>
+                      <p className="text-sm text-blue-700">Factors: {financialAnalysisData.marketSentiment.factors.join(', ')}</p>
+                    </Card>
+                  )}
+                  {/* ... more detailed analysis sections ... */}
                 </div>
               </motion.div>
             </motion.div>
@@ -1268,7 +1291,7 @@ Click on the analysis card below for detailed insights including technical indic
                 initial={{ scale: 0.9, opacity: 0, y: -20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.9, opacity: 0, y: -20 }}
-                className="bg-card border border-[#255F38]/30 rounded-2xl p-6 max-w-2xl w-full"
+                className="bg-card border border-[#255F38]/30 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" // Added w-full for small screens
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center gap-3 mb-4">
@@ -1279,7 +1302,7 @@ Click on the analysis card below for detailed insights including technical indic
                     autoFocus
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   {QUICK_ACTIONS.map((action) => (
                     <motion.div
