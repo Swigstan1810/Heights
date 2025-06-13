@@ -268,22 +268,22 @@ How can I help you dominate the markets today?`,
     try {
       // Call Claude API via your backend
       const response = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: content })
-      });
+  });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+  if (!response.ok) {
+    const errorData = await response.json();
         throw new Error(errorData.error || 'Unknown API error');
-      }
+  }
 
-      const data = await response.json();
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
+  const data = await response.json();
+  const aiMessage: Message = {
+    id: (Date.now() + 1).toString(),
+    role: 'assistant',
         content: data.message || data.output || 'No response from AI.',
-        timestamp: new Date(),
+    timestamp: new Date(),
         type: 'analysis',
         metadata: {
           confidence: data.confidence || undefined,
@@ -291,20 +291,20 @@ How can I help you dominate the markets today?`,
           category: 'market_analysis',
           priority: 'high'
         }
-      };
-      setMessages(prev => [...prev, aiMessage]);
+  };
+  setMessages(prev => [...prev, aiMessage]);
       // Optionally, handle data.suggestions, data.relatedSymbols, etc.
-    } catch (error) {
-      console.error('Error fetching AI response:', error);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 2).toString(),
-        role: 'assistant',
-        content: `Apologies, I encountered an error: ${error instanceof Error ? error.message : String(error)}. Please try again later.`,
-        timestamp: new Date(),
-        type: 'alert',
+} catch (error) {
+  console.error('Error fetching AI response:', error);
+  setMessages(prev => [...prev, {
+    id: (Date.now() + 2).toString(),
+    role: 'assistant',
+    content: `Apologies, I encountered an error: ${error instanceof Error ? error.message : String(error)}. Please try again later.`,
+    timestamp: new Date(),
+    type: 'alert',
         metadata: { actionable: false, category: 'error', priority: 'high' }
-      }]);
-    } finally {
+  }]);
+} finally {
       setIsLoading(false);
     }
   }, [isLoading]);

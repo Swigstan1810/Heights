@@ -530,22 +530,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      // Eagerly create wallet_balance row if user is returned
-      const userId = data?.user?.id;
-      if (userId) {
-        try {
-          await supabase
-            .from('wallet_balance')
-            .insert({
-              user_id: userId,
-              balance: 0,
-              locked_balance: 0,
-              currency: 'INR'
-            });
-        } catch (walletError) {
-          console.error('[Auth] Error creating wallet_balance after signup:', walletError);
-        }
-      }
+      // Removed eager wallet_balance insert here
 
       updateState({ loading: false });
       return { error: null };
