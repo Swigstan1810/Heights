@@ -684,7 +684,7 @@ export default function HomePage() {
       <div className="container mx-auto px-4 pt-24 pb-16">
         {/* Welcome Hero Section */}
         <motion.section 
-          style={{ y: heroY, opacity: heroOpacity }}
+          style={{ y: heroY, opacity: heroOpacity } as any}
           className="text-center mb-12"
         >
           <motion.div
@@ -714,9 +714,7 @@ export default function HomePage() {
                   repeat: Infinity,
                   ease: "linear"
                 }}
-                style={{
-                  backgroundSize: "200% 200%",
-                }}
+                style={{ backgroundSize: "200% 200%" } as any}
               >
                 Command Center
               </motion.span>

@@ -53,7 +53,7 @@ interface AuthState {
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, captchaToken?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshWalletBalance: () => Promise<void>;
@@ -510,36 +510,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, updateState]);
 
   // Sign up
-  const signUp = useCallback(async (email: string, password: string) => {
-    try {
-      updateState({ loading: true, error: null });
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
-          data: {
-            email: email,
-            auth_provider: 'email'
-          }
-        },
-      });
+  const signUp = useCallback(
+    async (email: string, password: string, captchaToken?: string) => {
+      try {
+        updateState({ loading: true, error: null });
 
-      if (error) throw error;
-      
-      updateState({ loading: false });
-      return { error: null };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
-      console.error('[Auth] Sign up error:', errorMessage);
-      updateState({ 
-        error: errorMessage,
-        loading: false 
-      });
-      return { error: error as Error };
-    }
-  }, [supabase, updateState]);
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            captchaToken,
+            emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
+            data: {
+              email: email,
+              auth_provider: 'email'
+            }
+          },
+        });
+
+        if (error) throw error;
+        
+        updateState({ loading: false });
+        return { error: null };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
+        console.error('[Auth] Sign up error:', errorMessage);
+        updateState({ 
+          error: errorMessage,
+          loading: false 
+        });
+        return { error: error as Error };
+      }
+    },
+    [supabase, updateState, router, fetchProfile, fetchWalletBalance]
+  );
 
   // Update profile
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {

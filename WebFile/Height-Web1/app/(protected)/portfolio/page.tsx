@@ -116,12 +116,6 @@ export default function PortfolioPage() {
     if (!isConnected || !address) return [];
 
     try {
-      // In a real implementation, you would:
-      // 1. Fetch token balances from blockchain
-      // 2. Get prices from CoinGecko/other APIs
-      // 3. Calculate metrics
-      
-      // For now, we'll fetch from database and sync with wallet
       const { data: dbHoldings } = await supabase
         .from('portfolio_holdings')
         .select('*')

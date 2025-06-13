@@ -13,6 +13,7 @@ import { CheckCircle, AlertCircle, Loader2, Info, Mail, Lock, Shield } from "luc
 import { useAuth } from "@/contexts/auth-context";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 export default function SignUp() {
   const [email, setEmail] = useState("");
@@ -26,6 +27,7 @@ export default function SignUp() {
     score: 0,
     feedback: ''
   });
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -107,6 +109,11 @@ export default function SignUp() {
       return;
     }
     
+    if (!captchaToken) {
+      setError('Please complete the captcha');
+      return;
+    }
+    
     setLoading(true);
     
     try {
@@ -123,7 +130,7 @@ export default function SignUp() {
       }
       
       // Sign up the user
-      const { error: signUpError } = await signUp(email, password);
+      const { error: signUpError } = await signUp(email, password, captchaToken);
       
       if (signUpError) {
         console.error('Signup error:', signUpError);
@@ -379,10 +386,17 @@ export default function SignUp() {
             </div>
           </div>
           
+          <div className="flex justify-center">
+            <HCaptcha
+              sitekey="ES_b3d264f3ef874f939722ad57880b4b4c"
+              onVerify={setCaptchaToken}
+            />
+          </div>
+          
           <Button
             type="submit"
             className="w-full"
-            disabled={loading || googleLoading || !!success}
+            disabled={loading || googleLoading || !!success || !captchaToken}
           >
             {loading ? (
               <>

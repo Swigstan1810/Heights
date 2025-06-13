@@ -1,7 +1,7 @@
-// app/(protected)/crypto/page.tsx - Enhanced with more coins
+// app/(protected)/crypto/page.tsx - Using Coinbase API directly
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { useAccount } from 'wagmi';
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { 
   Bitcoin,
@@ -27,12 +28,12 @@ import {
   Search,
   Info,
   DollarSign,
-  BarChart3
+  BarChart3,
+  AlertCircle,
+  Activity
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { coinbaseService } from '@/lib/services/coinbase-service';
 import dynamic from 'next/dynamic';
-import { LightweightChart } from '@/components/trading/lightweight-chart';
 
 // Lazy load TradingView widget
 const TradingViewWidget = dynamic(
@@ -51,26 +52,11 @@ interface CryptoData {
   price_change_percentage_24h: number;
   market_cap: number;
   total_volume: number;
-  circulating_supply: number;
-  price_change_percentage_7d?: number;
-  sparkline_in_7d?: { price: number[] };
-  image: string;
+  high_24h: number;
+  low_24h: number;
+  image?: string;
   isFavorite?: boolean;
 }
-
-// Expanded list of cryptocurrencies
-const ALL_CRYPTOS = [
-  'bitcoin', 'ethereum', 'binancecoin', 'ripple', 'cardano',
-  'solana', 'polkadot', 'dogecoin', 'avalanche-2', 'chainlink',
-  'polygon', 'stellar', 'cosmos', 'algorand', 'vechain',
-  'internet-computer', 'filecoin', 'tron', 'ethereum-classic', 'monero',
-  'tezos', 'hedera-hashgraph', 'aave', 'uniswap', 'litecoin',
-  'near', 'bitcoin-cash', 'aptos', 'arbitrum', 'optimism'
-];
-
-// Cache management
-const CACHE_DURATION = 30000; // 30 seconds
-const CACHE_KEY = 'crypto_data_cache_v2';
 
 export default function CryptoPage() {
   const { user, isAuthenticated, isInitialized } = useAuth();
@@ -82,119 +68,133 @@ export default function CryptoPage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [tradeAmount, setTradeAmount] = useState('');
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
   const [isTrading, setIsTrading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'market_cap' | 'price' | 'change'>('market_cap');
+  const [sortBy, setSortBy] = useState<'volume' | 'price' | 'change'>('volume');
   const [activeTab, setActiveTab] = useState('overview');
   
   const supabase = createClientComponentClient();
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const hasInitializedRef = useRef(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Redirect check - only after initialization
+  // Check authentication
   useEffect(() => {
     if (isInitialized && !isAuthenticated) {
       router.push('/login?redirectTo=/crypto');
     }
   }, [isInitialized, isAuthenticated, router]);
 
-  // Check cache first
-  const getCachedData = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_DURATION) {
-        return data;
-      }
-    }
-    return null;
-  }, []);
-
-  // Save to cache
-  const setCachedData = useCallback((data: CryptoData[]) => {
-    if (typeof window === 'undefined') return;
-    
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      data,
-      timestamp: Date.now()
-    }));
-  }, []);
-
-  // Optimized data fetching
-  const fetchCryptoData = useCallback(async (skipCache = false) => {
-    // Check cache first
-    if (!skipCache) {
-      const cached = getCachedData();
-      if (cached && cached.length > 0) {
-        setCryptoData(cached);
-        setFilteredData(cached);
-        if (!selectedCrypto && cached.length > 0) {
-          setSelectedCrypto(cached[0]);
-        }
-        setLoading(false);
-        return;
-      }
-    }
-
-    // Abort previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    abortControllerRef.current = new AbortController();
-
+  // Fetch crypto data from Coinbase API
+  const fetchCryptoData = useCallback(async () => {
     try {
-      const ids = ALL_CRYPTOS.join(',');
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=true&price_change_percentage=7d`,
-        { 
-          signal: abortControllerRef.current.signal,
-          headers: {
-            'Cache-Control': 'max-age=30'
-          }
-        }
-      );
+      setError(null);
       
-      if (!response.ok) throw new Error('Failed to fetch crypto data');
+      // Fetch from your API route that calls Coinbase
+      const response = await fetch('/api/coinbase/products');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch crypto data: ${response.status}`);
+      }
       
       const data = await response.json();
+      
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Invalid data received from API');
+      }
+
+      // Map Coinbase data to our format
       const formattedData: CryptoData[] = data.map((coin: any) => ({
         id: coin.id,
-        symbol: coin.symbol.toUpperCase(),
+        symbol: coin.symbol,
         name: coin.name,
-        current_price: coin.current_price,
-        price_change_percentage_24h: coin.price_change_percentage_24h,
-        price_change_percentage_7d: coin.price_change_percentage_7d_in_currency,
-        market_cap: coin.market_cap,
-        total_volume: coin.total_volume,
-        circulating_supply: coin.circulating_supply,
-        sparkline_in_7d: coin.sparkline_in_7d,
-        image: coin.image,
-        isFavorite: favorites.has(coin.symbol.toUpperCase())
+        current_price: coin.price,
+        price_change_percentage_24h: coin.change24h,
+        market_cap: coin.volume24h * coin.price, // Estimate based on volume
+        total_volume: coin.volume24h,
+        high_24h: coin.high24h,
+        low_24h: coin.low24h,
+        image: getCryptoIcon(coin.symbol),
+        isFavorite: favorites.has(coin.symbol)
       }));
       
       setCryptoData(formattedData);
       setFilteredData(formattedData);
-      setCachedData(formattedData);
       
       if (!selectedCrypto && formattedData.length > 0) {
         setSelectedCrypto(formattedData[0]);
       }
       
+      setError(null);
     } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching crypto data:', error);
-        toast.error('Failed to fetch crypto data');
-      }
+      console.error('Error fetching crypto data:', error);
+      setError(error.message || 'Failed to fetch crypto data from Coinbase');
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [favorites, selectedCrypto, getCachedData, setCachedData]);
+  }, [favorites, selectedCrypto]);
+
+  // Get crypto icon URL
+  const getCryptoIcon = (symbol: string) => {
+    // Map common symbols to CoinGecko IDs for icons
+    const symbolMap: { [key: string]: string } = {
+      'BTC': 'bitcoin',
+      'ETH': 'ethereum',
+      'USDT': 'tether',
+      'BNB': 'binancecoin',
+      'SOL': 'solana',
+      'USDC': 'usd-coin',
+      'XRP': 'ripple',
+      'ADA': 'cardano',
+      'AVAX': 'avalanche-2',
+      'DOGE': 'dogecoin',
+      'DOT': 'polkadot',
+      'MATIC': 'matic-network',
+      'SHIB': 'shiba-inu',
+      'DAI': 'dai',
+      'TRX': 'tron',
+      'WBTC': 'wrapped-bitcoin',
+      'UNI': 'uniswap',
+      'LTC': 'litecoin',
+      'LINK': 'chainlink',
+      'ATOM': 'cosmos',
+      'XLM': 'stellar',
+      'ALGO': 'algorand',
+      'NEAR': 'near',
+      'BCH': 'bitcoin-cash',
+      'VET': 'vechain',
+      'AAVE': 'aave',
+      'SAND': 'the-sandbox',
+      'MANA': 'decentraland',
+      'XTZ': 'tezos',
+      'FIL': 'filecoin',
+      'APE': 'apecoin',
+      'EOS': 'eos',
+      'SUSHI': 'sushi',
+      'MKR': 'maker',
+      'COMP': 'compound-governance-token',
+      'SNX': 'synthetix-network-token',
+      '1INCH': '1inch',
+      'BAT': 'basic-attention-token',
+      'ENJ': 'enjincoin',
+      'CRV': 'curve-dao-token',
+      'ZRX': '0x',
+      'YFI': 'yearn-finance',
+      'GRT': 'the-graph',
+      'STORJ': 'storj',
+      'BAL': 'balancer',
+      'LRC': 'loopring',
+      'BAND': 'band-protocol',
+      'REN': 'republic-protocol',
+      'NMR': 'numeraire',
+      'OMG': 'omisego'
+    };
+
+    const geckoId = symbolMap[symbol] || symbol.toLowerCase();
+    return `https://assets.coingecko.com/coins/images/1/thumb/${geckoId}.png`;
+  };
 
   // Load favorites
   const loadFavorites = useCallback(async () => {
@@ -223,37 +223,44 @@ export default function CryptoPage() {
 
     const newFavorites = new Set(favorites);
     
-    if (favorites.has(crypto.symbol)) {
-      newFavorites.delete(crypto.symbol);
-      await supabase
-        .from('crypto_watchlist')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('symbol', crypto.symbol);
-    } else {
-      newFavorites.add(crypto.symbol);
-      await supabase
-        .from('crypto_watchlist')
-        .insert({
-          user_id: user.id,
-          symbol: crypto.symbol,
-          crypto_id: crypto.id,
-          name: crypto.name
-        });
+    try {
+      if (favorites.has(crypto.symbol)) {
+        newFavorites.delete(crypto.symbol);
+        await supabase
+          .from('crypto_watchlist')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('symbol', crypto.symbol);
+        toast.success(`${crypto.name} removed from favorites`);
+      } else {
+        newFavorites.add(crypto.symbol);
+        await supabase
+          .from('crypto_watchlist')
+          .insert({
+            user_id: user.id,
+            symbol: crypto.symbol,
+            crypto_id: crypto.id,
+            name: crypto.name
+          });
+        toast.success(`${crypto.name} added to favorites`);
+      }
+      
+      setFavorites(newFavorites);
+      
+      // Update local data
+      const updatedData = cryptoData.map(c => ({
+        ...c,
+        isFavorite: newFavorites.has(c.symbol)
+      }));
+      setCryptoData(updatedData);
+      setFilteredData(updatedData);
+    } catch (error) {
+      console.error('Error updating favorite:', error);
+      toast.error('Failed to update favorite');
     }
-    
-    setFavorites(newFavorites);
-    
-    // Update local data
-    const updatedData = cryptoData.map(c => ({
-      ...c,
-      isFavorite: newFavorites.has(c.symbol)
-    }));
-    setCryptoData(updatedData);
-    setFilteredData(updatedData);
   }, [user, favorites, cryptoData, supabase]);
 
-  // Handle trade
+  // Handle trade through Coinbase
   const handleTrade = useCallback(async () => {
     if (!isConnected || !address || !selectedCrypto || !user) {
       toast.error('Please connect your wallet first');
@@ -267,25 +274,39 @@ export default function CryptoPage() {
 
     setIsTrading(true);
     try {
-      const params = {
-        userId: user.id,
-        walletAddress: address,
-        currency: `${selectedCrypto.symbol}-USD`,
-      };
+      // Call your API route that handles Coinbase orders
+      const response = await fetch('/api/coinbase/order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          side: tradeType,
+          productId: selectedCrypto.id,
+          amount: parseFloat(tradeAmount),
+          userId: user.id,
+          walletAddress: address
+        })
+      });
 
-      const result = tradeType === 'buy' 
-        ? await coinbaseService.createBuyOrder({
-            ...params,
-            amount: parseFloat(tradeAmount)
-          })
-        : await coinbaseService.createSellOrder({
-            ...params,
-            size: parseFloat(tradeAmount)
-          });
+      const result = await response.json();
 
       if (result.success) {
-        toast.success(result.message);
+        toast.success(`${tradeType === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
         setTradeAmount('');
+        
+        // Log to database
+        await supabase.from('crypto_transactions').insert({
+          user_id: user.id,
+          wallet_address: address,
+          transaction_type: tradeType,
+          currency_pair: selectedCrypto.id,
+          amount: parseFloat(tradeAmount),
+          price: selectedCrypto.current_price,
+          total_value: parseFloat(tradeAmount) * (tradeType === 'buy' ? 1 : selectedCrypto.current_price),
+          status: 'completed',
+          coinbase_order_id: result.orderId
+        });
       } else {
         toast.error(result.error || 'Trade failed');
       }
@@ -295,7 +316,7 @@ export default function CryptoPage() {
     } finally {
       setIsTrading(false);
     }
-  }, [isConnected, address, selectedCrypto, user, tradeAmount, tradeType]);
+  }, [isConnected, address, selectedCrypto, user, tradeAmount, tradeType, supabase]);
 
   // Search and filter
   useEffect(() => {
@@ -316,68 +337,58 @@ export default function CryptoPage() {
           return b.current_price - a.current_price;
         case 'change':
           return b.price_change_percentage_24h - a.price_change_percentage_24h;
-        case 'market_cap':
+        case 'volume':
         default:
-          return b.market_cap - a.market_cap;
+          return b.total_volume - a.total_volume;
       }
     });
     
     setFilteredData(filtered);
   }, [cryptoData, searchQuery, sortBy]);
 
-  // Initial load - load crypto data immediately without waiting for auth
+  // Initial load
   useEffect(() => {
-    if (!hasInitializedRef.current) {
-      hasInitializedRef.current = true;
-      // Load crypto data immediately
-      fetchCryptoData();
-    }
-  }, [fetchCryptoData]);
+    fetchCryptoData();
+  }, []);
 
-  // Load user-specific data after authentication
+  // Load user-specific data and set up auto-refresh
   useEffect(() => {
     if (user) {
       loadFavorites();
-      
-      // Set up interval with cleanup
-      const interval = setInterval(() => {
-        fetchCryptoData(true); // Skip cache for periodic updates
-      }, 30000);
-      
-      return () => {
-        clearInterval(interval);
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-      };
     }
+
+    // Set up auto-refresh interval (every 10 seconds for Coinbase data)
+    refreshIntervalRef.current = setInterval(() => {
+      fetchCryptoData();
+    }, 10000);
+    
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
   }, [user, loadFavorites, fetchCryptoData]);
 
-  // Memoized formatters
-  const formatCurrency = useMemo(() => (value: number) => {
+  // Formatters
+  const formatCurrency = (value: number) => {
+    if (!value || isNaN(value)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: value < 1 ? 4 : 2,
-      maximumFractionDigits: value < 1 ? 4 : 2,
+      maximumFractionDigits: value < 1 ? 8 : 2,
     }).format(value);
-  }, []);
+  };
 
-  const formatMarketCap = useMemo(() => (value: number) => {
-    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-    return formatCurrency(value);
-  }, [formatCurrency]);
-
-  const formatVolume = useMemo(() => (value: number) => {
+  const formatVolume = (value: number) => {
+    if (!value || isNaN(value)) return '$0';
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
     if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
     if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
     return formatCurrency(value);
-  }, [formatCurrency]);
+  };
 
-  // Show page immediately with skeleton while auth is checking
+  // Show loading skeleton
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-background">
@@ -411,20 +422,24 @@ export default function CryptoPage() {
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">
                 <Bitcoin className="h-8 w-8 text-orange-500" />
-                Crypto Trading
+                Coinbase Trading
               </h1>
               <p className="text-muted-foreground mt-2">
-                Track {ALL_CRYPTOS.length} cryptocurrencies and trade with your wallet
+                Trade all available Coinbase cryptocurrencies
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-green-500 border-green-500">
+                <Activity className="h-3 w-3 mr-1" />
+                Live from Coinbase
+              </Badge>
               <ConnectWalletButton />
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setIsRefreshing(true);
-                  fetchCryptoData(true);
+                  fetchCryptoData();
                 }}
                 disabled={isRefreshing}
               >
@@ -433,6 +448,14 @@ export default function CryptoPage() {
               </Button>
             </div>
           </div>
+
+          {/* Error Alert */}
+          {error && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -440,8 +463,8 @@ export default function CryptoPage() {
           <div className="lg:col-span-1">
             <Card className="h-[calc(100vh-200px)]">
               <CardHeader className="pb-3">
-                <CardTitle>Cryptocurrencies</CardTitle>
-                <CardDescription>Select to view details and trade</CardDescription>
+                <CardTitle>Available Cryptocurrencies</CardTitle>
+                <CardDescription>All Coinbase trading pairs</CardDescription>
                 <div className="space-y-3 pt-3">
                   {/* Search Bar */}
                   <div className="relative">
@@ -457,12 +480,12 @@ export default function CryptoPage() {
                   <div className="flex gap-1">
                     <Button
                       size="sm"
-                      variant={sortBy === 'market_cap' ? 'default' : 'outline'}
-                      onClick={() => setSortBy('market_cap')}
+                      variant={sortBy === 'volume' ? 'default' : 'outline'}
+                      onClick={() => setSortBy('volume')}
                       className="flex-1"
                     >
                       <DollarSign className="h-3 w-3 mr-1" />
-                      Cap
+                      Volume
                     </Button>
                     <Button
                       size="sm"
@@ -503,6 +526,11 @@ export default function CryptoPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                ) : filteredData.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                    <p>No cryptocurrencies found</p>
                   </div>
                 ) : (
                   <ScrollArea className="h-[calc(100vh-400px)]">
@@ -566,7 +594,7 @@ export default function CryptoPage() {
 
           {/* Trading Interface */}
           <div className="lg:col-span-2 space-y-6">
-            {selectedCrypto && (
+            {selectedCrypto ? (
               <>
                 {/* Selected Crypto Info */}
                 <Card>
@@ -580,7 +608,7 @@ export default function CryptoPage() {
                         />
                         <div>
                           <CardTitle className="text-2xl">{selectedCrypto.name}</CardTitle>
-                          <p className="text-muted-foreground">{selectedCrypto.symbol}/USD</p>
+                          <p className="text-muted-foreground">{selectedCrypto.id}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -600,16 +628,6 @@ export default function CryptoPage() {
                               {selectedCrypto.price_change_percentage_24h.toFixed(2)}% (24h)
                             </span>
                           </div>
-                          {selectedCrypto.price_change_percentage_7d && (
-                            <div className={`flex items-center ${
-                              selectedCrypto.price_change_percentage_7d >= 0 ? 'text-green-500' : 'text-red-500'
-                            }`}>
-                              <span className="text-sm">
-                                {selectedCrypto.price_change_percentage_7d >= 0 ? '+' : ''}
-                                {selectedCrypto.price_change_percentage_7d.toFixed(2)}% (7d)
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -617,18 +635,16 @@ export default function CryptoPage() {
                   <CardContent>
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
-                        <p className="text-muted-foreground">Market Cap</p>
-                        <p className="font-medium">{formatMarketCap(selectedCrypto.market_cap)}</p>
+                        <p className="text-muted-foreground">24h High</p>
+                        <p className="font-medium">{formatCurrency(selectedCrypto.high_24h)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">24h Low</p>
+                        <p className="font-medium">{formatCurrency(selectedCrypto.low_24h)}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">24h Volume</p>
                         <p className="font-medium">{formatVolume(selectedCrypto.total_volume)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Circulating Supply</p>
-                        <p className="font-medium">
-                          {selectedCrypto.circulating_supply?.toLocaleString() || 'N/A'} {selectedCrypto.symbol}
-                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -647,11 +663,11 @@ export default function CryptoPage() {
                       {/* Overview Tab */}
                       <TabsContent value="overview" className="p-6 space-y-4">
                         <div>
-                          <h3 className="text-lg font-semibold mb-3">About {selectedCrypto.name}</h3>
+                          <h3 className="text-lg font-semibold mb-3">Market Statistics</h3>
                           <div className="grid grid-cols-2 gap-4">
                             <Card>
                               <CardHeader className="pb-3">
-                                <CardTitle className="text-sm">Price Statistics</CardTitle>
+                                <CardTitle className="text-sm">Price Information</CardTitle>
                               </CardHeader>
                               <CardContent className="space-y-2">
                                 <div className="flex justify-between text-sm">
@@ -667,30 +683,28 @@ export default function CryptoPage() {
                                   </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Market Cap Rank</span>
-                                  <span className="font-medium">#{filteredData.findIndex(c => c.id === selectedCrypto.id) + 1}</span>
+                                  <span className="text-muted-foreground">Trading Pair</span>
+                                  <span className="font-medium">{selectedCrypto.id}</span>
                                 </div>
                               </CardContent>
                             </Card>
                             
                             <Card>
                               <CardHeader className="pb-3">
-                                <CardTitle className="text-sm">Market Information</CardTitle>
+                                <CardTitle className="text-sm">24h Trading Data</CardTitle>
                               </CardHeader>
                               <CardContent className="space-y-2">
                                 <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Market Cap</span>
-                                  <span className="font-medium">{formatMarketCap(selectedCrypto.market_cap)}</span>
+                                  <span className="text-muted-foreground">High</span>
+                                  <span className="font-medium">{formatCurrency(selectedCrypto.high_24h)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">24h Volume</span>
+                                  <span className="text-muted-foreground">Low</span>
+                                  <span className="font-medium">{formatCurrency(selectedCrypto.low_24h)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Volume</span>
                                   <span className="font-medium">{formatVolume(selectedCrypto.total_volume)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Volume/Market Cap</span>
-                                  <span className="font-medium">
-                                    {((selectedCrypto.total_volume / selectedCrypto.market_cap) * 100).toFixed(2)}%
-                                  </span>
                                 </div>
                               </CardContent>
                             </Card>
@@ -701,10 +715,9 @@ export default function CryptoPage() {
                       {/* Chart Tab */}
                       <TabsContent value="chart" className="p-0">
                         <div className="h-[600px] w-full">
-                          <LightweightChart
-                            symbol={selectedCrypto.id}
+                          <TradingViewWidget
+                            symbol={`COINBASE:${selectedCrypto.symbol}USD`}
                             height={600}
-                            showVolume={true}
                           />
                         </div>
                       </TabsContent>
@@ -727,12 +740,18 @@ export default function CryptoPage() {
                                   onChange={(e) => setTradeAmount(e.target.value)}
                                   disabled={!isConnected}
                                 />
-                                {tradeAmount && (
+                                {tradeAmount && selectedCrypto.current_price > 0 && (
                                   <p className="text-sm text-muted-foreground mt-1">
                                     ≈ {(parseFloat(tradeAmount) / selectedCrypto.current_price).toFixed(6)} {selectedCrypto.symbol}
                                   </p>
                                 )}
                               </div>
+                              <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertDescription>
+                                  Orders will be executed through Coinbase at market price
+                                </AlertDescription>
+                              </Alert>
                               <Button
                                 className="w-full"
                                 onClick={handleTrade}
@@ -756,12 +775,18 @@ export default function CryptoPage() {
                                   onChange={(e) => setTradeAmount(e.target.value)}
                                   disabled={!isConnected}
                                 />
-                                {tradeAmount && (
+                                {tradeAmount && selectedCrypto.current_price > 0 && (
                                   <p className="text-sm text-muted-foreground mt-1">
                                     ≈ {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.current_price)}
                                   </p>
                                 )}
                               </div>
+                              <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertDescription>
+                                  Orders will be executed through Coinbase at market price
+                                </AlertDescription>
+                              </Alert>
                               <Button
                                 className="w-full"
                                 variant="destructive"
@@ -783,7 +808,7 @@ export default function CryptoPage() {
                               <div className="flex items-center gap-2 text-sm">
                                 <Info className="h-4 w-4 text-muted-foreground" />
                                 <p className="text-muted-foreground">
-                                  Connect your wallet to start trading cryptocurrencies
+                                  Connect your wallet to start trading on Coinbase
                                 </p>
                               </div>
                             </div>
@@ -794,6 +819,13 @@ export default function CryptoPage() {
                   </CardContent>
                 </Card>
               </>
+            ) : (
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center text-muted-foreground">
+                  <Bitcoin className="h-12 w-12 mx-auto mb-4" />
+                  <p>Select a cryptocurrency to view details</p>
+                </div>
+              </div>
             )}
           </div>
         </div>
