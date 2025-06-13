@@ -8,11 +8,21 @@ const nextConfig = {
   // Disable x-powered-by header
   poweredByHeader: false,
   
+  transpilePackages: [
+    '@radix-ui/react-progress',
+    '@radix-ui/react-primitive',
+    '@radix-ui/react-compose-refs',
+    '@radix-ui/react-context',
+    '@radix-ui/react-use-callback-ref',
+    '@radix-ui/react-use-layout-effect'
+  ],
+  
   // Experimental features for optimization
   experimental: {
     // Enable optimized package imports for better tree shaking
     optimizePackageImports: [
       'lucide-react',
+      '@radix-ui/react-progress',
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-avatar',
       'framer-motion',
@@ -99,7 +109,7 @@ const nextConfig = {
   images: {
     domains: [
       'localhost', 
-      'your-domain.com',
+      'heightss.com',
       'api.coingecko.com',
       'via.placeholder.com',
       'images.unsplash.com',

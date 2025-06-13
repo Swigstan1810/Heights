@@ -32,6 +32,7 @@ import {
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { coinbaseService } from '@/lib/services/coinbase-service';
 import dynamic from 'next/dynamic';
+import { LightweightChart } from '@/components/trading/lightweight-chart';
 
 // Lazy load TradingView widget
 const TradingViewWidget = dynamic(
@@ -700,10 +701,10 @@ export default function CryptoPage() {
                       {/* Chart Tab */}
                       <TabsContent value="chart" className="p-0">
                         <div className="h-[600px] w-full">
-                          <TradingViewWidget
-                            symbol={`${selectedCrypto.symbol}USD`}
+                          <LightweightChart
+                            symbol={selectedCrypto.id}
                             height={600}
-                            theme="dark"
+                            showVolume={true}
                           />
                         </div>
                       </TabsContent>

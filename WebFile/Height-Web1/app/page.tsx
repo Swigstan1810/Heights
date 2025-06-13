@@ -73,7 +73,7 @@ const floatingAnimation = {
     transition: {
       duration: 4,
       repeat: Infinity,
-      ease: "easeInOut"
+      ease: "easeInOut" as const
     }
   }
 };
@@ -247,7 +247,7 @@ export default function Home() {
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-              }}
+              } as any}
               animate={{
                 y: [-20, 20, -20],
                 x: [-10, 10, -10],
@@ -270,7 +270,7 @@ export default function Home() {
       >
         <div className="max-w-7xl mx-auto">
           <motion.div
-            style={{ y: heroY, opacity: heroOpacity }}
+            style={{ y: heroY, opacity: heroOpacity } as any}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
@@ -305,7 +305,7 @@ export default function Home() {
                 }}
                 style={{
                   backgroundSize: "200% 200%",
-                }}
+                } as any}
               >
                 Heights
               </motion.span>
@@ -379,7 +379,7 @@ export default function Home() {
                         '#a855f7, #ec4899'
                       })`,
                       filter: 'blur(20px)',
-                    }}
+                    } as any}
                     animate={{
                       scale: [1, 1.1, 1],
                       opacity: [0.3, 0.5, 0.3],
@@ -412,7 +412,7 @@ export default function Home() {
                             background: category.id === 'crypto' ? 'rgba(249, 115, 22, 0.1)' :
                                       category.id === 'stocks' ? 'rgba(59, 130, 246, 0.1)' :
                                       'rgba(168, 85, 247, 0.1)',
-                          }}
+                          } as any}
                           whileHover={{ rotate: 360 }}
                           transition={{ duration: 0.5 }}
                         >
@@ -600,7 +600,7 @@ export default function Home() {
                     <CardContent className="pt-6 relative z-10">
                       <motion.div
                         className="relative inline-block"
-                        animate={hoveredFeature === index ? floatingAnimation.animate : {}}
+                        animate={hoveredFeature === index ? floatingAnimation.animate : {} as any}
                         initial={floatingAnimation.initial}
                       >
                         <motion.div
