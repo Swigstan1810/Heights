@@ -1,6 +1,6 @@
 // app/api/ai/analyze/route.ts
 import { NextResponse } from 'next/server';
-import { financialAnalyst } from '@/lib/enhanced-ai-system';
+import { ultimateAnalyst } from '@/lib/enhanced-ai-system';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,7 +16,7 @@ const requestCounts = new Map<string, { count: number; resetTime: number }>();
 function checkRateLimit(ip: string): { success: boolean; remaining: number } {
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
-  const maxRequests = 20; // Lower for comprehensive analysis
+  const maxRequests = 30; // Higher limit for analysis
 
   const current = requestCounts.get(ip);
   
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         { 
           status: 429,
           headers: {
-            'X-RateLimit-Limit': '20',
+            'X-RateLimit-Limit': '30',
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': new Date(Date.now() + 60000).toISOString()
           }
@@ -58,12 +58,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { 
       asset, 
-      timeframe = '1 year',
-      analysisType = 'comprehensive',
-      shortTermPeriod = '1 week',
-      longTermPeriod = '6 months',
-      usePerplexity = true,
-      useClaude = true,
       userId = 'anonymous'
     } = body;
     
@@ -71,48 +65,109 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Asset symbol is required' }, { status: 400 });
     }
 
-    console.log(`[Financial Analysis] Analyzing ${asset} for ${ip}`);
+    console.log(`[AI Analysis] Analyzing ${asset} with Claude + Perplexity`);
 
-    // Perform comprehensive analysis
-    const analysis = await financialAnalyst.analyzeAsset(asset, timeframe, {
-      usePerplexity,
-      useClaude,
-      shortTermPeriod,
-      longTermPeriod
+    // Perform comprehensive analysis with the ultimate analyst
+    const analysis = await ultimateAnalyst.analyzeAsset(asset, {
+      includeNews: true,
+      deepAnalysis: true
     });
 
     // Store analysis in Supabase
-    await supabase
-      .from('ai_financial_analyses')
-      .insert({
-        user_id: userId,
-        asset,
-        timeframe,
-        analysis: analysis,
-        created_at: new Date().toISOString(),
-        metadata: {
-          ip,
-          analysisType,
-          executionTime: Date.now() - startTime,
-          models: {
-            claude: useClaude,
-            perplexity: usePerplexity
+    try {
+      await supabase
+        .from('ai_financial_analyses')
+        .insert({
+          user_id: userId,
+          asset,
+          analysis: {
+            marketData: analysis.marketData,
+            predictions: analysis.predictions,
+            recommendation: analysis.recommendation,
+            newsAnalysis: analysis.newsAnalysis,
+            aiConsensus: analysis.aiConsensus
+          },
+          created_at: new Date().toISOString(),
+          metadata: {
+            ip,
+            executionTime: Date.now() - startTime,
+            models: {
+              claude: true,
+              perplexity: true
+            }
           }
-        }
-      });
+        });
+    } catch (dbError) {
+      console.error('Failed to store analysis:', dbError);
+    }
 
     // Return comprehensive analysis
     return NextResponse.json({
       success: true,
-      analysis,
+      analysis: {
+        asset: analysis.asset,
+        timestamp: analysis.timestamp,
+        
+        // Market Data
+        currentPrice: analysis.marketData.price,
+        priceChange: {
+          amount: analysis.marketData.change24h,
+          percentage: analysis.marketData.changePercent
+        },
+        volume: analysis.marketData.volume,
+        marketCap: analysis.marketData.marketCap,
+        sentiment: analysis.marketData.sentiment,
+        
+        // Predictions
+        shortTermPrediction: {
+          direction: analysis.predictions.shortTerm.direction,
+          targetPrice: analysis.predictions.shortTerm.targetPrice,
+          confidence: analysis.predictions.shortTerm.confidence,
+          timeframe: analysis.predictions.shortTerm.timeframe,
+          reasoning: analysis.predictions.shortTerm.reasoning
+        },
+        longTermPrediction: {
+          direction: analysis.predictions.longTerm.direction,
+          targetPrice: analysis.predictions.longTerm.targetPrice,
+          confidence: analysis.predictions.longTerm.confidence,
+          timeframe: analysis.predictions.longTerm.timeframe,
+          reasoning: analysis.predictions.longTerm.reasoning
+        },
+        
+        // Technical Indicators
+        technicalIndicators: analysis.predictions.technicalIndicators,
+        riskMetrics: analysis.predictions.riskMetrics,
+        
+        // News Analysis
+        newsHeadlines: analysis.newsAnalysis.headlines.slice(0, 5),
+        newsSentiment: {
+          score: analysis.newsAnalysis.sentimentScore,
+          impact: analysis.newsAnalysis.marketImpact
+        },
+        keyEvents: analysis.newsAnalysis.keyEvents,
+        tradingSignals: analysis.newsAnalysis.tradingSignals,
+        
+        // AI Recommendation
+        recommendation: {
+          action: analysis.recommendation.action,
+          confidence: analysis.recommendation.confidence,
+          reasoning: analysis.recommendation.reasoning,
+          entryPoints: analysis.recommendation.entryPoints,
+          exitPoints: analysis.recommendation.exitPoints
+        },
+        
+        // AI Consensus
+        aiConsensus: analysis.aiConsensus
+      },
       metadata: {
         executionTime: Date.now() - startTime,
         rateLimitRemaining: remaining,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        dataSources: ['claude-3.5-sonnet', 'perplexity-llama-3.1']
       }
     }, {
       headers: {
-        'X-RateLimit-Limit': '20',
+        'X-RateLimit-Limit': '30',
         'X-RateLimit-Remaining': String(remaining),
         'Cache-Control': 'private, max-age=300' // Cache for 5 minutes
       }
@@ -144,7 +199,6 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const asset = searchParams.get('asset');
-  const timeframe = searchParams.get('timeframe') || '1 year';
   
   if (!asset) {
     return NextResponse.json({ error: 'Asset parameter required' }, { status: 400 });
@@ -163,7 +217,7 @@ export async function GET(request: Request) {
         })}\n\n`));
 
         // Stream analysis updates
-        for await (const update of financialAnalyst.streamAnalysis(asset, timeframe)) {
+        for await (const update of ultimateAnalyst.streamAnalysis(asset)) {
           const data = `data: ${JSON.stringify({ 
             type: 'update', 
             data: update,

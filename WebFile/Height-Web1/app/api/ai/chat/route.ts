@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
-import { aiOrchestrator } from '@/lib/services/enhanced-ai-orchestrator';
+import { SimplifiedAIOrchestrator, aiOrchestrator } from '@/lib/services/enhanced-ai-orchestrator';
 import { ChatContext } from '@/types/ai-types';
 
 // Initialize Supabase
@@ -13,12 +13,12 @@ const supabase = createClient(
 
 // Rate limiting configuration
 const RATE_LIMITS = {
-  anonymous: { requests: 10, period: 60 * 1000 }, // 10 requests per minute
-  authenticated: { requests: 30, period: 60 * 1000 }, // 30 requests per minute
-  premium: { requests: 100, period: 60 * 1000 } // 100 requests per minute
+  anonymous: { requests: 20, period: 60 * 1000 }, // 20 requests per minute
+  authenticated: { requests: 50, period: 60 * 1000 }, // 50 requests per minute
+  premium: { requests: 200, period: 60 * 1000 } // 200 requests per minute
 };
 
-// In-memory rate limiting (use Redis in production)
+// In-memory rate limiting
 const requestCounts = new Map<string, { count: number; resetTime: number; tier: keyof typeof RATE_LIMITS }>();
 
 function checkRateLimit(identifier: string, tier: keyof typeof RATE_LIMITS = 'anonymous'): { 
@@ -62,31 +62,6 @@ async function getUserTier(userId?: string): Promise<keyof typeof RATE_LIMITS> {
   }
 }
 
-async function logConversation(
-  userId: string | undefined,
-  message: string,
-  response: any,
-  metadata: any
-) {
-  try {
-    await supabase
-      .from('ai_conversations')
-      .insert({
-        user_id: userId || 'anonymous',
-        user_message: message,
-        ai_response: JSON.stringify(response),
-        metadata: {
-          ...metadata,
-          ip: headers().get('x-forwarded-for') || 'unknown',
-          user_agent: headers().get('user-agent') || 'unknown',
-          timestamp: new Date().toISOString()
-        }
-      });
-  } catch (error) {
-    console.error('Failed to log conversation:', error);
-  }
-}
-
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
@@ -108,9 +83,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (message.length > 1000) {
+    if (message.length > 2000) {
       return NextResponse.json(
-        { error: 'Message too long. Maximum 1000 characters allowed.' },
+        { error: 'Message too long. Maximum 2000 characters allowed.' },
         { status: 400 }
       );
     }
@@ -138,43 +113,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[AI Chat] Processing request for ${userTier} user, remaining: ${remaining}`);
-
-    // Add structured and usePerplexity flags to preferences
-    const enhancedPreferences = {
-      ...preferences,
-      structured: preferences.structured ?? true,
-      usePerplexity: preferences.usePerplexity ?? true
-    };
-    
-    // Add conversationPurpose if present
-    const conversationPurpose = preferences.intent || preferences.conversationPurpose || undefined;
+    console.log(`[AI Chat] Processing for ${userTier} user, remaining: ${remaining}`);
 
     // Build chat context
     const context: ChatContext = {
       userId,
       sessionId,
       messageHistory: history,
-      preferences: enhancedPreferences,
-      activeAnalyses: {},
-      ...(conversationPurpose ? { conversationPurpose } : {})
+      preferences: {
+        ...preferences,
+        preferredSources: ['claude', 'perplexity'] // Only use these two
+      },
+      activeAnalyses: {}
     };
 
-    // Process query with enhanced AI orchestrator
+    // Process with simplified orchestrator
     const response = await aiOrchestrator.processQuery(message, context, {
-      useCache: true,
-      maxRetries: 3
+      usePerplexity: preferences.usePerplexity !== false, // Default true
+      structured: preferences.structured !== false // Default true
     });
 
-    // Log conversation for analytics
-    await logConversation(userId, message, response, {
-      processingTime: Date.now() - startTime,
-      rateLimitRemaining: remaining,
-      userTier,
-      classification: response.metadata.classification
-    });
+    // Log conversation
+    try {
+      await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: userId || 'anonymous',
+          user_message: message,
+          ai_response: JSON.stringify(response),
+          metadata: {
+            processingTime: Date.now() - startTime,
+            rateLimitRemaining: remaining,
+            userTier,
+            ip: headers().get('x-forwarded-for') || 'unknown',
+            timestamp: new Date().toISOString()
+          }
+        });
+    } catch (error) {
+      console.error('Failed to log conversation:', error);
+    }
 
-    // Return enhanced response
+    // Return response
     return NextResponse.json({
       ...response,
       responseTime: Date.now() - startTime,
@@ -190,13 +169,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    let userIdForError = 'unknown';
-    try {
-      const body = await request.json();
-      userIdForError = body.userId || 'unknown';
-    } catch {}
-    console.error('AI Chat API error:', error, { requestBody: await request.text?.(), userContext: { headers: headers(), userId: userIdForError } });
-    // Log error for debugging
+    console.error('AI Chat API error:', error);
+    
+    // Log error
     await supabase
       .from('ai_errors')
       .insert({
@@ -205,14 +180,13 @@ export async function POST(request: NextRequest) {
         context: {
           endpoint: '/api/ai/chat',
           timestamp: new Date().toISOString(),
-          ip: headers().get('x-forwarded-for'),
-          requestBody: await request.text?.(),
-          userId: userIdForError
+          ip: headers().get('x-forwarded-for')
         }
       });
+
     return NextResponse.json(
       { 
-        error: 'Sorry, our AI assistant is temporarily unavailable. Please try again in a few moments.',
+        error: 'Our AI assistant is temporarily unavailable. Please try again.',
         message: process.env.NODE_ENV === 'development' 
           ? (error instanceof Error ? error.message : 'Unknown error')
           : 'Something went wrong. Please try again.'
@@ -251,12 +225,12 @@ export async function GET(request: NextRequest) {
     async start(controller) {
       try {
         // Send initial response
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
           type: 'start',
           message: 'Starting AI analysis...',
           timestamp: Date.now()
-          })}\n\n`));
-          
+        })}\n\n`));
+        
         // Stream the processing
         for await (const update of aiOrchestrator.streamProcessQuery(message)) {
           const data = `data: ${JSON.stringify({ 
@@ -305,9 +279,8 @@ export async function GET(request: NextRequest) {
 export async function HEAD() {
   try {
     // Quick health check
-    const testResponse = await aiOrchestrator.processQuery('health check', undefined, {
-      useCache: false,
-      maxRetries: 1
+    const testResponse = await aiOrchestrator.processQuery('test', undefined, {
+      usePerplexity: false
     });
     
     return new Response(null, {

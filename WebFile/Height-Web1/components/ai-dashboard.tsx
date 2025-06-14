@@ -1,4 +1,4 @@
-// components/ai-dashboard.tsx - Enhanced Responsive Heights+ AI Investment Dashboard
+// components/ai-dashboard.tsx - Fully Responsive Design
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -53,11 +53,27 @@ import {
   BookOpen,
   DollarSign,
   Menu,
-  AlertTriangle
+  AlertTriangle,
+  Mic,
+  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  Download,
+  Share2,
+  Filter,
+  ChevronLeft
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cn } from '@/lib/utils';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
-// Enhanced interfaces
+// Message Interface
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -76,6 +92,7 @@ interface Message {
   };
 }
 
+// Real-time metrics interface
 interface RealTimeMetrics {
   portfolioValue: number;
   dayChange: number;
@@ -89,6 +106,7 @@ interface RealTimeMetrics {
   activeAlerts: number;
 }
 
+// Market data interface
 interface MarketDataPoint {
   symbol: string;
   price: number;
@@ -98,96 +116,66 @@ interface MarketDataPoint {
   source: string;
 }
 
-interface QuickAction {
-  id: string;
-  label: string;
-  icon: any;
-  color: string;
-  prompt: string;
-  category: 'analysis' | 'trading' | 'portfolio' | 'market' | 'investment';
-}
-
-// Real Quick actions
-const QUICK_ACTIONS: QuickAction[] = [
+// Quick actions
+const QUICK_ACTIONS = [
   {
     id: 'market-overview',
     label: 'Market Overview',
     icon: BarChart3,
     color: 'text-blue-500',
-    prompt: 'Give me a comprehensive overview of today\'s market performance across crypto, stocks, and commodities',
-    category: 'market'
+    bgColor: 'bg-blue-500/10',
+    prompt: 'Give me a comprehensive overview of today\'s market performance',
   },
   {
     id: 'crypto-analysis',
     label: 'Crypto Analysis',
     icon: Bitcoin,
     color: 'text-orange-500',
-    prompt: 'Analyze the top 10 cryptocurrencies and provide investment insights',
-    category: 'investment'
+    bgColor: 'bg-orange-500/10',
+    prompt: 'Analyze the top cryptocurrencies and provide insights',
   },
   {
     id: 'portfolio-review',
     label: 'Portfolio Review',
     icon: PieChart,
     color: 'text-green-500',
-    prompt: 'Help me optimize my investment portfolio based on current market conditions',
-    category: 'portfolio'
+    bgColor: 'bg-green-500/10',
+    prompt: 'Review my portfolio and suggest optimizations',
   },
   {
     id: 'risk-assessment',
     label: 'Risk Assessment',
     icon: Shield,
     color: 'text-red-500',
-    prompt: 'Analyze current market risks and provide risk management strategies',
-    category: 'analysis'
+    bgColor: 'bg-red-500/10',
+    prompt: 'Analyze current market risks',
   },
   {
     id: 'news-impact',
     label: 'News Impact',
     icon: Newspaper,
     color: 'text-purple-500',
-    prompt: 'Analyze latest financial news and its potential impact on markets',
-    category: 'market'
+    bgColor: 'bg-purple-500/10',
+    prompt: 'Analyze latest financial news impact',
   },
   {
     id: 'trading-signals',
     label: 'Trading Signals',
     icon: Target,
     color: 'text-indigo-500',
-    prompt: 'Generate trading signals for major assets with entry/exit points',
-    category: 'trading'
+    bgColor: 'bg-indigo-500/10',
+    prompt: 'Generate trading signals for major assets',
   }
 ];
 
-// Animated number component
-const AnimatedNumber = ({ value, prefix = '', suffix = '', decimals = 0 }: any) => {
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    const duration = 1000;
-    const steps = 60;
-    const increment = value / steps;
-    let current = 0;
-
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        setDisplayValue(value);
-        clearInterval(timer);
-      } else {
-        setDisplayValue(current);
-      }
-    }, duration / steps);
-
-    return () => clearInterval(timer);
-  }, [value]);
-
-  return (
-    <span className="font-mono">
-      {prefix}{displayValue.toFixed(decimals)}{suffix}
-    </span>
-  );
-};
+// Suggested prompts
+const SUGGESTED_PROMPTS = [
+  "What's the current price of Bitcoin?",
+  "Analyze AAPL stock for investment",
+  "Compare ETH vs SOL performance",
+  "Best crypto investments today",
+  "Market sentiment analysis",
+];
 
 export default function EnhancedAIDashboard() {
   const { user, isAuthenticated } = useAuth();
@@ -209,165 +197,27 @@ export default function EnhancedAIDashboard() {
   });
   const [marketData, setMarketData] = useState<MarketDataPoint[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = createClientComponentClient();
-
-  // Fetch real metrics from Supabase and APIs
-  useEffect(() => {
-    const fetchRealData = async () => {
-      setIsLoadingData(true);
-      try {
-        // Fetch user's real portfolio and analytics data
-        if (user?.id) {
-          const [portfolioData, analyticsData, alertsData] = await Promise.all([
-            supabase
-              .from('user_portfolios')
-              .select('total_value, day_change, week_change, total_assets, profitable_assets')
-              .eq('user_id', user.id)
-              .single(),
-            
-            supabase
-              .from('ai_conversations')
-              .select('metadata, created_at')
-              .eq('user_id', user.id)
-              .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
-              
-            supabase
-              .from('user_alerts')
-              .select('id, is_active')
-              .eq('user_id', user.id)
-              .eq('is_active', true)
-          ]);
-
-          // Calculate real metrics
-          let realMetrics: RealTimeMetrics = {
-            portfolioValue: portfolioData.data?.total_value || 0,
-            dayChange: portfolioData.data?.day_change || 0,
-            weekChange: portfolioData.data?.week_change || 0,
-            totalAssets: portfolioData.data?.total_assets || 0,
-            profitableAssets: portfolioData.data?.profitable_assets || 0,
-            totalAnalyses: analyticsData.data?.length || 0,
-            successRate: 0,
-            averageConfidence: 0,
-            responseTime: 0,
-            activeAlerts: alertsData.data?.length || 0
-          };
-
-          // Calculate AI metrics from conversation history
-          if (analyticsData.data && analyticsData.data.length > 0) {
-            const validAnalyses = analyticsData.data.filter(a => a.metadata?.confidence);
-            const avgConfidence = validAnalyses.length > 0 
-              ? validAnalyses.reduce((sum, a) => sum + (a.metadata.confidence || 0), 0) / validAnalyses.length 
-              : 0;
-            const avgResponseTime = validAnalyses.length > 0
-              ? validAnalyses.reduce((sum, a) => sum + (a.metadata.responseTime || 0), 0) / validAnalyses.length
-              : 0;
-            const successfulAnalyses = validAnalyses.filter(a => (a.metadata.confidence || 0) > 0.7).length;
-
-            realMetrics.averageConfidence = avgConfidence * 100;
-            realMetrics.responseTime = avgResponseTime / 1000;
-            realMetrics.successRate = validAnalyses.length > 0 ? (successfulAnalyses / validAnalyses.length) * 100 : 0;
-          }
-
-          setMetrics(realMetrics);
-        }
-
-        // Fetch real market data
-        await fetchMarketData();
-        
-      } catch (error) {
-        console.error('Error fetching real data:', error);
-        // Fallback to basic structure with zero values
-        setMetrics({
-          portfolioValue: 0,
-          dayChange: 0,
-          weekChange: 0,
-          totalAssets: 0,
-          profitableAssets: 0,
-          totalAnalyses: 0,
-          successRate: 0,
-          averageConfidence: 0,
-          responseTime: 0,
-          activeAlerts: 0
-        });
-      } finally {
-        setIsLoadingData(false);
-      }
-    };
-
-    fetchRealData();
-    // Refresh data every 30 seconds
-    const interval = setInterval(fetchRealData, 30000);
-    return () => clearInterval(interval);
-  }, [user, supabase]);
-
-  // Fetch live market data
-  const fetchMarketData = async () => {
-    try {
-      const [cryptoResponse, stockResponse] = await Promise.all([
-        fetch('/api/market/crypto?symbols=BTC,ETH,SOL,MATIC').catch(() => null),
-        fetch('/api/market/stocks?symbols=AAPL,GOOGL,TSLA,MSFT').catch(() => null)
-      ]);
-
-      const marketDataPoints: MarketDataPoint[] = [];
-
-      if (cryptoResponse?.ok) {
-        const cryptoData = await cryptoResponse.json();
-        if (cryptoData.data) {
-          Object.values(cryptoData.data).forEach((crypto: any) => {
-            marketDataPoints.push({
-              symbol: crypto.symbol || 'N/A',
-              price: crypto.price || 0,
-              changePercent: crypto.changePercent || 0,
-              volume: crypto.volume,
-              marketCap: crypto.marketCap,
-              source: 'crypto'
-            });
-          });
-        }
-      }
-
-      if (stockResponse?.ok) {
-        const stockData = await stockResponse.json();
-        if (stockData.data) {
-          Object.values(stockData.data).forEach((stock: any) => {
-            marketDataPoints.push({
-              symbol: stock.symbol || 'N/A',
-              price: stock.price || 0,
-              changePercent: stock.changePercent || 0,
-              volume: stock.volume,
-              marketCap: stock.marketCap,
-              source: 'stock'
-            });
-          });
-        }
-      }
-
-      setMarketData(marketDataPoints);
-    } catch (error) {
-      console.error('Error fetching market data:', error);
-    }
-  };
 
   // Initialize with welcome message
   useEffect(() => {
     const welcomeMessage: Message = {
       id: 'welcome',
       role: 'assistant',
-      content: `🚀 **Welcome to Heights+ AI Investment Intelligence!**
+      content: `👋 **Welcome to Heights AI Investment Assistant!**
 
-I'm your advanced AI assistant powered by Claude and Perplexity, ready to help you with:
+I'm powered by Claude AI and Perplexity to provide you with:
 
-📊 **Real-time Market Analysis** - Live data from multiple exchanges
-📈 **Investment Research** - Deep analysis across all asset classes  
-💰 **Portfolio Optimization** - AI-powered allocation strategies
-🔍 **News & Sentiment** - Breaking financial news analysis
-⚡ **Trading Signals** - Technical analysis and entry/exit points
+📊 **Real-time Market Analysis** - Live prices and trends
+💡 **Investment Insights** - AI-powered recommendations
+📈 **Portfolio Optimization** - Personalized strategies
+🎯 **Trading Signals** - Entry and exit points
 
-Ready to elevate your investment game? Ask me anything!`,
+How can I help you today?`,
       timestamp: new Date(),
       type: 'text',
       metadata: {
@@ -385,6 +235,21 @@ Ready to elevate your investment game? Ask me anything!`,
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Fetch market data (mock for now)
+  useEffect(() => {
+    // Mock market data
+    setMarketData([
+      { symbol: 'BTC', price: 45234.56, changePercent: 2.34, source: 'crypto' },
+      { symbol: 'ETH', price: 2456.78, changePercent: -1.23, source: 'crypto' },
+      { symbol: 'AAPL', price: 178.45, changePercent: 0.56, source: 'stock' },
+      { symbol: 'GOOGL', price: 142.34, changePercent: 1.78, source: 'stock' },
+      { symbol: 'TSLA', price: 234.56, changePercent: -2.34, source: 'stock' },
+      { symbol: 'SOL', price: 98.76, changePercent: 5.67, source: 'crypto' },
+    ]);
+    setIsLoadingData(false);
+  }, []);
+
+  // Send message function
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
@@ -407,7 +272,11 @@ Ready to elevate your investment game? Ask me anything!`,
         body: JSON.stringify({
           message: content,
           history: messages.slice(-10),
-          userId: user?.id
+          userId: user?.id,
+          preferences: {
+            usePerplexity: true,
+            structured: true
+          }
         })
       });
 
@@ -418,16 +287,15 @@ Ready to elevate your investment game? Ask me anything!`,
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.message || data.content,
+        content: data.content || data.message,
         timestamp: new Date(),
         type: data.type || 'text',
         metadata: {
-          confidence: data.metadata?.confidence || data.confidence,
+          confidence: data.metadata?.confidence,
           actionable: true,
           category: 'analysis',
-          priority: 'medium',
           analysis: data.analysis,
-          assetType: data.analysis?.asset?.type
+          assetType: data.metadata?.classification?.assetType
         }
       };
 
@@ -444,10 +312,10 @@ Ready to elevate your investment game? Ask me anything!`,
       setMessages(prev => [...prev, {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: 'I encountered an error processing your request. Please try again.',
+        content: 'I apologize, but I encountered an error. Please try again.',
         timestamp: new Date(),
         type: 'alert',
-        metadata: { actionable: false, category: 'error', priority: 'high' }
+        metadata: { actionable: false, category: 'error' }
       }]);
     } finally {
       setIsLoading(false);
@@ -474,583 +342,458 @@ Ready to elevate your investment game? Ask me anything!`,
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6 group`}
       >
-        <div className={`max-w-[85%] sm:max-w-[75%] flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`max-w-[90%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
-          <motion.div
-            className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-              isUser
-                ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53]'
-                : 'bg-gradient-to-br from-[#255F38] to-[#1F7D53]'
-            } shadow-lg`}
-          >
-            {isUser ? <User size={16} className="text-white" /> : <HeightsLogo size="sm" className="text-white" animate={false} />}
-          </motion.div>
+          <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg ${
+            isUser
+              ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53]'
+              : 'bg-gradient-to-br from-[#255F38] to-[#1F7D53]'
+          }`}>
+            {isUser ? (
+              <User size={16} className="text-white sm:w-5 sm:h-5" />
+            ) : (
+              <HeightsLogo size="sm" className="text-white" animate={false} />
+            )}
+          </div>
 
           {/* Message Content */}
-          <motion.div
-            className={`rounded-xl p-3 sm:p-4 shadow-lg backdrop-blur-sm ${
-              isUser
-                ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white'
-                : 'bg-card/90 border border-[#255F38]/30'
-            }`}
-          >
+          <div className={`rounded-xl sm:rounded-2xl shadow-lg max-w-full ${
+            isUser
+              ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white'
+              : 'bg-card border border-border'
+          }`}>
             {/* Message Header */}
-            {!isUser && (
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <div className="flex items-center flex-wrap gap-2">
-                  <Badge variant="secondary" className="text-xs bg-[#255F38]/20 text-[#255F38]">
-                    Heights+ AI
+            {!isUser && message.metadata?.confidence && (
+              <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-2 border-b border-border/10">
+                <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                  <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                    Heights AI
                   </Badge>
-                  {message.metadata?.confidence && (
-                    <Badge variant="outline" className="text-xs border-[#1F7D53]/50">
-                      {Math.round(message.metadata.confidence * 100)}% confident
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="text-[10px] sm:text-xs">
+                    {Math.round(message.metadata.confidence * 100)}% confident
+                  </Badge>
+                  <span className="text-[10px] sm:text-xs text-muted-foreground ml-auto">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
-                <span className="text-xs opacity-70">
-                  {message.timestamp.toLocaleTimeString()}
-                </span>
               </div>
             )}
 
-            {/* Message Text */}
-            <div className="whitespace-pre-wrap text-sm leading-relaxed">
-              {message.content}
+            {/* Message Body */}
+            <div className="px-3 sm:px-4 py-2 sm:py-3">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-xs sm:text-sm">
+                {message.content.split('\n').map((line, i) => (
+                  <p key={i} className="mb-1 sm:mb-2 last:mb-0">{line}</p>
+                ))}
+              </div>
             </div>
 
             {/* Message Actions */}
-            <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 text-xs hover:bg-white/10"
-                onClick={() => copyToClipboard(message.content, message.id)}
-              >
-                {copiedMessageId === message.id ? (
-                  <Check className="h-3 w-3 mr-1" />
-                ) : (
-                  <Copy className="h-3 w-3 mr-1" />
-                )}
-                Copy
-              </Button>
-            </div>
-          </motion.div>
+            {!isUser && (
+              <div className="px-3 sm:px-4 pb-2 sm:pb-3 pt-1 sm:pt-2 border-t border-border/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 sm:h-7 text-[10px] sm:text-xs px-2"
+                    onClick={() => copyToClipboard(message.content, message.id)}
+                  >
+                    {copiedMessageId === message.id ? (
+                      <Check className="h-3 w-3 mr-0.5 sm:mr-1" />
+                    ) : (
+                      <Copy className="h-3 w-3 mr-0.5 sm:mr-1" />
+                    )}
+                    Copy
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 sm:h-7 text-[10px] sm:text-xs px-2">
+                    <Share2 className="h-3 w-3 mr-0.5 sm:mr-1" />
+                    Share
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     );
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      notation: value >= 1000000 ? 'compact' : 'standard',
-      maximumFractionDigits: 2
-    }).format(value);
-  };
+  // Sidebar content component
+  const SidebarContent = () => (
+    <>
+      {/* Quick Actions */}
+      <div className="p-3 sm:p-4 border-b">
+        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2">
+          <Rocket className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+          Quick Actions
+        </h3>
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+          {QUICK_ACTIONS.map((action) => (
+            <Button
+              key={action.id}
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-auto py-2 sm:py-3 px-2 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 hover:border-primary/50 text-xs",
+                action.bgColor
+              )}
+              onClick={() => {
+                setActiveMode('chat');
+                sendMessage(action.prompt);
+                setShowMobileSidebar(false);
+              }}
+            >
+              <action.icon className={cn("h-4 w-4 sm:h-5 sm:w-5", action.color)} />
+              <span className="text-[10px] sm:text-xs text-center leading-tight">{action.label}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-[#255F38]/5">
-      <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6">
-        {/* Enhanced Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          {/* Title and Status */}
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <motion.div
-                whileHover={{ rotate: 360 }}
-                transition={{ duration: 0.5 }}
-              >
-                <HeightsLogo size="xl" />
-              </motion.div>
-              <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
-                  Heights+ AI Hub
-                </h1>
-                <p className="text-sm text-muted-foreground">Real-time Investment Intelligence</p>
+      {/* Market Overview */}
+      <div className="flex-1 overflow-auto p-3 sm:p-4">
+        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2">
+          <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+          Live Market
+        </h3>
+        <div className="space-y-1.5 sm:space-y-2">
+          {marketData.length > 0 ? (
+            marketData.slice(0, 8).map((asset, idx) => (
+              <div key={idx} className="flex items-center justify-between p-2 sm:p-3 bg-background rounded-lg">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
+                    asset.source === 'crypto' ? 'bg-orange-500' : 'bg-blue-500'
+                  }`} />
+                  <span className="font-medium text-xs sm:text-sm">{asset.symbol}</span>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-xs sm:text-sm">${asset.price.toFixed(2)}</p>
+                  <p className={cn(
+                    "text-[10px] sm:text-xs",
+                    asset.changePercent >= 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
+                  </p>
+                </div>
               </div>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <div className="flex items-center gap-2 lg:hidden">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowMobileNav(!showMobileNav)}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Desktop Status Indicators */}
-            <div className="hidden lg:flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 backdrop-blur-sm border border-[#255F38]/20 rounded-full">
-                <motion.div
-                  className="w-2 h-2 bg-green-500 rounded-full"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                />
-                <span className="text-xs font-medium">Live</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 backdrop-blur-sm border border-[#255F38]/20 rounded-full">
-                <Brain className="h-3 w-3 text-[#1F7D53]" />
-                <span className="text-xs font-medium">Claude AI</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Enhanced Metrics Cards */}
-          {isLoadingData ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-4">
-                    <div className="animate-pulse space-y-2">
-                      <div className="h-4 bg-muted rounded w-3/4"></div>
-                      <div className="h-6 bg-muted rounded w-1/2"></div>
-                      <div className="h-3 bg-muted rounded w-2/3"></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            ))
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <motion.div whileHover={{ y: -2 }}>
-                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">Portfolio Value</span>
-                      <Wallet className="h-4 w-4 text-[#1F7D53]" />
-                    </div>
-                    <p className="text-lg font-bold">
-                      {metrics.portfolioValue > 0 ? (
-                        <AnimatedNumber value={metrics.portfolioValue} prefix="$" decimals={2} />
-                      ) : (
-                        '$0.00'
-                      )}
-                    </p>
-                    <p className={`text-xs flex items-center gap-1 mt-1 ${
-                      metrics.dayChange >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {metrics.dayChange >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                      {Math.abs(metrics.dayChange).toFixed(2)}%
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div whileHover={{ y: -2 }}>
-                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">Total Assets</span>
-                      <PieChart className="h-4 w-4 text-[#255F38]" />
-                    </div>
-                    <p className="text-lg font-bold">
-                      <AnimatedNumber value={metrics.totalAssets} />
-                    </p>
-                    <p className="text-xs text-green-600 mt-1">
-                      {metrics.profitableAssets} profitable
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div whileHover={{ y: -2 }}>
-                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">AI Analyses</span>
-                      <BarChart3 className="h-4 w-4 text-[#27391C]" />
-                    </div>
-                    <p className="text-lg font-bold">
-                      <AnimatedNumber value={metrics.totalAnalyses} />
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Today
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div whileHover={{ y: -2 }}>
-                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">Success Rate</span>
-                      <Target className="h-4 w-4 text-[#1F7D53]" />
-                    </div>
-                    <p className="text-lg font-bold">
-                      <AnimatedNumber value={metrics.successRate} suffix="%" decimals={1} />
-                    </p>
-                    <Progress value={metrics.successRate} className="h-1 mt-2" />
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div whileHover={{ y: -2 }}>
-                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">AI Confidence</span>
-                      <Brain className="h-4 w-4 text-[#255F38]" />
-                    </div>
-                    <p className="text-lg font-bold">
-                      <AnimatedNumber value={metrics.averageConfidence} suffix="%" decimals={1} />
-                    </p>
-                    <Progress value={metrics.averageConfidence} className="h-1 mt-2" />
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div whileHover={{ y: -2 }}>
-                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">Active Alerts</span>
-                      <Bell className="h-4 w-4 text-red-500" />
-                    </div>
-                    <p className="text-lg font-bold">
-                      <AnimatedNumber value={metrics.activeAlerts} />
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Monitoring
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
+            <div className="text-center py-6 sm:py-8">
+              <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+              <p className="text-xs sm:text-sm text-muted-foreground">Loading market data...</p>
             </div>
           )}
-        </motion.div>
+        </div>
+      </div>
 
-        {/* Main Content Area */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 lg:gap-6">
-          {/* Main Section */}
-          <div className="xl:col-span-3">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-            >
-              <Card className="h-[calc(100vh-280px)] sm:h-[calc(100vh-320px)] flex flex-col bg-card/80 backdrop-blur-sm border-[#255F38]/20">
-                <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full h-full flex flex-col">
-                  <CardHeader className="border-b border-[#255F38]/20 pb-3">
-                    <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-[#255F38]/10">
-                      <TabsTrigger value="investment" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
-                        <DollarSign className="h-4 w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">Investment</span>
-                        <span className="sm:hidden">Invest</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="chat" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
-                        <MessageSquare className="h-4 w-4 mr-1 sm:mr-2" />
-                        Chat
-                      </TabsTrigger>
-                      <TabsTrigger value="analysis" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
-                        <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">Analysis</span>
-                        <span className="sm:hidden">Data</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="insights" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
-                        <Lightbulb className="h-4 w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">Insights</span>
-                        <span className="sm:hidden">Tips</span>
-                      </TabsTrigger>
-                    </TabsList>
-                  </CardHeader>
+      {/* Resources */}
+      <div className="p-3 sm:p-4 border-t">
+        <div className="space-y-1">
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs sm:text-sm">
+            <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+            User Guide
+          </Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs sm:text-sm">
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+            Settings
+          </Button>
+        </div>
+      </div>
+    </>
+  );
 
-                  <CardContent className="flex-1 p-0 overflow-hidden">
-                    {/* Investment Tab - Main Feature */}
-                    <TabsContent value="investment" className="h-full m-0">
-                      <div className="h-[60vh] lg:h-[70vh] xl:h-[80vh] 2xl:h-[85vh] max-w-4xl mx-auto flex flex-col">
-                        <InvestmentChatbot />
-                      </div>
-                    </TabsContent>
+  return (
+    <div className="h-[calc(100vh-64px)] bg-background flex flex-col">
+      {/* Top Header */}
+      <div className="border-b bg-card/50 backdrop-blur-sm">
+        <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Mobile Sidebar Toggle */}
+              <Sheet open={showMobileSidebar} onOpenChange={setShowMobileSidebar}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="lg:hidden h-8 w-8 p-0"
+                  >
+                    <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0">
+                  <SheetHeader className="sr-only">
+                    <SheetTitle>Navigation Menu</SheetTitle>
+                  </SheetHeader>
+                  <SidebarContent />
+                </SheetContent>
+              </Sheet>
+              
+              <div className="flex items-center gap-2">
+                <HeightsLogo size="md" className="sm:hidden" />
+                <HeightsLogo size="lg" className="hidden sm:block" />
+                <div>
+                  <h1 className="text-base sm:text-xl font-bold">AI Investment Hub</h1>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Powered by Claude & Perplexity</p>
+                </div>
+              </div>
+            </div>
 
-                    {/* Chat Tab */}
-                    <TabsContent value="chat" className="h-full m-0">
-                      <div className="flex flex-col h-[60vh] lg:h-[70vh] xl:h-[80vh] 2xl:h-[85vh] max-w-4xl mx-auto">
-                        <ScrollArea className="flex-1 p-3 sm:p-4 lg:p-6 max-h-full">
-                          <AnimatePresence>
-                            {messages.map(renderMessage)}
-                          </AnimatePresence>
+            {/* Status Indicators */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="hidden sm:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 bg-green-500/10 text-green-600 rounded-full text-xs sm:text-sm">
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse" />
+                Live
+              </div>
+              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs">Claude AI</Badge>
+              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs">Perplexity</Badge>
+            </div>
+          </div>
+        </div>
+      </div>
 
-                          {isLoading && (
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              className="flex justify-start mb-6"
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                                  <HeightsLogo size="sm" className="text-white" animate={false} />
-                                </div>
-                                <div className="bg-card/90 border border-[#255F38]/30 rounded-xl p-4">
-                                  <div className="flex items-center gap-3">
-                                    <motion.div
-                                      animate={{ rotate: 360 }}
-                                      transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                                    >
-                                      <Brain className="h-5 w-5 text-[#1F7D53]" />
-                                    </motion.div>
-                                    <span className="text-sm text-muted-foreground">
-                                      Analyzing your query...
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                          <div ref={messagesEndRef} />
-                        </ScrollArea>
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex w-[320px] xl:w-[360px] border-r bg-card/50 backdrop-blur-sm flex-col">
+          <SidebarContent />
+        </div>
 
-                        {/* Enhanced Input Area */}
-                        <div className="p-3 sm:p-4 border-t border-[#255F38]/20 bg-gradient-to-r from-card/50 to-[#255F38]/5">
-                          {/* Quick Actions */}
-                          <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
-                            {QUICK_ACTIONS.slice(0, 3).map((action) => (
-                              <motion.div key={action.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => sendMessage(action.prompt)}
-                                  disabled={isLoading}
-                                  className="border-[#255F38]/30 hover:bg-[#255F38]/10 whitespace-nowrap text-xs"
-                                >
-                                  <action.icon className={`h-3 w-3 mr-1 ${action.color}`} />
-                                  {action.label}
-                                </Button>
-                              </motion.div>
-                            ))}
-                          </div>
-
-                          {/* Input Field */}
-                          <div className="relative">
-                            <div className="relative flex gap-2">
-                              <Textarea
-                                ref={inputRef}
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyPress={handleKeyPress}
-                                placeholder="Ask about investments, markets, or get AI analysis..."
-                                className="flex-1 min-h-[60px] max-h-[120px] resize-none bg-background/80 backdrop-blur-sm border-[#255F38]/30 focus:border-[#255F38] transition-all duration-300"
-                                disabled={isLoading}
-                              />
-                              <Button
-                                onClick={() => sendMessage(input)}
-                                disabled={isLoading || !input.trim()}
-                                size="lg"
-                                className="h-full bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53] text-white shadow-lg"
-                              >
-                                {isLoading ? (
-                                  <Loader2 className="h-5 w-5 animate-spin" />
-                                ) : (
-                                  <Send className="h-5 w-5" />
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row items-center justify-between mt-2 text-xs text-muted-foreground gap-2">
-                            <span>Press Enter to send, Shift+Enter for new line</span>
-                          </div>
-                        </div>
-                      </div>
-                    </TabsContent>
-
-                    {/* Analysis Tab */}
-                    <TabsContent value="analysis" className="h-full m-0 p-3 sm:p-6">
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold mb-4">Real-time Analysis</h3>
-                        
-                        {metrics.totalAnalyses === 0 ? (
-                          <Card>
-                            <CardContent className="p-6 text-center">
-                              <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                              <p className="text-muted-foreground">No analyses performed yet.</p>
-                              <p className="text-sm text-muted-foreground mt-2">
-                                Start by asking questions in the Investment or Chat tabs.
-                              </p>
-                            </CardContent>
-                          </Card>
-                        ) : (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-sm">AI Performance Metrics</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                  <span>Total Analyses</span>
-                                  <span className="font-medium">{metrics.totalAnalyses}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span>Success Rate</span>
-                                  <span className="font-medium">{metrics.successRate.toFixed(1)}%</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span>Average Response Time</span>
-                                  <span className="font-medium">{metrics.responseTime.toFixed(2)}s</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
-                    </TabsContent>
-
-                    {/* Insights Tab */}
-                    <TabsContent value="insights" className="h-full m-0 p-3 sm:p-6">
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold mb-4">Market Insights</h3>
-                        
-                        {marketData.length > 0 ? (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-sm flex items-center gap-2">
-                                <Activity className="h-4 w-4 text-green-500" />
-                                Live Market Data
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-3">
-                                {marketData.slice(0, 6).map((asset, idx) => (
-                                  <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                    <div>
-                                      <p className="font-medium">{asset.symbol}</p>
-                                      <p className="text-sm text-muted-foreground capitalize">{asset.source}</p>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="font-medium">{formatCurrency(asset.price)}</p>
-                                      <p className={`text-sm ${asset.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ) : (
-                          <Card>
-                            <CardContent className="p-6 text-center">
-                              <Globe className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                              <p className="text-muted-foreground">Loading market data...</p>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
-                    </TabsContent>
-                  </CardContent>
-                </Tabs>
-              </Card>
-            </motion.div>
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col bg-background">
+          {/* Mode Tabs */}
+          <div className="border-b">
+            <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full">
+              <TabsList className="w-full h-10 sm:h-12 rounded-none bg-transparent border-b-0 p-0">
+                <TabsTrigger 
+                  value="investment" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-t-lg text-xs sm:text-sm"
+                >
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Investment</span>
+                  <span className="sm:hidden">Invest</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="chat" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-t-lg text-xs sm:text-sm"
+                >
+                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  Chat
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="analysis" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-t-lg text-xs sm:text-sm"
+                >
+                  <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Analysis</span>
+                  <span className="sm:hidden">Data</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="insights" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-t-lg text-xs sm:text-sm"
+                >
+                  <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Insights</span>
+                  <span className="sm:hidden">Tips</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
-          {/* Sidebar */}
-          <div className={`space-y-4 ${showMobileNav ? 'block' : 'hidden xl:block'}`}>
-            {/* Quick Actions */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card className="bg-card/80 backdrop-blur-sm border-[#255F38]/20">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Rocket className="h-4 w-4 text-[#1F7D53]" />
-                    Quick Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {QUICK_ACTIONS.map((action) => (
-                    <motion.div key={action.id} whileHover={{ x: 2 }}>
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start text-sm hover:bg-[#255F38]/10"
-                        onClick={() => {
-                          setActiveMode('chat');
-                          sendMessage(action.prompt);
-                        }}
-                        disabled={isLoading}
-                      >
-                        <action.icon className={`h-4 w-4 mr-2 ${action.color}`} />
-                        {action.label}
-                      </Button>
-                    </motion.div>
-                  ))}
-                </CardContent>
-              </Card>
-            </motion.div>
+          {/* Tab Content */}
+          <div className="flex-1 overflow-hidden">
+            <Tabs value={activeMode} className="h-full">
+              {/* Investment Tab */}
+              <TabsContent value="investment" className="h-full m-0 p-0">
+                <InvestmentChatbot />
+              </TabsContent>
 
-            {/* Market Overview */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="bg-card/80 backdrop-blur-sm border-[#255F38]/20">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-[#255F38]" />
-                    Live Market
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {marketData.slice(0, 4).map((asset, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2 w-2 rounded-full ${asset.source === 'crypto' ? 'bg-orange-500' : 'bg-blue-500'}`} />
-                        <span className="text-sm font-medium">{asset.symbol}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{formatCurrency(asset.price)}</p>
-                        <p className={`text-xs ${asset.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {marketData.length === 0 && (
-                    <div className="text-center py-4">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground">Loading market data...</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+              {/* Chat Tab */}
+              <TabsContent value="chat" className="h-full m-0 p-0">
+                <div className="h-full flex flex-col">
+                  {/* Messages Area */}
+                  <ScrollArea className="flex-1 px-3 sm:px-4 lg:px-8">
+                    <div className="max-w-2xl lg:max-w-4xl mx-auto py-4 sm:py-6">
+                      {messages.length === 1 && (
+                        <div className="text-center py-6 sm:py-12">
+                          <Brain className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+                          <h3 className="text-base sm:text-lg font-semibold mb-2">Start a conversation</h3>
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
+                          
+                          {/* Suggested Prompts */}
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
+                            {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                              <Button
+                                key={idx}
+                                variant="outline"
+                                size="sm"
+                                onClick={() => sendMessage(prompt)}
+                                className="text-[10px] sm:text-xs h-7 sm:h-8"
+                              >
+                                {prompt}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <AnimatePresence>
+                        {messages.map(renderMessage)}
+                      </AnimatePresence>
 
-            {/* Help & Resources */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="bg-card/80 backdrop-blur-sm border-[#255F38]/20">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <HelpCircle className="h-4 w-4 text-[#27391C]" />
-                    Resources
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Button variant="ghost" className="w-full justify-start text-sm">
-                    <BookOpen className="h-4 w-4 mr-2" />
-                    User Guide
-                  </Button>
-                  <Button variant="ghost" className="w-full justify-start text-sm">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+                      {isLoading && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="flex justify-start mb-4 sm:mb-6"
+                        >
+                          <div className="max-w-[90%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
+                              <HeightsLogo size="sm" className="text-white" animate={false} />
+                            </div>
+                            <div className="bg-card border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3">
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                                <span className="text-xs sm:text-sm text-muted-foreground">Analyzing...</span>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                      
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </ScrollArea>
+
+                  {/* Input Area */}
+                  <div className="border-t bg-card/50 backdrop-blur-sm p-3 sm:p-4">
+                    <div className="max-w-2xl lg:max-w-4xl mx-auto">
+                      {/* Quick Actions Bar - Horizontal scroll on mobile */}
+                      <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 sm:pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
+                        {QUICK_ACTIONS.slice(0, 4).map((action) => (
+                          <Button
+                            key={action.id}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => sendMessage(action.prompt)}
+                            disabled={isLoading}
+                            className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0"
+                          >
+                            <action.icon className={cn("h-3 w-3 mr-1", action.color)} />
+                            {action.label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {/* Input Field */}
+                      <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                          <Textarea
+                            ref={inputRef}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Ask about any stock, crypto, or investment strategy..."
+                            className="min-h-[60px] sm:min-h-[80px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-xs sm:text-sm"
+                            disabled={isLoading}
+                          />
+                          <div className="absolute bottom-2 right-2 flex items-center gap-0.5 sm:gap-1">
+                            <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0" disabled>
+                              <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0" disabled>
+                              <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => sendMessage(input)}
+                          disabled={isLoading || !input.trim()}
+                          size="lg"
+                          className="h-[60px] sm:h-[80px] px-4 sm:px-8 bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53]"
+                        >
+                          {isLoading ? (
+                            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+                          )}
+                        </Button>
+                      </div>
+
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 sm:mt-2 text-center">
+                        Press Enter to send • Shift+Enter for new line • Powered by Claude AI & Perplexity
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Analysis Tab */}
+              <TabsContent value="analysis" className="h-full m-0 p-4 sm:p-6 lg:p-8 overflow-auto">
+                <div className="max-w-2xl lg:max-w-4xl mx-auto">
+                  <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6">Market Analysis</h2>
+                  <div className="grid gap-3 sm:gap-4">
+                    <Card>
+                      <CardHeader className="p-4 sm:p-6">
+                        <CardTitle className="text-sm sm:text-base">AI Performance Metrics</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+                        <div className="space-y-3 sm:space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs sm:text-sm">Total Analyses Today</span>
+                            <span className="font-bold text-xs sm:text-sm">{metrics.totalAnalyses}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs sm:text-sm">Average Confidence</span>
+                            <span className="font-bold text-xs sm:text-sm">{metrics.averageConfidence.toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs sm:text-sm">Success Rate</span>
+                            <span className="font-bold text-xs sm:text-sm">{metrics.successRate.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Insights Tab */}
+              <TabsContent value="insights" className="h-full m-0 p-4 sm:p-6 lg:p-8 overflow-auto">
+                <div className="max-w-2xl lg:max-w-4xl mx-auto">
+                  <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6">Market Insights</h2>
+                  <div className="grid gap-3 sm:gap-4">
+                    <Card>
+                      <CardHeader className="p-4 sm:p-6">
+                        <CardTitle className="text-sm sm:text-base">Today's Top Movers</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+                        <div className="space-y-2 sm:space-y-3">
+                          {marketData.slice(0, 5).map((asset, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted rounded-lg">
+                              <div>
+                                <p className="font-medium text-xs sm:text-sm">{asset.symbol}</p>
+                                <p className="text-[10px] sm:text-xs text-muted-foreground">{asset.source}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium text-xs sm:text-sm">${asset.price.toFixed(2)}</p>
+                                <p className={cn(
+                                  "text-[10px] sm:text-xs",
+                                  asset.changePercent >= 0 ? "text-green-600" : "text-red-600"
+                                )}>
+                                  {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
