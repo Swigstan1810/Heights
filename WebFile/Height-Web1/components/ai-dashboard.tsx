@@ -1,4 +1,4 @@
-// components/ai-dashboard.tsx - Enhanced Heights+ AI Dashboard
+// components/ai-dashboard.tsx - Enhanced Responsive Heights+ AI Investment Dashboard
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/auth-context';
 import { HeightsLogo } from '@/components/ui/heights-logo';
+import InvestmentChatbot from '@/components/ai-assistant/investment-chatbot';
 import {
   Brain,
   Send,
@@ -22,65 +22,38 @@ import {
   BarChart3,
   TrendingUp,
   TrendingDown,
-  Bot,
   User,
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  Settings,
   Zap,
-  Eye,
-  Download,
-  Share,
   Star,
   Clock,
   MessageSquare,
   ChevronRight,
   Loader2,
-  AlertCircle,
-  CheckCircle,
   Lightbulb,
   Target,
   Rocket,
   Globe,
   Shield,
-  Cpu,
-  Database,
-  Cloud,
-  Lock,
-  Unlock,
   RefreshCw,
-  ArrowUpRight,
-  ArrowDownRight,
-  DollarSign,
-  Percent,
-  MoreHorizontal,
-  Bell,
-  LineChart,
-  PieChart,
-  BarChart,
-  Wallet,
-  CandlestickChart,
   ArrowUp,
   ArrowDown,
-  Info,
-  Search,
-  Filter,
-  ChevronUp,
-  ChevronDown,
-  ExternalLink,
+  Bell,
+  PieChart,
+  Wallet,
   Copy,
   Check,
   X,
   Newspaper,
-  Hash,
-  Users,
-  Building,
-  Briefcase,
-  Calculator,
-  TrendingUp as TrendUp,
-  Award
+  Bitcoin,
+  LineChart,
+  Gem,
+  Search,
+  Settings,
+  HelpCircle,
+  BookOpen,
+  DollarSign,
+  Menu,
+  AlertTriangle
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
@@ -90,7 +63,7 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  type?: 'text' | 'analysis' | 'prediction' | 'alert' | 'financial';
+  type?: 'text' | 'analysis' | 'prediction' | 'alert' | 'financial' | 'investment';
   metadata?: {
     confidence?: number;
     sources?: string[];
@@ -99,39 +72,30 @@ interface Message {
     priority?: 'low' | 'medium' | 'high';
     analysis?: any;
     symbols?: string[];
+    assetType?: string;
   };
 }
 
-interface AIAnalysis {
-  symbol: string;
-  sentiment: 'bullish' | 'bearish' | 'neutral';
-  confidence: number;
-  prediction: string;
-  timeframe: string;
-  keyFactors: string[];
-  riskLevel: 'low' | 'medium' | 'high';
-  lastUpdated: Date;
-  technicalIndicators?: {
-    rsi?: number;
-    macd?: { value: number; signal: number };
-    sma?: { sma20: number; sma50: number; sma200: number };
-  };
-  priceTargets?: {
-    short: number;
-    medium: number;
-    long: number;
-  };
-}
-
-interface MarketMetrics {
+interface RealTimeMetrics {
+  portfolioValue: number;
+  dayChange: number;
+  weekChange: number;
+  totalAssets: number;
+  profitableAssets: number;
   totalAnalyses: number;
   successRate: number;
   averageConfidence: number;
   responseTime: number;
   activeAlerts: number;
-  portfolioValue?: number;
-  dayChange?: number;
-  weekChange?: number;
+}
+
+interface MarketDataPoint {
+  symbol: string;
+  price: number;
+  changePercent: number;
+  volume?: number;
+  marketCap?: number;
+  source: string;
 }
 
 interface QuickAction {
@@ -140,62 +104,62 @@ interface QuickAction {
   icon: any;
   color: string;
   prompt: string;
-  category: 'analysis' | 'trading' | 'portfolio' | 'market';
+  category: 'analysis' | 'trading' | 'portfolio' | 'market' | 'investment';
 }
 
-// Quick actions configuration
+// Real Quick actions
 const QUICK_ACTIONS: QuickAction[] = [
   {
-    id: 'portfolio',
-    label: 'Portfolio Analysis',
+    id: 'market-overview',
+    label: 'Market Overview',
+    icon: BarChart3,
+    color: 'text-blue-500',
+    prompt: 'Give me a comprehensive overview of today\'s market performance across crypto, stocks, and commodities',
+    category: 'market'
+  },
+  {
+    id: 'crypto-analysis',
+    label: 'Crypto Analysis',
+    icon: Bitcoin,
+    color: 'text-orange-500',
+    prompt: 'Analyze the top 10 cryptocurrencies and provide investment insights',
+    category: 'investment'
+  },
+  {
+    id: 'portfolio-review',
+    label: 'Portfolio Review',
     icon: PieChart,
-    color: 'text-[#1F7D53]',
-    prompt: 'Analyze my current portfolio performance and provide optimization suggestions',
+    color: 'text-green-500',
+    prompt: 'Help me optimize my investment portfolio based on current market conditions',
     category: 'portfolio'
   },
   {
-    id: 'market',
-    label: 'Market Summary',
-    icon: BarChart3,
-    color: 'text-[#255F38]',
-    prompt: 'Give me a comprehensive market summary including major indices and trends',
-    category: 'market'
-  },
-  {
-    id: 'risk',
+    id: 'risk-assessment',
     label: 'Risk Assessment',
     icon: Shield,
-    color: 'text-[#27391C]',
-    prompt: 'Assess current market risks and my portfolio exposure',
+    color: 'text-red-500',
+    prompt: 'Analyze current market risks and provide risk management strategies',
     category: 'analysis'
   },
   {
-    id: 'ideas',
-    label: 'Trading Ideas',
-    icon: Lightbulb,
-    color: 'text-[#18230F]',
-    prompt: 'Generate top trading ideas based on current market conditions',
-    category: 'trading'
-  },
-  {
-    id: 'technical',
-    label: 'Technical Analysis',
-    icon: CandlestickChart,
-    color: 'text-[#1F7D53]',
-    prompt: 'Perform technical analysis on my watchlist stocks',
-    category: 'analysis'
-  },
-  {
-    id: 'news',
+    id: 'news-impact',
     label: 'News Impact',
     icon: Newspaper,
-    color: 'text-[#255F38]',
-    prompt: 'Analyze latest news and its potential market impact',
+    color: 'text-purple-500',
+    prompt: 'Analyze latest financial news and its potential impact on markets',
     category: 'market'
+  },
+  {
+    id: 'trading-signals',
+    label: 'Trading Signals',
+    icon: Target,
+    color: 'text-indigo-500',
+    prompt: 'Generate trading signals for major assets with entry/exit points',
+    category: 'trading'
   }
 ];
 
-// Animated components
+// Animated number component
 const AnimatedNumber = ({ value, prefix = '', suffix = '', decimals = 0 }: any) => {
   const [displayValue, setDisplayValue] = useState(0);
 
@@ -225,110 +189,185 @@ const AnimatedNumber = ({ value, prefix = '', suffix = '', decimals = 0 }: any) 
   );
 };
 
-// Typing animation for input placeholder
-const useTypingPlaceholder = (phrases: string[]) => {
-  const [placeholder, setPlaceholder] = useState('');
-  const [phraseIndex, setPhraseIndex] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const currentPhrase = phrases[phraseIndex];
-    const timeout = setTimeout(() => {
-      if (!isDeleting) {
-        if (placeholder.length < currentPhrase.length) {
-          setPlaceholder(currentPhrase.slice(0, placeholder.length + 1));
-        } else {
-          setTimeout(() => setIsDeleting(true), 2000);
-        }
-      } else {
-        if (placeholder.length > 0) {
-          setPlaceholder(placeholder.slice(0, -1));
-        } else {
-          setIsDeleting(false);
-          setPhraseIndex((prev) => (prev + 1) % phrases.length);
-        }
-      }
-    }, isDeleting ? 50 : 100);
-
-    return () => clearTimeout(timeout);
-  }, [placeholder, phraseIndex, isDeleting, phrases]);
-
-  return placeholder;
-};
-
 export default function EnhancedAIDashboard() {
   const { user, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeMode, setActiveMode] = useState<'chat' | 'analysis' | 'insights'>('chat');
-  const [analyses, setAnalyses] = useState<AIAnalysis[]>([]);
-  const [metrics, setMetrics] = useState<MarketMetrics>({
-    totalAnalyses: 127,
-    successRate: 87.3,
-    averageConfidence: 92.1,
-    responseTime: 1.2,
-    activeAlerts: 5,
-    portfolioValue: 125430.50,
-    dayChange: 2.34,
-    weekChange: -1.28
+  const [activeMode, setActiveMode] = useState<'investment' | 'chat' | 'analysis' | 'insights'>('investment');
+  const [metrics, setMetrics] = useState<RealTimeMetrics>({
+    portfolioValue: 0,
+    dayChange: 0,
+    weekChange: 0,
+    totalAssets: 0,
+    profitableAssets: 0,
+    totalAnalyses: 0,
+    successRate: 0,
+    averageConfidence: 0,
+    responseTime: 0,
+    activeAlerts: 0
   });
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
-  const [showFinancialAnalysis, setShowFinancialAnalysis] = useState(false);
-  const [financialAnalysisData, setFinancialAnalysisData] = useState<any>(null);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [marketData, setMarketData] = useState<MarketDataPoint[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = createClientComponentClient();
 
-  // 1. Enhanced State Management with Real Data
-  const [realTimeData, setRealTimeData] = useState<{
-    btc?: any;
-    eth?: any;
-    marketIndices?: any;
-  }>({});
+  // Fetch real metrics from Supabase and APIs
+  useEffect(() => {
+    const fetchRealData = async () => {
+      setIsLoadingData(true);
+      try {
+        // Fetch user's real portfolio and analytics data
+        if (user?.id) {
+          const [portfolioData, analyticsData, alertsData] = await Promise.all([
+            supabase
+              .from('user_portfolios')
+              .select('total_value, day_change, week_change, total_assets, profitable_assets')
+              .eq('user_id', user.id)
+              .single(),
+            
+            supabase
+              .from('ai_conversations')
+              .select('metadata, created_at')
+              .eq('user_id', user.id)
+              .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+              
+            supabase
+              .from('user_alerts')
+              .select('id, is_active')
+              .eq('user_id', user.id)
+              .eq('is_active', true)
+          ]);
 
-  const [aiPerformanceMetrics, setAiPerformanceMetrics] = useState({
-    totalRequests: 0,
-    successfulAnalyses: 0,
-    averageResponseTime: 0,
-    confidenceScores: [] as number[],
-    modelsUsed: { claude: 0, perplexity: 0 },
-    lastUpdated: new Date()
-  });
+          // Calculate real metrics
+          let realMetrics: RealTimeMetrics = {
+            portfolioValue: portfolioData.data?.total_value || 0,
+            dayChange: portfolioData.data?.day_change || 0,
+            weekChange: portfolioData.data?.week_change || 0,
+            totalAssets: portfolioData.data?.total_assets || 0,
+            profitableAssets: portfolioData.data?.profitable_assets || 0,
+            totalAnalyses: analyticsData.data?.length || 0,
+            successRate: 0,
+            averageConfidence: 0,
+            responseTime: 0,
+            activeAlerts: alertsData.data?.length || 0
+          };
 
-  // Typing placeholder phrases
-  const placeholderPhrases = [
-    "Ask about Bitcoin's price prediction...",
-    "Analyze my portfolio performance...",
-    "What are today's top trading opportunities?",
-    "Show me technical analysis for AAPL...",
-    "Assess current market risks...",
-    "Generate investment recommendations..."
-  ];
+          // Calculate AI metrics from conversation history
+          if (analyticsData.data && analyticsData.data.length > 0) {
+            const validAnalyses = analyticsData.data.filter(a => a.metadata?.confidence);
+            const avgConfidence = validAnalyses.length > 0 
+              ? validAnalyses.reduce((sum, a) => sum + (a.metadata.confidence || 0), 0) / validAnalyses.length 
+              : 0;
+            const avgResponseTime = validAnalyses.length > 0
+              ? validAnalyses.reduce((sum, a) => sum + (a.metadata.responseTime || 0), 0) / validAnalyses.length
+              : 0;
+            const successfulAnalyses = validAnalyses.filter(a => (a.metadata.confidence || 0) > 0.7).length;
 
-  const animatedPlaceholder = useTypingPlaceholder(placeholderPhrases);
+            realMetrics.averageConfidence = avgConfidence * 100;
+            realMetrics.responseTime = avgResponseTime / 1000;
+            realMetrics.successRate = validAnalyses.length > 0 ? (successfulAnalyses / validAnalyses.length) * 100 : 0;
+          }
 
-  // Initialize with enhanced welcome message
+          setMetrics(realMetrics);
+        }
+
+        // Fetch real market data
+        await fetchMarketData();
+        
+      } catch (error) {
+        console.error('Error fetching real data:', error);
+        // Fallback to basic structure with zero values
+        setMetrics({
+          portfolioValue: 0,
+          dayChange: 0,
+          weekChange: 0,
+          totalAssets: 0,
+          profitableAssets: 0,
+          totalAnalyses: 0,
+          successRate: 0,
+          averageConfidence: 0,
+          responseTime: 0,
+          activeAlerts: 0
+        });
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchRealData();
+    // Refresh data every 30 seconds
+    const interval = setInterval(fetchRealData, 30000);
+    return () => clearInterval(interval);
+  }, [user, supabase]);
+
+  // Fetch live market data
+  const fetchMarketData = async () => {
+    try {
+      const [cryptoResponse, stockResponse] = await Promise.all([
+        fetch('/api/market/crypto?symbols=BTC,ETH,SOL,MATIC').catch(() => null),
+        fetch('/api/market/stocks?symbols=AAPL,GOOGL,TSLA,MSFT').catch(() => null)
+      ]);
+
+      const marketDataPoints: MarketDataPoint[] = [];
+
+      if (cryptoResponse?.ok) {
+        const cryptoData = await cryptoResponse.json();
+        if (cryptoData.data) {
+          Object.values(cryptoData.data).forEach((crypto: any) => {
+            marketDataPoints.push({
+              symbol: crypto.symbol || 'N/A',
+              price: crypto.price || 0,
+              changePercent: crypto.changePercent || 0,
+              volume: crypto.volume,
+              marketCap: crypto.marketCap,
+              source: 'crypto'
+            });
+          });
+        }
+      }
+
+      if (stockResponse?.ok) {
+        const stockData = await stockResponse.json();
+        if (stockData.data) {
+          Object.values(stockData.data).forEach((stock: any) => {
+            marketDataPoints.push({
+              symbol: stock.symbol || 'N/A',
+              price: stock.price || 0,
+              changePercent: stock.changePercent || 0,
+              volume: stock.volume,
+              marketCap: stock.marketCap,
+              source: 'stock'
+            });
+          });
+        }
+      }
+
+      setMarketData(marketDataPoints);
+    } catch (error) {
+      console.error('Error fetching market data:', error);
+    }
+  };
+
+  // Initialize with welcome message
   useEffect(() => {
     const welcomeMessage: Message = {
       id: 'welcome',
       role: 'assistant',
-      content: `🚀 Welcome to Heights+ AI Trading Intelligence!
+      content: `🚀 **Welcome to Heights+ AI Investment Intelligence!**
 
-I'm your advanced AI assistant powered by Claude and Perplexity, ready to help you:
+I'm your advanced AI assistant powered by Claude and Perplexity, ready to help you with:
 
-📊 **Market Analysis**: Real-time insights across stocks, crypto, and forex
-📈 **Technical Analysis**: Advanced indicators, patterns, and signals
-📰 **News Impact**: Breaking news analysis with sentiment scoring
-💼 **Portfolio Optimization**: Personalized recommendations
-🎯 **Price Predictions**: AI-powered forecasts with confidence levels
-⚡ **Trading Signals**: Entry/exit points and risk management
+📊 **Real-time Market Analysis** - Live data from multiple exchanges
+📈 **Investment Research** - Deep analysis across all asset classes  
+💰 **Portfolio Optimization** - AI-powered allocation strategies
+🔍 **News & Sentiment** - Breaking financial news analysis
+⚡ **Trading Signals** - Technical analysis and entry/exit points
 
-Type a question or select a quick action to get started!`,
+Ready to elevate your investment game? Ask me anything!`,
       timestamp: new Date(),
       type: 'text',
       metadata: {
@@ -346,172 +385,6 @@ Type a question or select a quick action to get started!`,
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K for command palette
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowCommandPalette(prev => !prev);
-      }
-      // Cmd/Ctrl + / for focus input
-      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // Simulated real-time metric updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMetrics(prev => ({
-        ...prev,
-        portfolioValue: (prev.portfolioValue ?? 0) + (Math.random() - 0.5) * 100,
-        dayChange: (prev.dayChange ?? 0) + (Math.random() - 0.5) * 0.1,
-        responseTime: Math.max(0.8, Math.min(2.0, (prev.responseTime ?? 1.2) + (Math.random() - 0.5) * 0.2))
-      }));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // 2. Real-time Data Fetching
-  useEffect(() => {
-    const fetchRealTimeData = async () => {
-      try {
-        // Fetch crypto prices
-        const cryptoResponse = await fetch('/api/market/crypto?symbols=BTC,ETH');
-        const cryptoData = await cryptoResponse.json();
-        // Fetch AI metrics from Supabase
-        const { data: aiMetrics } = await supabase
-          .from('ai_conversations')
-          .select('metadata, created_at')
-          .eq('user_id', user?.id)
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .order('created_at', { ascending: false });
-        // Calculate real AI performance metrics
-        if (aiMetrics && aiMetrics.length > 0) {
-          const successfulAnalyses = aiMetrics.filter(m => (m.metadata?.confidence || 0) > 0.7).length; // Ensure confidence is treated as number
-          const avgResponseTime = aiMetrics.reduce((acc, m) => acc + (m.metadata?.responseTime || 0), 0) / aiMetrics.length;
-          const confidenceScores = aiMetrics.map(m => m.metadata?.confidence || 0).filter(c => c > 0);
-          setAiPerformanceMetrics({
-            totalRequests: aiMetrics.length,
-            successfulAnalyses,
-            averageResponseTime: avgResponseTime / 1000, // Convert to seconds
-            confidenceScores,
-            modelsUsed: {
-              claude: aiMetrics.filter(m => m.metadata?.model?.includes('claude')).length,
-              perplexity: aiMetrics.filter(m => m.metadata?.model?.includes('perplexity')).length
-            },
-            lastUpdated: new Date()
-          });
-        }
-        // Update market data
-        setRealTimeData({
-          btc: cryptoData?.data?.BTC,
-          eth: cryptoData?.data?.ETH,
-          marketIndices: cryptoData?.indices
-        });
-      } catch (error) {
-        console.error('Error fetching real-time data:', error);
-      }
-    };
-    fetchRealTimeData();
-    const interval = setInterval(fetchRealTimeData, 30000);
-    return () => clearInterval(interval);
-  }, [user, supabase]); // Added supabase to dependencies
-
-  // 3. Replace the metrics state update with real data
-  useEffect(() => {
-    if (aiPerformanceMetrics.totalRequests > 0) {
-      setMetrics(prev => ({
-        ...prev,
-        totalAnalyses: aiPerformanceMetrics.totalRequests,
-        successRate: (aiPerformanceMetrics.successfulAnalyses / aiPerformanceMetrics.totalRequests) * 100,
-        averageConfidence: aiPerformanceMetrics.confidenceScores.length > 0
-          ? (aiPerformanceMetrics.confidenceScores.reduce((a, b) => a + b, 0) / aiPerformanceMetrics.confidenceScores.length) * 100
-          : prev.averageConfidence,
-        responseTime: aiPerformanceMetrics.averageResponseTime || prev.responseTime,
-        dayChange: realTimeData.btc ? realTimeData.btc.change24hPercent : (prev.dayChange ?? 0),
-        // weekChange and portfolioValue handled elsewhere
-      }));
-    }
-  }, [aiPerformanceMetrics, realTimeData]);
-
-  // 8. Real Portfolio Value from Wallet Balance
-  useEffect(() => {
-    const fetchPortfolioValue = async () => {
-      if (!user) return;
-      try {
-        // Fetch wallet balance
-        const { data: walletData } = await supabase
-          .from('wallet_balance')
-          .select('balance')
-          .eq('user_id', user.id)
-          .single();
-        // Fetch portfolio holdings
-        const { data: holdings } = await supabase
-          .from('portfolio_holdings')
-          .select('quantity, purchase_price, symbol')
-          .eq('user_id', user.id);
-        let totalValue = walletData?.balance || 0;
-        if (holdings && holdings.length > 0) {
-          for (const holding of holdings) {
-            // Get current price for each holding
-            const response = await fetch(`/api/market/price?symbol=${holding.symbol}`);
-            const priceData = await response.json();
-            if (priceData.price) {
-              totalValue += holding.quantity * priceData.price;
-            }
-          }
-        }
-        setMetrics(prev => ({
-          ...prev,
-          portfolioValue: totalValue,
-          dayChange: realTimeData.btc ? realTimeData.btc.change24hPercent : (prev.dayChange ?? 0),
-          // weekChange and portfolioValue handled elsewhere
-        }));
-      } catch (error) {
-        console.error('Error fetching portfolio value:', error);
-      }
-    };
-    fetchPortfolioValue();
-    const interval = setInterval(fetchPortfolioValue, 60000);
-    return () => clearInterval(interval);
-  }, [user, supabase, realTimeData.btc]); // Added supabase and realTimeData.btc to dependencies
-
-  // 9. Real Active Alerts Count
-  useEffect(() => {
-    const fetchActiveAlerts = async () => {
-      if (!user) return;
-      try {
-        const { data: alerts, count } = await supabase
-          .from('market_alerts')
-          .select('*', { count: 'exact' })
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-        setMetrics(prev => ({
-          ...prev,
-          activeAlerts: count || 0
-        }));
-        // Update the alerts display - This element needs to exist in your HTML.
-        // For a more robust solution, manage this count in state or pass it via props.
-        // const criticalAlerts = alerts?.filter(a => a.severity === 'critical').length || 0;
-        // document.getElementById('critical-alerts-count')?.setAttribute('data-count', criticalAlerts.toString());
-      } catch (error) {
-        console.error('Error fetching alerts:', error);
-      }
-    };
-    fetchActiveAlerts();
-    const interval = setInterval(fetchActiveAlerts, 30000);
-    return () => clearInterval(interval);
-  }, [user, supabase]); // Added supabase to dependencies
-
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
@@ -528,90 +401,42 @@ Type a question or select a quick action to get started!`,
     setIsLoading(true);
 
     try {
-      // Check if this is a financial analysis request
-      const isFinancialAnalysis = /analyze|prediction|forecast|technical|fundamental/i.test(content);
-      const symbols = content.match(/\b[A-Z]{2,5}\b/g) || [];
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: content,
+          history: messages.slice(-10),
+          userId: user?.id
+        })
+      });
 
-      if (isFinancialAnalysis && symbols.length > 0) {
-        // Call the enhanced financial analysis endpoint
-        const response = await fetch('/api/ai/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            asset: symbols[0],
-            timeframe: '1 year',
-            usePerplexity: true,
-            useClaude: true
-          })
-        });
+      if (!response.ok) throw new Error('Request failed');
 
-        if (!response.ok) throw new Error('Analysis failed');
+      const data = await response.json();
 
-        const data = await response.json();
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.message || data.content,
+        timestamp: new Date(),
+        type: data.type || 'text',
+        metadata: {
+          confidence: data.metadata?.confidence || data.confidence,
+          actionable: true,
+          category: 'analysis',
+          priority: 'medium',
+          analysis: data.analysis,
+          assetType: data.analysis?.asset?.type
+        }
+      };
 
-        setFinancialAnalysisData(data.analysis);
-        setShowFinancialAnalysis(true);
-
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `I've completed a comprehensive analysis of ${symbols[0]}. Here are the key insights:
-
-📊 **Market Sentiment**: ${data.analysis.marketSentiment?.overall || 'Neutral'}
-📈 **Recommendation**: ${data.analysis.recommendation?.action || 'HOLD'}
-🎯 **Confidence**: ${Math.round((data.analysis.metadata?.confidence || 0.75) * 100)}%
-
-Click on the analysis card below for detailed insights including technical indicators, news impact, and price predictions.`,
-          timestamp: new Date(),
-          type: 'financial',
-          metadata: {
-            confidence: data.analysis.metadata?.confidence,
-            actionable: true,
-            category: 'financial_analysis',
-            priority: 'high',
-            analysis: data.analysis,
-            symbols
-          }
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-      } else {
-        // Regular chat endpoint
-        const response = await fetch('/api/ai/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: content,
-            history: messages.slice(-10)
-          })
-        });
-
-        if (!response.ok) throw new Error('Chat failed');
-
-        const data = await response.json();
-
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: data.message,
-          timestamp: new Date(),
-          type: 'analysis',
-          metadata: {
-            confidence: data.confidence,
-            actionable: true,
-            category: 'market_analysis',
-            priority: 'medium'
-          }
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-      }
+      setMessages(prev => [...prev, aiMessage]);
 
       // Update metrics
       setMetrics(prev => ({
         ...prev,
-        totalAnalyses: prev.totalAnalyses + 1,
-        averageConfidence: (prev.averageConfidence * prev.totalAnalyses + 85) / (prev.totalAnalyses + 1)
+        totalAnalyses: prev.totalAnalyses + 1
       }));
 
     } catch (error) {
@@ -619,7 +444,7 @@ Click on the analysis card below for detailed insights including technical indic
       setMessages(prev => [...prev, {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: `I encountered an error processing your request. Please try again or contact support if the issue persists.`,
+        content: 'I encountered an error processing your request. Please try again.',
         timestamp: new Date(),
         type: 'alert',
         metadata: { actionable: false, category: 'error', priority: 'high' }
@@ -627,7 +452,7 @@ Click on the analysis card below for detailed insights including technical indic
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, messages]);
+  }, [isLoading, messages, user?.id]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -649,44 +474,38 @@ Click on the analysis card below for detailed insights including technical indic
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group`}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}
       >
-        <div className={`max-w-[85%] flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`max-w-[85%] sm:max-w-[75%] flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
           <motion.div
-            className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+            className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
               isUser
                 ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53]'
                 : 'bg-gradient-to-br from-[#255F38] to-[#1F7D53]'
             } shadow-lg`}
           >
-            {isUser ? <User size={20} className="text-white" /> : <HeightsLogo size="sm" className="text-white" animate={false} />}
+            {isUser ? <User size={16} className="text-white" /> : <HeightsLogo size="sm" className="text-white" animate={false} />}
           </motion.div>
 
           {/* Message Content */}
           <motion.div
-            className={`rounded-2xl p-4 shadow-lg backdrop-blur-sm ${
+            className={`rounded-xl p-3 sm:p-4 shadow-lg backdrop-blur-sm ${
               isUser
                 ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white'
-                : 'bg-card/90 border border-[#255F38]/30 dark:bg-gray-900/90 dark:border-[#255F38]/20'
+                : 'bg-card/90 border border-[#255F38]/30'
             }`}
           >
             {/* Message Header */}
             {!isUser && (
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2"> {/* Added flex-wrap for badges on small screens */}
-                <div className="flex items-center flex-wrap gap-2"> {/* Added flex-wrap */}
-                  <Badge variant="secondary" className="text-xs bg-[#255F38]/20 text-[#255F38] dark:bg-[#255F38]/10">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex items-center flex-wrap gap-2">
+                  <Badge variant="secondary" className="text-xs bg-[#255F38]/20 text-[#255F38]">
                     Heights+ AI
                   </Badge>
                   {message.metadata?.confidence && (
                     <Badge variant="outline" className="text-xs border-[#1F7D53]/50">
                       {Math.round(message.metadata.confidence * 100)}% confident
-                    </Badge>
-                  )}
-                  {message.type === 'financial' && (
-                    <Badge className="text-xs bg-gradient-to-r from-[#255F38] to-[#1F7D53]">
-                      <Sparkles className="h-3 w-3 mr-1" />
-                      Financial Analysis
                     </Badge>
                   )}
                 </div>
@@ -701,32 +520,12 @@ Click on the analysis card below for detailed insights including technical indic
               {message.content}
             </div>
 
-            {/* Financial Analysis Card */}
-            {message.type === 'financial' && message.metadata?.analysis && (
-              <motion.div
-                className="mt-4 p-4 bg-white/10 dark:bg-black/20 rounded-lg cursor-pointer"
-                whileHover={{ scale: 1.02 }}
-                onClick={() => {
-                  setFinancialAnalysisData(message.metadata?.analysis);
-                  setShowFinancialAnalysis(true);
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-[#1F7D53]" />
-                    <span className="font-medium">View Full Analysis</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4" />
-                </div>
-              </motion.div>
-            )}
-
             {/* Message Actions */}
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/10 dark:border-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-xs hover:bg-white/10"
+                className="h-6 text-xs hover:bg-white/10"
                 onClick={() => copyToClipboard(message.content, message.id)}
               >
                 {copiedMessageId === message.id ? (
@@ -736,22 +535,6 @@ Click on the analysis card below for detailed insights including technical indic
                 )}
                 Copy
               </Button>
-              {!isUser && message.metadata?.actionable && (
-                <>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs hover:bg-white/10">
-                    <Star className="h-3 w-3 mr-1" />
-                    Save
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs hover:bg-white/10">
-                    <Share className="h-3 w-3 mr-1" />
-                    Share
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs hover:bg-white/10">
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Retry
-                  </Button>
-                </>
-              )}
             </div>
           </motion.div>
         </div>
@@ -759,17 +542,26 @@ Click on the analysis card below for detailed insights including technical indic
     );
   };
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: value >= 1000000 ? 'compact' : 'standard',
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-[#255F38]/5 dark:from-black dark:via-gray-950 dark:to-[#255F38]/10">
-      <div className="max-w-[1600px] mx-auto p-4 md:p-6">
-        {/* Enhanced Header with Metrics */}
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-[#255F38]/5">
+      <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6">
+        {/* Enhanced Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6"
         >
           {/* Title and Status */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
               <motion.div
                 whileHover={{ rotate: 360 }}
@@ -777,16 +569,27 @@ Click on the analysis card below for detailed insights including technical indic
               >
                 <HeightsLogo size="xl" />
               </motion.div>
-              <div>
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
-                  Heights+ AI
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
+                  Heights+ AI Hub
                 </h1>
-                <p className="text-sm text-muted-foreground">Advanced Trading Intelligence</p>
+                <p className="text-sm text-muted-foreground">Real-time Investment Intelligence</p>
               </div>
             </div>
 
-            {/* Live Status Indicators - flex-wrap for smaller screens */}
-            <div className="flex flex-wrap justify-center md:justify-start items-center gap-4"> {/* Added flex-wrap, justify-center */}
+            {/* Mobile Menu Button */}
+            <div className="flex items-center gap-2 lg:hidden">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowMobileNav(!showMobileNav)}
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Desktop Status Indicators */}
+            <div className="hidden lg:flex items-center gap-4">
               <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 backdrop-blur-sm border border-[#255F38]/20 rounded-full">
                 <motion.div
                   className="w-2 h-2 bg-green-500 rounded-full"
@@ -797,247 +600,247 @@ Click on the analysis card below for detailed insights including technical indic
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 backdrop-blur-sm border border-[#255F38]/20 rounded-full">
                 <Brain className="h-3 w-3 text-[#1F7D53]" />
-                <span className="text-xs font-medium">Claude</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 backdrop-blur-sm border border-[#255F38]/20 rounded-full">
-                <Globe className="h-3 w-3 text-[#255F38]" />
-                <span className="text-xs font-medium">Perplexity</span>
+                <span className="text-xs font-medium">Claude AI</span>
               </div>
             </div>
           </div>
 
-          {/* Metrics Cards - Responsive grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"> {/* Adjusted for small screens */}
-            <motion.div whileHover={{ y: -2 }} className="col-span-1">
-              <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Portfolio Value</span>
-                    <Wallet className="h-4 w-4 text-[#1F7D53]" />
-                  </div>
-                  <p className="text-lg font-bold">
-                    $<AnimatedNumber value={metrics.portfolioValue ?? 0} decimals={2} />
-                  </p>
-                  <p className={`text-xs flex items-center gap-1 mt-1 ${((metrics.dayChange ?? 0) >= 0) ? 'text-green-600' : 'text-red-600'}`}>
-                    {(metrics.dayChange ?? 0) >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                    {Math.abs(metrics.dayChange ?? 0).toFixed(2)}%
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
+          {/* Enhanced Metrics Cards */}
+          {isLoadingData ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-4">
+                    <div className="animate-pulse space-y-2">
+                      <div className="h-4 bg-muted rounded w-3/4"></div>
+                      <div className="h-6 bg-muted rounded w-1/2"></div>
+                      <div className="h-3 bg-muted rounded w-2/3"></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <motion.div whileHover={{ y: -2 }}>
+                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">Portfolio Value</span>
+                      <Wallet className="h-4 w-4 text-[#1F7D53]" />
+                    </div>
+                    <p className="text-lg font-bold">
+                      {metrics.portfolioValue > 0 ? (
+                        <AnimatedNumber value={metrics.portfolioValue} prefix="$" decimals={2} />
+                      ) : (
+                        '$0.00'
+                      )}
+                    </p>
+                    <p className={`text-xs flex items-center gap-1 mt-1 ${
+                      metrics.dayChange >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {metrics.dayChange >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                      {Math.abs(metrics.dayChange).toFixed(2)}%
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-            <motion.div whileHover={{ y: -2 }} className="col-span-1">
-              <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Total Analyses</span>
-                    <BarChart3 className="h-4 w-4 text-[#255F38]" />
-                  </div>
-                  <p className="text-lg font-bold">
-                    <AnimatedNumber value={metrics.totalAnalyses} />
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    +12 today
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">Total Assets</span>
+                      <PieChart className="h-4 w-4 text-[#255F38]" />
+                    </div>
+                    <p className="text-lg font-bold">
+                      <AnimatedNumber value={metrics.totalAssets} />
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      {metrics.profitableAssets} profitable
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-            <motion.div whileHover={{ y: -2 }} className="col-span-1">
-              <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Success Rate</span>
-                    <Target className="h-4 w-4 text-[#27391C]" />
-                  </div>
-                  <p className="text-lg font-bold">
-                    <AnimatedNumber value={metrics.successRate} suffix="%" decimals={1} />
-                  </p>
-                  <Progress value={metrics.successRate} className="h-1 mt-2" />
-                </CardContent>
-              </Card>
-            </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">AI Analyses</span>
+                      <BarChart3 className="h-4 w-4 text-[#27391C]" />
+                    </div>
+                    <p className="text-lg font-bold">
+                      <AnimatedNumber value={metrics.totalAnalyses} />
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Today
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-            <motion.div whileHover={{ y: -2 }} className="col-span-1">
-              <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">AI Confidence</span>
-                    <Brain className="h-4 w-4 text-[#1F7D53]" />
-                  </div>
-                  <p className="text-lg font-bold">
-                    <AnimatedNumber value={metrics.averageConfidence} suffix="%" decimals={1} />
-                  </p>
-                  <Progress value={metrics.averageConfidence} className="h-1 mt-2" />
-                </CardContent>
-              </Card>
-            </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">Success Rate</span>
+                      <Target className="h-4 w-4 text-[#1F7D53]" />
+                    </div>
+                    <p className="text-lg font-bold">
+                      <AnimatedNumber value={metrics.successRate} suffix="%" decimals={1} />
+                    </p>
+                    <Progress value={metrics.successRate} className="h-1 mt-2" />
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-            <motion.div whileHover={{ y: -2 }} className="col-span-1">
-              <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Response Time</span>
-                    <Zap className="h-4 w-4 text-yellow-500" />
-                  </div>
-                  <p className="text-lg font-bold">
-                    <AnimatedNumber value={metrics.responseTime} suffix="s" decimals={1} />
-                  </p>
-                  <p className="text-xs text-green-600 mt-1">
-                    Fast
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">AI Confidence</span>
+                      <Brain className="h-4 w-4 text-[#255F38]" />
+                    </div>
+                    <p className="text-lg font-bold">
+                      <AnimatedNumber value={metrics.averageConfidence} suffix="%" decimals={1} />
+                    </p>
+                    <Progress value={metrics.averageConfidence} className="h-1 mt-2" />
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-            <motion.div whileHover={{ y: -2 }} className="col-span-1">
-              <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Active Alerts</span>
-                    <Bell className="h-4 w-4 text-red-500" />
-                  </div>
-                  <p className="text-lg font-bold">
-                    <AnimatedNumber value={metrics.activeAlerts} />
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    2 critical
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Card className="bg-gradient-to-br from-card/80 to-card/60 backdrop-blur-sm border-[#255F38]/20">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">Active Alerts</span>
+                      <Bell className="h-4 w-4 text-red-500" />
+                    </div>
+                    <p className="text-lg font-bold">
+                      <AnimatedNumber value={metrics.activeAlerts} />
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Monitoring
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
+          )}
         </motion.div>
 
         {/* Main Content Area */}
-        {/* Adjusted grid to stack columns on small screens */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          {/* Chat Section - Takes up 3 columns on xl, full width on others */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 lg:gap-6">
+          {/* Main Section */}
           <div className="xl:col-span-3">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
             >
-              <Card className="min-h-[400px] md:min-h-[500px] xl:h-[calc(100vh-320px)] flex flex-col bg-card/80 backdrop-blur-sm border-[#255F38]/20"> {/* Adjusted height */}
-                <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full">
+              <Card className="h-[calc(100vh-280px)] sm:h-[calc(100vh-320px)] flex flex-col bg-card/80 backdrop-blur-sm border-[#255F38]/20">
+                <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full h-full flex flex-col">
                   <CardHeader className="border-b border-[#255F38]/20 pb-3">
-                    <div className="flex items-center justify-between flex-wrap"> {/* Added flex-wrap */}
-                      <TabsList className="grid w-full grid-cols-3 max-w-md bg-[#255F38]/10 mb-2 md:mb-0"> {/* Added mb-2 for mobile spacing */}
-                        <TabsTrigger value="chat" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white">
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          Chat
-                        </TabsTrigger>
-                        <TabsTrigger value="analysis" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white">
-                          <BarChart3 className="h-4 w-4 mr-2" />
-                          Analysis
-                        </TabsTrigger>
-                        <TabsTrigger value="insights" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white">
-                          <Lightbulb className="h-4 w-4 mr-2" />
-                          Insights
-                        </TabsTrigger>
-                      </TabsList>
-                      {/* Optional: Add settings/voice buttons here if needed, considering space */}
-                    </div>
+                    <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-[#255F38]/10">
+                      <TabsTrigger value="investment" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
+                        <DollarSign className="h-4 w-4 mr-1 sm:mr-2" />
+                        <span className="hidden sm:inline">Investment</span>
+                        <span className="sm:hidden">Invest</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="chat" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
+                        <MessageSquare className="h-4 w-4 mr-1 sm:mr-2" />
+                        Chat
+                      </TabsTrigger>
+                      <TabsTrigger value="analysis" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
+                        <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
+                        <span className="hidden sm:inline">Analysis</span>
+                        <span className="sm:hidden">Data</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="insights" className="data-[state=active]:bg-[#255F38] data-[state=active]:text-white text-xs sm:text-sm">
+                        <Lightbulb className="h-4 w-4 mr-1 sm:mr-2" />
+                        <span className="hidden sm:inline">Insights</span>
+                        <span className="sm:hidden">Tips</span>
+                      </TabsTrigger>
+                    </TabsList>
                   </CardHeader>
 
-                  <CardContent className="flex-1 p-0 flex flex-col">
-                    <TabsContent value="chat" className="flex-1 m-0 h-full"> {/* Ensure TabsContent takes full height */}
-                      {/* Messages Area */}
-                      <ScrollArea className="flex-1 p-4 md:p-6 h-full"> {/* h-full for ScrollArea */}
-                        <AnimatePresence>
-                          {messages.map(renderMessage)}
-                        </AnimatePresence>
+                  <CardContent className="flex-1 p-0 overflow-hidden">
+                    {/* Investment Tab - Main Feature */}
+                    <TabsContent value="investment" className="h-full m-0">
+                      <div className="h-[60vh] lg:h-[70vh] xl:h-[80vh] 2xl:h-[85vh] max-w-4xl mx-auto flex flex-col">
+                        <InvestmentChatbot />
+                      </div>
+                    </TabsContent>
 
-                        {isLoading && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex justify-start mb-6"
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                                <HeightsLogo size="sm" className="text-white" animate={false} />
-                              </div>
-                              <div className="bg-card/90 border border-[#255F38]/30 rounded-2xl p-4">
-                                <div className="flex items-center gap-3">
-                                  <motion.div
-                                    animate={{ rotate: 360 }}
-                                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                                  >
-                                    <Brain className="h-5 w-5 text-[#1F7D53]" />
-                                  </motion.div>
-                                  <span className="text-sm text-muted-foreground">
-                                    Analyzing with Claude & Perplexity...
-                                  </span>
+                    {/* Chat Tab */}
+                    <TabsContent value="chat" className="h-full m-0">
+                      <div className="flex flex-col h-[60vh] lg:h-[70vh] xl:h-[80vh] 2xl:h-[85vh] max-w-4xl mx-auto">
+                        <ScrollArea className="flex-1 p-3 sm:p-4 lg:p-6 max-h-full">
+                          <AnimatePresence>
+                            {messages.map(renderMessage)}
+                          </AnimatePresence>
+
+                          {isLoading && (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="flex justify-start mb-6"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
+                                  <HeightsLogo size="sm" className="text-white" animate={false} />
                                 </div>
-                                <div className="flex gap-1 mt-2">
-                                  <motion.div
-                                    className="h-2 w-2 rounded-full bg-[#255F38]"
-                                    animate={{ scale: [1, 1.5, 1] }}
-                                    transition={{ repeat: Infinity, duration: 0.6 }}
-                                  />
-                                  <motion.div
-                                    className="h-2 w-2 rounded-full bg-[#1F7D53]"
-                                    animate={{ scale: [1, 1.5, 1] }}
-                                    transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
-                                  />
-                                  <motion.div
-                                    className="h-2 w-2 rounded-full bg-[#27391C]"
-                                    animate={{ scale: [1, 1.5, 1] }}
-                                    transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
-                                  />
+                                <div className="bg-card/90 border border-[#255F38]/30 rounded-xl p-4">
+                                  <div className="flex items-center gap-3">
+                                    <motion.div
+                                      animate={{ rotate: 360 }}
+                                      transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                                    >
+                                      <Brain className="h-5 w-5 text-[#1F7D53]" />
+                                    </motion.div>
+                                    <span className="text-sm text-muted-foreground">
+                                      Analyzing your query...
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </motion.div>
-                        )}
-                        <div ref={messagesEndRef} />
-                      </ScrollArea>
-
-                      {/* Enhanced Input Area */}
-                      <div className="p-4 border-t border-[#255F38]/20 bg-gradient-to-r from-card/50 to-[#255F38]/5">
-                        {/* Quick Actions */}
-                        <div className="flex gap-2 mb-3 overflow-x-auto pb-2 custom-scrollbar"> {/* Added custom-scrollbar for styling */}
-                          {QUICK_ACTIONS.slice(0, 4).map((action) => (
-                            <motion.div key={action.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => sendMessage(action.prompt)}
-                                disabled={isLoading}
-                                className="border-[#255F38]/30 hover:bg-[#255F38]/10 whitespace-nowrap"
-                              >
-                                <action.icon className={`h-3 w-3 mr-1 ${action.color}`} />
-                                {action.label}
-                              </Button>
                             </motion.div>
-                          ))}
-                        </div>
+                          )}
+                          <div ref={messagesEndRef} />
+                        </ScrollArea>
 
-                        {/* Input Field with Animation */}
-                        <div className="relative">
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-r from-[#255F38]/20 to-[#1F7D53]/20 rounded-lg blur-xl"
-                            animate={{
-                              opacity: [0.3, 0.6, 0.3],
-                            }}
-                            transition={{
-                              repeat: Infinity,
-                              duration: 3,
-                              ease: "easeInOut"
-                            }}
-                          />
-                          <div className="relative flex gap-2">
-                            <Textarea
-                              ref={inputRef}
-                              value={input}
-                              onChange={(e) => setInput(e.target.value)}
-                              onKeyPress={handleKeyPress}
-                              placeholder={animatedPlaceholder}
-                              className="flex-1 min-h-[60px] max-h-[120px] resize-none bg-background/80 backdrop-blur-sm border-[#255F38]/30 focus:border-[#255F38] transition-all duration-300"
-                              disabled={isLoading}
-                            />
-                            <motion.div className="flex flex-col gap-2">
+                        {/* Enhanced Input Area */}
+                        <div className="p-3 sm:p-4 border-t border-[#255F38]/20 bg-gradient-to-r from-card/50 to-[#255F38]/5">
+                          {/* Quick Actions */}
+                          <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+                            {QUICK_ACTIONS.slice(0, 3).map((action) => (
+                              <motion.div key={action.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => sendMessage(action.prompt)}
+                                  disabled={isLoading}
+                                  className="border-[#255F38]/30 hover:bg-[#255F38]/10 whitespace-nowrap text-xs"
+                                >
+                                  <action.icon className={`h-3 w-3 mr-1 ${action.color}`} />
+                                  {action.label}
+                                </Button>
+                              </motion.div>
+                            ))}
+                          </div>
+
+                          {/* Input Field */}
+                          <div className="relative">
+                            <div className="relative flex gap-2">
+                              <Textarea
+                                ref={inputRef}
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder="Ask about investments, markets, or get AI analysis..."
+                                className="flex-1 min-h-[60px] max-h-[120px] resize-none bg-background/80 backdrop-blur-sm border-[#255F38]/30 focus:border-[#255F38] transition-all duration-300"
+                                disabled={isLoading}
+                              />
                               <Button
                                 onClick={() => sendMessage(input)}
                                 disabled={isLoading || !input.trim()}
@@ -1050,39 +853,97 @@ Click on the analysis card below for detailed insights including technical indic
                                   <Send className="h-5 w-5" />
                                 )}
                               </Button>
-                            </motion.div>
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Input Helper Text */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between mt-2 text-xs text-muted-foreground gap-2"> {/* Added flex-col/row for responsiveness */}
-                          <span>Press Enter to send, Shift+Enter for new line</span>
-                          <div className="flex items-center gap-2">
-                            <kbd className="px-2 py-0.5 bg-muted rounded text-xs">⌘K</kbd>
-                            <span>Command Palette</span>
+                          <div className="flex flex-col sm:flex-row items-center justify-between mt-2 text-xs text-muted-foreground gap-2">
+                            <span>Press Enter to send, Shift+Enter for new line</span>
                           </div>
                         </div>
                       </div>
                     </TabsContent>
 
-                    <TabsContent value="analysis" className="flex-1 m-0 p-6 h-full"> {/* Ensure TabsContent takes full height */}
+                    {/* Analysis Tab */}
+                    <TabsContent value="analysis" className="h-full m-0 p-3 sm:p-6">
                       <div className="space-y-4">
-                        <h3 className="text-lg font-semibold mb-4">Market Analysis Overview</h3>
-                        <p className="text-muted-foreground">
-                          Market analysis content would be displayed here. This section is under development.
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Analysis cards */}
-                        </div>
+                        <h3 className="text-lg font-semibold mb-4">Real-time Analysis</h3>
+                        
+                        {metrics.totalAnalyses === 0 ? (
+                          <Card>
+                            <CardContent className="p-6 text-center">
+                              <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                              <p className="text-muted-foreground">No analyses performed yet.</p>
+                              <p className="text-sm text-muted-foreground mt-2">
+                                Start by asking questions in the Investment or Chat tabs.
+                              </p>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-sm">AI Performance Metrics</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <span>Total Analyses</span>
+                                  <span className="font-medium">{metrics.totalAnalyses}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Success Rate</span>
+                                  <span className="font-medium">{metrics.successRate.toFixed(1)}%</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Average Response Time</span>
+                                  <span className="font-medium">{metrics.responseTime.toFixed(2)}s</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
                       </div>
                     </TabsContent>
 
-                    <TabsContent value="insights" className="flex-1 m-0 p-6 h-full"> {/* Ensure TabsContent takes full height */}
+                    {/* Insights Tab */}
+                    <TabsContent value="insights" className="h-full m-0 p-3 sm:p-6">
                       <div className="space-y-4">
-                        <h3 className="text-lg font-semibold mb-4">AI-Generated Insights</h3>
-                        <p className="text-muted-foreground">
-                          AI-generated insights and trading recommendations would be displayed here. This section is under development.
-                        </p>
+                        <h3 className="text-lg font-semibold mb-4">Market Insights</h3>
+                        
+                        {marketData.length > 0 ? (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <Activity className="h-4 w-4 text-green-500" />
+                                Live Market Data
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {marketData.slice(0, 6).map((asset, idx) => (
+                                  <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                    <div>
+                                      <p className="font-medium">{asset.symbol}</p>
+                                      <p className="text-sm text-muted-foreground capitalize">{asset.source}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-medium">{formatCurrency(asset.price)}</p>
+                                      <p className={`text-sm ${asset.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <Card>
+                            <CardContent className="p-6 text-center">
+                              <Globe className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                              <p className="text-muted-foreground">Loading market data...</p>
+                            </CardContent>
+                          </Card>
+                        )}
                       </div>
                     </TabsContent>
                   </CardContent>
@@ -1091,8 +952,8 @@ Click on the analysis card below for detailed insights including technical indic
             </motion.div>
           </div>
 
-          {/* Sidebar - Quick Actions & Insights (stacks below chat on small screens) */}
-          <div className="space-y-4">
+          {/* Sidebar */}
+          <div className={`space-y-4 ${showMobileNav ? 'block' : 'hidden xl:block'}`}>
             {/* Quick Actions */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
@@ -1112,7 +973,10 @@ Click on the analysis card below for detailed insights including technical indic
                       <Button
                         variant="ghost"
                         className="w-full justify-start text-sm hover:bg-[#255F38]/10"
-                        onClick={() => sendMessage(action.prompt)}
+                        onClick={() => {
+                          setActiveMode('chat');
+                          sendMessage(action.prompt);
+                        }}
                         disabled={isLoading}
                       >
                         <action.icon className={`h-4 w-4 mr-2 ${action.color}`} />
@@ -1124,7 +988,7 @@ Click on the analysis card below for detailed insights including technical indic
               </Card>
             </motion.div>
 
-            {/* Trading Ideas */}
+            {/* Market Overview */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1133,55 +997,36 @@ Click on the analysis card below for detailed insights including technical indic
               <Card className="bg-card/80 backdrop-blur-sm border-[#255F38]/20">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Lightbulb className="h-4 w-4 text-yellow-500" />
-                    Today's Top Ideas
+                    <Activity className="h-4 w-4 text-[#255F38]" />
+                    Live Market
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {realTimeData.btc && (
-                    <motion.div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">BTC Long</span>
-                        <Badge className="text-xs bg-green-500/20 text-green-600">
-                          85% confidence
-                        </Badge>
+                  {marketData.slice(0, 4).map((asset, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2 w-2 rounded-full ${asset.source === 'crypto' ? 'bg-orange-500' : 'bg-blue-500'}`} />
+                        <span className="text-sm font-medium">{asset.symbol}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Strong support at $51,200
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {realTimeData.eth && (
-                    <motion.div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">ETH Long</span>
-                        <Badge className="text-xs bg-blue-500/20 text-blue-600">
-                          85% confidence
-                        </Badge>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{formatCurrency(asset.price)}</p>
+                        <p className={`text-xs ${asset.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Strong support at $1,800
-                      </p>
-                    </motion.div>
-                  )}
-
-                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">Gold Hedge</span>
-                      <Badge className="text-xs bg-yellow-500/20 text-yellow-600">
-                        72% confidence
-                      </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Market uncertainty rising
-                    </p>
-                  </div>
+                  ))}
+                  {marketData.length === 0 && (
+                    <div className="text-center py-4">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">Loading market data...</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
 
-            {/* Recent Analyses */}
+            {/* Help & Resources */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1190,145 +1035,24 @@ Click on the analysis card below for detailed insights including technical indic
               <Card className="bg-card/80 backdrop-blur-sm border-[#255F38]/20">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-[#255F38]" />
-                    Recent Analyses
+                    <HelpCircle className="h-4 w-4 text-[#27391C]" />
+                    Resources
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {messages.filter(m => m.type === 'analysis').slice(-3).reverse().map((message) => ( // Show last 3 analyses
-                    <div key={message.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                      <div className="flex items-center gap-2">
-                        {message.metadata?.symbols?.[0] && (
-                          <Badge variant="outline" className="text-xs">{message.metadata.symbols[0]}</Badge>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(message.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      {message.metadata?.confidence && (
-                        <Badge variant="outline" className="text-xs">
-                          {Math.round(message.metadata.confidence * 100)}%
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                  {messages.filter(m => m.type === 'analysis').length === 0 && (
-                    <p className="text-sm text-muted-foreground">No recent analyses</p>
-                  )}
+                  <Button variant="ghost" className="w-full justify-start text-sm">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    User Guide
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-start text-sm">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Button>
                 </CardContent>
               </Card>
             </motion.div>
           </div>
         </div>
-
-        {/* Financial Analysis Modal */}
-        <AnimatePresence>
-          {showFinancialAnalysis && financialAnalysisData && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShowFinancialAnalysis(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-card border border-[#255F38]/30 rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto" // Added w-full for small screens
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl md:text-2xl font-bold"> {/* Adjusted text size */}
-                    {financialAnalysisData.asset} - Comprehensive Analysis
-                  </h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowFinancialAnalysis(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Add your financial analysis display component here */}
-                <div className="space-y-6">
-                  {/* Analysis content */}
-                  <p className="text-muted-foreground">
-                    Full financial analysis visualization would go here. This section is under development.
-                  </p>
-                  {/* Example content structure if you were to expand it: */}
-                  {financialAnalysisData.recommendation && (
-                    <Card className="p-4 bg-green-500/10 border-green-500/20">
-                      <h4 className="font-semibold text-green-600">Recommendation: {financialAnalysisData.recommendation.action}</h4>
-                      <p className="text-sm text-green-700">{financialAnalysisData.recommendation.reason}</p>
-                    </Card>
-                  )}
-                  {financialAnalysisData.marketSentiment && (
-                    <Card className="p-4 bg-blue-500/10 border-blue-500/20">
-                      <h4 className="font-semibold text-blue-600">Market Sentiment: {financialAnalysisData.marketSentiment.overall}</h4>
-                      <p className="text-sm text-blue-700">Factors: {financialAnalysisData.marketSentiment.factors.join(', ')}</p>
-                    </Card>
-                  )}
-                  {/* ... more detailed analysis sections ... */}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Command Palette */}
-        <AnimatePresence>
-          {showCommandPalette && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShowCommandPalette(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0, y: -20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: -20 }}
-                className="bg-card border border-[#255F38]/30 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" // Added w-full for small screens
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <Search className="h-5 w-5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search commands..."
-                    className="flex-1 border-0 focus:ring-0 text-lg"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  {QUICK_ACTIONS.map((action) => (
-                    <motion.div
-                      key={action.id}
-                      whileHover={{ x: 2 }}
-                      className="p-3 hover:bg-[#255F38]/10 rounded-lg cursor-pointer flex items-center justify-between group"
-                      onClick={() => {
-                        sendMessage(action.prompt);
-                        setShowCommandPalette(false);
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <action.icon className={`h-5 w-5 ${action.color}`} />
-                        <div>
-                          <p className="font-medium">{action.label}</p>
-                          <p className="text-xs text-muted-foreground">{action.category}</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );
