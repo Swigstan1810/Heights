@@ -176,16 +176,18 @@ export function Navbar() {
     >
       <div className="container mx-auto px-3 sm:px-4 lg:px-6">
         <div className="flex items-center justify-between h-14 sm:h-16">
-          {/* Logo */}
-          <Link 
-            href={isAuthenticated ? "/home" : "/"} 
-            className="flex items-center gap-2 shrink-0"
-          >
-            <HeightsLogo size="lg" />
-            <span className="hidden sm:block text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
-              Heights
-            </span>
-          </Link>
+          {/* Logo and nav container */}
+          <div className="flex items-center h-12 gap-x-3">
+            <Link 
+              href={isAuthenticated ? "/home" : "/"} 
+              className="flex items-center gap-2 shrink-0"
+            >
+              <HeightsLogo size="lg" />
+              <span className="hidden sm:block text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
+                Heights
+              </span>
+            </Link>
+          </div>
 
           {/* Desktop Navigation */}
           {isAuthenticated && (
@@ -233,16 +235,18 @@ export function Navbar() {
           )}
 
           {/* Right Side Actions */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-x-2 shrink-0 h-12">
             {isAuthenticated ? (
               <>
-                {/* Wallet Connect - Hidden on small screens */}
-                <div className="hidden md:block">
-                  <ConnectWalletButton />
-                </div>
+                {/* Wallet Connect - Only show if not connected, hidden on small screens */}
+                {!isConnected && (
+                  <div className="hidden md:block h-8 flex items-center px-3 rounded-md border bg-muted text-sm" style={{minWidth: 'auto'}}>
+                    <ConnectWalletButton />
+                  </div>
+                )}
 
-                {/* Balance Display - Hidden on small screens */}
-                {walletBalance && !isConnected && (
+                {/* Balance Display - Only show if connected and has balance, hidden on small screens */}
+                {isConnected && walletBalance && (
                   <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full border">
                     <Wallet className="h-3 w-3 text-primary" />
                     <span className="text-sm font-medium">
@@ -250,14 +254,6 @@ export function Navbar() {
                     </span>
                   </div>
                 )}
-
-                {/* Notifications - Hidden on mobile */}
-                <Button variant="ghost" size="sm" className="hidden sm:flex relative">
-                  <Bell className="h-4 w-4" />
-                  <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 w-4 p-0 text-xs">
-                    3
-                  </Badge>
-                </Button>
 
                 {/* Theme Toggle */}
                 <DropdownMenu>
@@ -477,9 +473,12 @@ export function Navbar() {
                     <div className="flex flex-col h-full">
                       {/* Wallet Section */}
                       <div className="p-6 space-y-4">
-                        <ConnectWalletButton />
-                        {/* Balance Display */}
-                        {walletBalance && !isConnected && (
+                        {!isConnected && (
+                          <div className="w-full">
+                            <ConnectWalletButton />
+                          </div>
+                        )}
+                        {isConnected && walletBalance && (
                           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
                             <div className="flex items-center gap-2">
                               <Wallet className="h-4 w-4 text-primary" />
@@ -490,8 +489,6 @@ export function Navbar() {
                             </span>
                           </div>
                         )}
-
-                        {/* Connection Status */}
                         {isConnected && (
                           <div className="flex items-center justify-center p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
                             <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">

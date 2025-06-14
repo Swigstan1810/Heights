@@ -90,7 +90,7 @@ export function ConnectWalletButton() {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 h-8 px-3 text-sm rounded-md">
             <Wallet className="h-4 w-4" />
             <span className="hidden sm:inline">{formatAddress(address)}</span>
             <span className="inline sm:hidden">Wallet</span>
@@ -168,7 +168,7 @@ export function ConnectWalletButton() {
         <Button
           onClick={() => setShowConnectors(true)}
           disabled={isPending}
-          className="gap-2"
+          className="gap-2 h-8 px-3 text-sm rounded-md"
         >
           {isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -140,13 +140,24 @@ export async function POST(request: NextRequest) {
 
     console.log(`[AI Chat] Processing request for ${userTier} user, remaining: ${remaining}`);
 
+    // Add structured and usePerplexity flags to preferences
+    const enhancedPreferences = {
+      ...preferences,
+      structured: preferences.structured ?? true,
+      usePerplexity: preferences.usePerplexity ?? true
+    };
+    
+    // Add conversationPurpose if present
+    const conversationPurpose = preferences.intent || preferences.conversationPurpose || undefined;
+
     // Build chat context
     const context: ChatContext = {
       userId,
       sessionId,
       messageHistory: history,
-      preferences,
-      activeAnalyses: {}
+      preferences: enhancedPreferences,
+      activeAnalyses: {},
+      ...(conversationPurpose ? { conversationPurpose } : {})
     };
 
     // Process query with enhanced AI orchestrator
@@ -179,24 +190,29 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('AI Chat API error:', error);
-    
+    let userIdForError = 'unknown';
+    try {
+      const body = await request.json();
+      userIdForError = body.userId || 'unknown';
+    } catch {}
+    console.error('AI Chat API error:', error, { requestBody: await request.text?.(), userContext: { headers: headers(), userId: userIdForError } });
     // Log error for debugging
-      await supabase
-        .from('ai_errors')
-        .insert({
+    await supabase
+      .from('ai_errors')
+      .insert({
         error_message: error instanceof Error ? error.message : 'Unknown error',
         error_stack: error instanceof Error ? error.stack : null,
         context: {
           endpoint: '/api/ai/chat',
           timestamp: new Date().toISOString(),
-          ip: headers().get('x-forwarded-for')
+          ip: headers().get('x-forwarded-for'),
+          requestBody: await request.text?.(),
+          userId: userIdForError
         }
       });
-    
     return NextResponse.json(
       { 
-        error: 'Internal server error. Our team has been notified.',
+        error: 'Sorry, our AI assistant is temporarily unavailable. Please try again in a few moments.',
         message: process.env.NODE_ENV === 'development' 
           ? (error instanceof Error ? error.message : 'Unknown error')
           : 'Something went wrong. Please try again.'
