@@ -1,3 +1,4 @@
+// app/home/page.tsx - Updated with real-time Coinbase data
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -5,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { Navbar } from "@/components/navbar";
-import { marketDataService, type MarketData } from '@/lib/market-data';
+import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,66 +47,50 @@ import {
   ExternalLink,
   TrendingDownIcon,
   CreditCard,
-  PieChart
+  PieChart,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import Link from 'next/link';
+import TradingViewWidget, { TradingViewAdvancedChart, TradingViewMiniChart } from '@/components/trading/tradingview-widget';
 
-// Enhanced TradingView Widget Component
-const TradingViewWidget = ({ symbol, height = 400, theme = 'dark' }: {
+// Enhanced TradingView Widget Component with real-time symbol updates
+const LiveTradingViewWidget = ({ symbol, height = 400, marketData }: {
   symbol: string;
   height?: number;
-  theme?: 'light' | 'dark';
+  marketData?: MarketData;
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [displaySymbol, setDisplaySymbol] = useState(symbol);
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/tv.js';
-    script.async = true;
-    
-    script.onload = () => {
-      if (containerRef.current && (window as any).TradingView) {
-        new (window as any).TradingView.widget({
-          autosize: true,
-          symbol: symbol,
-          interval: "1D",
-          timezone: "Asia/Kolkata",
-          theme: theme,
-          style: "1",
-          locale: "en",
-          toolbar_bg: "#f1f3f6",
-          enable_publishing: false,
-          allow_symbol_change: false,
-          container_id: containerRef.current.id,
-          height: height,
-          studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-          show_popup_button: false,
-          hide_side_toolbar: true,
-          hide_legend: false,
-          save_image: false,
-          hide_volume: false,
-        });
-      }
-    };
-
-    if (containerRef.current) {
-      containerRef.current.appendChild(script);
+    // Update symbol when market data changes
+    if (marketData) {
+      // Convert to TradingView format
+      const tvSymbol = `COINBASE:${marketData.productId.replace('-', '')}`;
+      setDisplaySymbol(tvSymbol);
     }
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, [symbol, height, theme]);
+  }, [marketData]);
 
   return (
-    <div 
-      ref={containerRef} 
-      id={`tradingview_${symbol.replace(':', '_')}`}
-      className="w-full rounded-lg overflow-hidden"
-      style={{ height: `${height}px` }}
-    />
+    <div className="relative">
+      <TradingViewAdvancedChart
+        symbol={displaySymbol}
+        height={height}
+        interval="1D"
+        studies={["RSI@tv-basicstudies"]}
+      />
+      {marketData && (
+        <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm rounded-lg p-2 border">
+          <div className="flex items-center gap-2 text-sm">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="font-medium">${marketData.price.toFixed(2)}</span>
+            <span className={`${marketData.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {marketData.change24hPercent >= 0 ? '+' : ''}{marketData.change24hPercent.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -172,52 +157,144 @@ function AnimatedCounter({
   );
 }
 
-// Market Stats Component
-const MarketStats = ({ data }: { data: Map<string, MarketData> }) => {
-  const stats = Array.from(data.values()).slice(0, 6);
+// Real-time Market Stats Component
+const LiveMarketStats = () => {
+  const [marketData, setMarketData] = useState<Map<string, MarketData>>(new Map());
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [loading, setLoading] = useState(true);
+
+  // Top symbols to track
+  const TRACKED_SYMBOLS = ['BTC', 'ETH', 'SOL', 'MATIC', 'LINK', 'AVAX'];
+
+  useEffect(() => {
+    const unsubscribes: (() => void)[] = [];
+
+    // Subscribe to market data for tracked symbols
+    TRACKED_SYMBOLS.forEach(symbol => {
+      const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (data) => {
+        setMarketData(prev => new Map(prev).set(symbol, data));
+        setLoading(false);
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    // Monitor connection status
+    const statusInterval = setInterval(() => {
+      setConnectionStatus(coinbaseRealtimeService.getConnectionState());
+    }, 1000);
+
+    // Load initial data
+    Promise.all(
+      TRACKED_SYMBOLS.map(symbol => coinbaseRealtimeService.getMarketData(symbol))
+    ).then(results => {
+      const dataMap = new Map<string, MarketData>();
+      results.forEach((data, index) => {
+        if (data) {
+          dataMap.set(TRACKED_SYMBOLS[index], data);
+        }
+      });
+      setMarketData(dataMap);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+      clearInterval(statusInterval);
+    };
+  }, []);
+
+  const stats = Array.from(marketData.values()).slice(0, 6);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {TRACKED_SYMBOLS.map((symbol, index) => (
+          <div key={symbol} className="animate-pulse">
+            <div className="bg-card/50 border border-border/50 rounded-lg p-4">
+              <div className="h-4 bg-muted rounded w-16 mb-2"></div>
+              <div className="h-6 bg-muted rounded w-24 mb-1"></div>
+              <div className="h-3 bg-muted rounded w-20"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {stats.map((item, index) => (
-        <motion.div
-          key={item.symbol}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg p-4 hover:bg-card/70 transition-all cursor-pointer group"
-          onClick={() => window.open(`/trade?symbol=${item.symbol}`, '_blank')}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">
-              {item.symbol.replace('CRYPTO:', '').replace('NSE:', '')}
-            </span>
-            <div className={`w-2 h-2 rounded-full ${
-              item.change24hPercent >= 0 ? 'bg-green-500' : 'bg-red-500'
-            } animate-pulse`} />
-          </div>
-          <div className="space-y-1">
-            <p className="font-bold text-lg">
-              ${item.price.toLocaleString(undefined, { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 
-              })}
-            </p>
-            <p className={`text-sm flex items-center ${
-              item.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'
-            }`}>
-              {item.change24hPercent >= 0 ? (
-                <TrendingUp className="h-3 w-3 mr-1" />
-              ) : (
-                <TrendingDown className="h-3 w-3 mr-1" />
-              )}
-              {item.change24hPercent >= 0 ? '+' : ''}{item.change24hPercent.toFixed(2)}%
-            </p>
-          </div>
-          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <p className="text-xs text-muted-foreground">Click to trade</p>
-          </div>
-        </motion.div>
-      ))}
+    <div className="space-y-4">
+      {/* Connection Status */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={`${
+            connectionStatus === 'connected' ? 'text-green-500 border-green-500' : 'text-yellow-500 border-yellow-500'
+          }`}>
+            {connectionStatus === 'connected' ? (
+              <Wifi className="h-3 w-3 mr-1" />
+            ) : (
+              <WifiOff className="h-3 w-3 mr-1" />
+            )}
+            {connectionStatus === 'connected' ? 'Live' : 'Connecting...'}
+          </Badge>
+          <span className="text-sm text-muted-foreground">Coinbase WebSocket</span>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          Last update: {new Date().toLocaleTimeString()}
+        </span>
+      </div>
+
+      {/* Market Data Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {stats.map((item, index) => (
+          <motion.div
+            key={item.symbol}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg p-4 hover:bg-card/70 transition-all cursor-pointer group relative overflow-hidden"
+            onClick={() => window.open(`/crypto?symbol=${item.symbol}`, '_blank')}
+          >
+            {/* Animated background gradient */}
+            <div className={`absolute inset-0 opacity-5 ${
+              item.change24hPercent >= 0 
+                ? 'bg-gradient-to-br from-green-500 to-emerald-500' 
+                : 'bg-gradient-to-br from-red-500 to-rose-500'
+            }`} />
+            
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-muted-foreground">
+                  {item.symbol}
+                </span>
+                <div className={`w-2 h-2 rounded-full ${
+                  item.change24hPercent >= 0 ? 'bg-green-500' : 'bg-red-500'
+                } animate-pulse`} />
+              </div>
+              <div className="space-y-1">
+                <p className="font-bold text-lg">
+                  ${item.price.toLocaleString(undefined, { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: item.price < 1 ? 4 : 2
+                  })}
+                </p>
+                <div className={`text-sm flex items-center ${
+                  item.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {item.change24hPercent >= 0 ? (
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 mr-1" />
+                  )}
+                  {item.change24hPercent >= 0 ? '+' : ''}{item.change24hPercent.toFixed(2)}%
+                </div>
+              </div>
+              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="text-xs text-muted-foreground">Click to trade</p>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -274,9 +351,9 @@ const PortfolioSummary = () => {
   }, [user, supabase]);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: 'USD',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
@@ -368,7 +445,7 @@ const PortfolioSummary = () => {
         </div>
         <div className="space-y-2">
           <p className="text-3xl font-bold">
-            ₹<AnimatedCounter value={Number(walletBalance?.balance || 0)} decimals={2} />
+            $<AnimatedCounter value={Number(walletBalance?.balance || 0)} decimals={2} />
           </p>
           <p className="text-sm text-muted-foreground">
             Ready for trading
@@ -379,7 +456,7 @@ const PortfolioSummary = () => {
   );
 };
 
-// News Component with Real Data
+// Recent News Component with Real Data
 const RecentNews = () => {
   const [newsArticles, setNewsArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -524,7 +601,7 @@ const RecentActivity = () => {
         <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
         <p className="text-muted-foreground">No recent trading activity</p>
         <Button variant="outline" className="mt-4" asChild>
-          <Link href="/trade">
+          <Link href="/crypto">
             <TrendingUp className="h-4 w-4 mr-2" />
             Start Trading
           </Link>
@@ -557,12 +634,12 @@ const RecentActivity = () => {
                 {activity.type === 'buy' ? 'Bought' : 'Sold'} {activity.name}
               </p>
               <p className="text-sm text-muted-foreground">
-                {activity.quantity} {activity.symbol} @ ₹{activity.price}
+                {activity.quantity} {activity.symbol} @ ${activity.price}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="font-medium">₹{activity.amount.toFixed(2)}</p>
+            <p className="font-medium">${activity.amount.toFixed(2)}</p>
             <p className="text-xs text-muted-foreground">
               {new Date(activity.createdAt).toLocaleDateString()}
             </p>
@@ -576,51 +653,26 @@ const RecentActivity = () => {
 export default function HomePage() {
   const { user, isAuthenticated, loading } = useAuth();
   const router = useRouter();
-  const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
-  const [selectedTab, setSelectedTab] = useState('crypto');
-  const [loadingData, setLoadingData] = useState(true);
+  const [selectedCrypto, setSelectedCrypto] = useState<MarketData | null>(null);
   const { scrollY } = useScroll();
   
   // Parallax effects
   const heroY = useTransform(scrollY, [0, 500], [0, -50]);
   const heroOpacity = useTransform(scrollY, [0, 300], [1, 0.8]);
 
-  // Major symbols to track
-  const CRYPTO_SYMBOLS = ['CRYPTO:BTC', 'CRYPTO:ETH', 'CRYPTO:SOL', 'CRYPTO:MATIC', 'CRYPTO:LINK', 'CRYPTO:AVAX'];
-
+  // Get BTC data for main chart
   useEffect(() => {
-    if (!loading && isAuthenticated) {
-      // Connect to market data service
-      marketDataService.connect();
-      
-      // Subscribe to real-time updates
-      const unsubscribes = CRYPTO_SYMBOLS.map(symbol => 
-        marketDataService.subscribe(symbol, (data) => {
-          setCryptoData(prev => new Map(prev).set(symbol, data));
-          setLoadingData(false);
-        })
-      );
-      
-      // Fetch initial data
-      Promise.all(
-        CRYPTO_SYMBOLS.map(symbol => marketDataService.getMarketData(symbol))
-      ).then(results => {
-        const dataMap = new Map();
-        results.forEach((data, index) => {
-          if (data) {
-            dataMap.set(CRYPTO_SYMBOLS[index], data);
-          }
-        });
-        setCryptoData(dataMap);
-        setLoadingData(false);
-      });
+    const unsubscribe = coinbaseRealtimeService.subscribe('BTC', (data) => {
+      setSelectedCrypto(data);
+    });
 
-      return () => {
-        unsubscribes.forEach(unsub => unsub());
-        marketDataService.disconnect();
-      };
-    }
-  }, [loading, isAuthenticated]);
+    // Load initial BTC data
+    coinbaseRealtimeService.getMarketData('BTC').then(data => {
+      if (data) setSelectedCrypto(data);
+    });
+
+    return unsubscribe;
+  }, []);
 
   if (loading) {
     return (
@@ -752,36 +804,12 @@ export default function HomePage() {
               <Activity className="h-6 w-6 text-primary animate-pulse" />
               Live Market Data
             </h2>
-            <Badge variant="outline" className="text-green-500 border-green-500">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
-              Live from Coinbase
-            </Badge>
           </div>
           
-          <AnimatePresence mode="wait">
-            {loadingData ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-center py-12"
-              >
-                <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-                <p className="text-muted-foreground">Connecting to Coinbase WebSocket...</p>
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <MarketStats data={cryptoData} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <LiveMarketStats />
         </motion.section>
 
-        {/* Trading Charts Section */}
+        {/* Trading Charts Section with Real-time Data */}
         <motion.section 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
@@ -799,10 +827,19 @@ export default function HomePage() {
                 <CardTitle className="flex items-center gap-2">
                   <Bitcoin className="h-5 w-5 text-orange-500" />
                   Bitcoin (BTC/USD)
+                  {selectedCrypto && (
+                    <Badge variant="outline" className="ml-auto">
+                      ${selectedCrypto.price.toFixed(2)}
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <TradingViewWidget symbol="BTCUSD" height={400} />
+                <LiveTradingViewWidget 
+                  symbol="COINBASE:BTCUSD" 
+                  height={400} 
+                  marketData={selectedCrypto || undefined}
+                />
               </CardContent>
             </Card>
 
@@ -814,7 +851,7 @@ export default function HomePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <TradingViewWidget symbol="ETHUSD" height={400} />
+                <TradingViewAdvancedChart symbol="COINBASE:ETHUSD" height={400} />
               </CardContent>
             </Card>
           </div>
@@ -891,7 +928,7 @@ export default function HomePage() {
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-6 cursor-pointer group"
-              onClick={() => router.push('/trade')}
+              onClick={() => router.push('/crypto')}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-green-500/20 rounded-lg">
@@ -1017,7 +1054,7 @@ export default function HomePage() {
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.5, delay: 1.6 }}
                   >
-                    ₹<AnimatedCounter value={10} suffix="B+" />
+                    $<AnimatedCounter value={10} suffix="B+" />
                   </motion.div>
                   <p className="text-sm text-muted-foreground">Daily Volume</p>
                 </div>

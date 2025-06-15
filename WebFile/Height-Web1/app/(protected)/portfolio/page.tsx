@@ -1,10 +1,10 @@
-// app/(protected)/portfolio/page.tsx
+// app/(protected)/portfolio/page.tsx - Enhanced portfolio with real trading data
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { Navbar } from '@/components/navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -37,72 +37,66 @@ import {
   Download,
   Filter,
   Calendar,
-  Percent
+  Percent,
+  IndianRupee,
+  Eye,
+  EyeOff
 } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { LightweightChart } from '@/components/trading/lightweight-chart';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Tooltip, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Tooltip, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
+import { cryptoTradingService } from '@/lib/services/crypto-trading-service';
 
-interface Holding {
-  id: string;
-  symbol: string;
-  name: string;
-  quantity: number;
-  averageBuyPrice: number;
-  currentPrice: number;
-  totalInvested: number;
-  currentValue: number;
-  profitLoss: number;
-  profitLossPercentage: number;
-  allocation: number;
-  logo?: string;
+interface PortfolioSummary {
+  total_invested_inr: number;
+  current_value_inr: number;
+  total_pnl_inr: number;
+  total_pnl_percentage: number;
+  holdings_count: number;
+  inr_balance: number;
 }
 
-interface PortfolioMetrics {
-  totalValue: number;
-  totalInvested: number;
-  totalProfitLoss: number;
-  totalProfitLossPercentage: number;
-  dailyChange: number;
-  dailyChangePercentage: number;
-  cagr: number;
-  bestPerformer: Holding | null;
-  worstPerformer: Holding | null;
-  holdingsCount: number;
-  riskScore: number;
+interface CryptoHolding {
+  symbol: string;
+  balance: number;
+  average_buy_price: number;
+  current_price_usd: number;
+  current_price_inr: number;
+  current_value_inr: number;
+  total_invested_inr: number;
+  pnl_inr: number;
+  pnl_percentage: number;
+  change_24h_percent: number;
 }
 
-interface Transaction {
+interface TradeHistory {
   id: string;
-  type: 'buy' | 'sell';
   symbol: string;
-  name: string;
+  trade_type: 'buy' | 'sell';
   quantity: number;
-  price: number;
-  total: number;
-  date: string;
-  status: 'completed' | 'pending' | 'failed';
+  price_inr: number;
+  total_inr: number;
+  brokerage_fee: number;
+  net_amount: number;
+  status: string;
+  created_at: string;
 }
 
 const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
-export default function PortfolioPage() {
+export default function EnhancedPortfolioPage() {
   const { user, isAuthenticated, isInitialized } = useAuth();
   const { address, isConnected } = useAccount();
-  const { data: walletBalance } = useBalance({ address });
   const router = useRouter();
-  const supabase = createClientComponentClient();
 
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [metrics, setMetrics] = useState<PortfolioMetrics | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // State management
+  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
+  const [holdings, setHoldings] = useState<CryptoHolding[]>([]);
+  const [tradeHistory, setTradeHistory] = useState<TradeHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL'>('1M');
-  const [portfolioHistory, setPortfolioHistory] = useState<any[]>([]);
+  const [showBalances, setShowBalances] = useState(true);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -111,195 +105,48 @@ export default function PortfolioPage() {
     }
   }, [isInitialized, isAuthenticated, router]);
 
-  // Fetch portfolio data from wallet
-  const fetchWalletHoldings = useCallback(async () => {
-    if (!isConnected || !address) return [];
-
-    try {
-      const { data: dbHoldings } = await supabase
-        .from('portfolio_holdings')
-        .select('*')
-        .eq('user_id', user?.id);
-
-      if (!dbHoldings) return [];
-
-      // Fetch current prices
-      const symbols = dbHoldings.map(h => h.symbol.toLowerCase()).join(',');
-      const priceResponse = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${symbols}&vs_currencies=usd&include_24hr_change=true`
-      );
-      const prices = await priceResponse.json();
-
-      // Update holdings with current prices
-      const updatedHoldings: Holding[] = dbHoldings.map(holding => {
-        const currentPrice = prices[holding.symbol.toLowerCase()]?.usd || holding.current_price;
-        const currentValue = holding.quantity * currentPrice;
-        const profitLoss = currentValue - holding.total_invested;
-        const profitLossPercentage = (profitLoss / holding.total_invested) * 100;
-
-        return {
-          id: holding.id,
-          symbol: holding.symbol.toUpperCase(),
-          name: holding.name,
-          quantity: holding.quantity,
-          averageBuyPrice: holding.average_buy_price,
-          currentPrice,
-          totalInvested: holding.total_invested,
-          currentValue,
-          profitLoss,
-          profitLossPercentage,
-          allocation: 0, // Will be calculated after
-          logo: `https://assets.coingecko.com/coins/images/1/small/${holding.symbol.toLowerCase()}.png`
-        };
-      });
-
-      // Calculate allocations
-      const totalValue = updatedHoldings.reduce((sum, h) => sum + h.currentValue, 0);
-      updatedHoldings.forEach(h => {
-        h.allocation = (h.currentValue / totalValue) * 100;
-      });
-
-      return updatedHoldings;
-    } catch (error) {
-      console.error('Error fetching wallet holdings:', error);
-      toast.error('Failed to fetch portfolio data');
-      return [];
-    }
-  }, [isConnected, address, user, supabase]);
-
-  // Calculate portfolio metrics
-  const calculateMetrics = useCallback((holdings: Holding[]): PortfolioMetrics => {
-    const totalValue = holdings.reduce((sum, h) => sum + h.currentValue, 0);
-    const totalInvested = holdings.reduce((sum, h) => sum + h.totalInvested, 0);
-    const totalProfitLoss = totalValue - totalInvested;
-    const totalProfitLossPercentage = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
-
-    // Calculate daily change (simplified - in real app, fetch from API)
-    const dailyChange = totalValue * 0.02; // Mock 2% daily change
-    const dailyChangePercentage = 2;
-
-    // Calculate CAGR (simplified)
-    const years = 1; // Assuming 1 year for demo
-    const cagr = totalInvested > 0 ? (Math.pow(totalValue / totalInvested, 1 / years) - 1) * 100 : 0;
-
-    // Find best and worst performers
-    const sortedByPerformance = [...holdings].sort((a, b) => b.profitLossPercentage - a.profitLossPercentage);
-    const bestPerformer = sortedByPerformance[0] || null;
-    const worstPerformer = sortedByPerformance[sortedByPerformance.length - 1] || null;
-
-    // Calculate risk score (simplified)
-    const volatilities = holdings.map(h => Math.abs(h.profitLossPercentage));
-    const avgVolatility = volatilities.reduce((sum, v) => sum + v, 0) / volatilities.length;
-    const riskScore = Math.min(100, Math.max(0, avgVolatility * 2));
-
-    return {
-      totalValue,
-      totalInvested,
-      totalProfitLoss,
-      totalProfitLossPercentage,
-      dailyChange,
-      dailyChangePercentage,
-      cagr,
-      bestPerformer,
-      worstPerformer,
-      holdingsCount: holdings.length,
-      riskScore
-    };
-  }, []);
-
-  // Fetch transactions
-  const fetchTransactions = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const { data } = await supabase
-        .from('portfolio_orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (data) {
-        const formattedTransactions: Transaction[] = data.map(tx => ({
-          id: tx.id,
-          type: tx.order_type as 'buy' | 'sell',
-          symbol: tx.symbol,
-          name: tx.name,
-          quantity: tx.quantity,
-          price: tx.price,
-          total: tx.total_amount,
-          date: tx.created_at || '',
-          status: tx.status as 'completed' | 'pending' | 'failed'
-        }));
-        setTransactions(formattedTransactions);
-      }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-    }
-  }, [user, supabase]);
-
-  // Generate portfolio history data
-  const generatePortfolioHistory = useCallback((holdings: Holding[], timeframe: string) => {
-    // In a real app, fetch historical data from API
-    const days = timeframe === '1D' ? 1 : 
-                timeframe === '1W' ? 7 : 
-                timeframe === '1M' ? 30 : 
-                timeframe === '3M' ? 90 : 
-                timeframe === '1Y' ? 365 : 730;
-
-    const data = [];
-    const endValue = holdings.reduce((sum, h) => sum + h.currentValue, 0);
-    const startValue = holdings.reduce((sum, h) => sum + h.totalInvested, 0);
-
-    for (let i = 0; i <= days; i++) {
-      const progress = i / days;
-      const value = startValue + (endValue - startValue) * progress;
-      const date = new Date();
-      date.setDate(date.getDate() - (days - i));
-
-      data.push({
-        date: date.toLocaleDateString(),
-        value: value + (Math.random() - 0.5) * value * 0.05, // Add some volatility
-        timestamp: date.getTime()
-      });
-    }
-
-    return data;
-  }, []);
-
-  // Load all data
+  // Load portfolio data
   const loadPortfolioData = useCallback(async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
-      const holdingsData = await fetchWalletHoldings();
-      setHoldings(holdingsData);
-      
-      if (holdingsData.length > 0) {
-        const metricsData = calculateMetrics(holdingsData);
-        setMetrics(metricsData);
-        
-        const history = generatePortfolioHistory(holdingsData, timeframe);
-        setPortfolioHistory(history);
-      }
-      
-      await fetchTransactions();
+      const [summaryData, holdingsData, historyData] = await Promise.all([
+        cryptoTradingService.getPortfolioSummary(user.id),
+        cryptoTradingService.getUserHoldings(user.id),
+        cryptoTradingService.getTradeHistory(user.id, 50)
+      ]);
+
+      setSummary(summaryData);
+      setHoldings(
+        holdingsData.map((h: any) => ({
+          symbol: h.symbol,
+          balance: h.balance,
+          average_buy_price: h.average_buy_price ?? 0,
+          current_price_usd: h.current_price_usd ?? 0,
+          current_price_inr: h.current_price_inr ?? 0,
+          current_value_inr: h.current_value_inr ?? 0,
+          total_invested_inr: h.total_invested_inr ?? 0,
+          pnl_inr: h.pnl_inr ?? 0,
+          pnl_percentage: h.pnl_percentage ?? 0,
+          change_24h_percent: h.change_24h_percent ?? 0,
+        }))
+      );
+      setTradeHistory(historyData);
     } catch (error) {
       console.error('Error loading portfolio:', error);
       toast.error('Failed to load portfolio data');
     } finally {
       setLoading(false);
     }
-  }, [fetchWalletHoldings, calculateMetrics, generatePortfolioHistory, fetchTransactions, timeframe]);
+  }, [user]);
 
   // Initial load
   useEffect(() => {
-    if (user && isConnected) {
+    if (user) {
       loadPortfolioData();
-    } else if (user && !isConnected) {
-      // Show prompt to connect wallet
-      setLoading(false);
     }
-  }, [user, isConnected, loadPortfolioData]);
+  }, [user, loadPortfolioData]);
 
   // Refresh data
   const handleRefresh = async () => {
@@ -311,9 +158,9 @@ export default function PortfolioPage() {
 
   // Format currency
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
@@ -324,28 +171,71 @@ export default function PortfolioPage() {
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
-  // Pie chart data
-  const pieChartData = useMemo(() => {
-    return holdings.map((holding: Holding, index: number) => ({
-      name: holding.symbol,
-      value: holding.currentValue,
-      percentage: holding.allocation,
-      color: CHART_COLORS[index % CHART_COLORS.length]
-    }));
-  }, [holdings]);
+  // Pie chart data for asset allocation
+  const pieChartData = holdings.map((holding, index) => ({
+    name: holding.symbol,
+    value: holding.current_value_inr,
+    percentage: summary ? (holding.current_value_inr / summary.current_value_inr) * 100 : 0,
+    color: CHART_COLORS[index % CHART_COLORS.length]
+  }));
+
+  // Performance metrics calculation
+  const calculateMetrics = () => {
+    if (!summary || !holdings.length) return null;
+
+    const totalInvested = summary.total_invested_inr;
+    const currentValue = summary.current_value_inr;
+    const profitLoss = summary.total_pnl_inr;
+    
+    // Find best and worst performers
+    const sortedByPerformance = [...holdings].sort((a, b) => b.pnl_percentage - a.pnl_percentage);
+    const bestPerformer = sortedByPerformance[0];
+    const worstPerformer = sortedByPerformance[sortedByPerformance.length - 1];
+
+    // Calculate diversification score
+    const largestHolding = Math.max(...holdings.map(h => (h.current_value_inr / currentValue) * 100));
+    const diversificationScore = Math.max(0, 100 - largestHolding);
+
+    // Calculate risk score based on volatility
+    const volatilities = holdings.map(h => Math.abs(h.change_24h_percent));
+    const avgVolatility = volatilities.reduce((sum, v) => sum + v, 0) / volatilities.length;
+    const riskScore = Math.min(100, avgVolatility * 3);
+
+    return {
+      totalInvested,
+      currentValue,
+      profitLoss,
+      profitLossPercentage: totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0,
+      bestPerformer,
+      worstPerformer,
+      diversificationScore,
+      riskScore,
+      holdingsCount: holdings.length
+    };
+  };
+
+  const metrics = calculateMetrics();
 
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 pt-24 pb-16">
-          <Skeleton className="h-96" />
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-muted rounded w-48"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 bg-muted rounded-lg"></div>
+              ))}
+            </div>
+            <div className="h-64 bg-muted rounded-lg"></div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!isConnected) {
+  if (!summary && !loading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -353,21 +243,15 @@ export default function PortfolioPage() {
           <Card className="max-w-2xl mx-auto">
             <CardHeader className="text-center">
               <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <CardTitle>Connect Your Wallet</CardTitle>
+              <CardTitle>No Portfolio Yet</CardTitle>
               <CardDescription>
-                Connect your crypto wallet to view and manage your portfolio
+                Start trading cryptocurrencies to build your portfolio
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
-              <p className="text-sm text-muted-foreground mb-6">
-                We support Coinbase Wallet, MetaMask, and WalletConnect
-              </p>
-              <Button 
-                onClick={() => router.push('/crypto')}
-                className="gap-2"
-              >
-                <Wallet className="h-4 w-4" />
-                Go to Trading Page
+              <Button onClick={() => router.push('/crypto')} className="gap-2">
+                <Bitcoin className="h-4 w-4" />
+                Start Trading
               </Button>
             </CardContent>
           </Card>
@@ -382,7 +266,7 @@ export default function PortfolioPage() {
       
       <div className="container mx-auto px-4 pt-24 pb-16">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <PieChart className="h-8 w-8 text-primary" />
@@ -392,7 +276,14 @@ export default function PortfolioPage() {
               Track your crypto investments and performance
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-4 sm:mt-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowBalances(!showBalances)}
+            >
+              {showBalances ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -402,11 +293,7 @@ export default function PortfolioPage() {
               <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {/* Export functionality */}}
-            >
+            <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
@@ -417,95 +304,127 @@ export default function PortfolioPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-32" />
+                <div key={i} className="h-32 bg-muted rounded-lg animate-pulse"></div>
               ))}
             </div>
-            <Skeleton className="h-96" />
+            <div className="h-96 bg-muted rounded-lg animate-pulse"></div>
           </div>
-        ) : metrics && holdings.length > 0 ? (
+        ) : summary && metrics ? (
           <div className="space-y-6">
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Value</p>
-                      <p className="text-2xl font-bold">{formatCurrency(metrics.totalValue)}</p>
-                      <div className={`flex items-center gap-1 mt-1 ${metrics.dailyChangePercentage >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {metrics.dailyChangePercentage >= 0 ? (
-                          <TrendingUp className="h-4 w-4" />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0 }}
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Value</p>
+                        <p className="text-2xl font-bold">
+                          {showBalances ? formatCurrency(summary.current_value_inr) : '••••••'}
+                        </p>
+                        <div className={`flex items-center gap-1 mt-1 ${summary.total_pnl_inr >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {summary.total_pnl_inr >= 0 ? (
+                            <TrendingUp className="h-4 w-4" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4" />
+                          )}
+                          <span className="text-sm font-medium">
+                            {showBalances ? formatPercentage(summary.total_pnl_percentage) : '••••'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-3 bg-primary/10 rounded-full">
+                        <DollarSign className="h-6 w-6 text-primary" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+          
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total P&L</p>
+                        <p className={`text-2xl font-bold ${summary.total_pnl_inr >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {showBalances ? formatCurrency(Math.abs(summary.total_pnl_inr)) : '••••••'}
+                        </p>
+                        <p className={`text-sm mt-1 ${summary.total_pnl_percentage >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {showBalances ? formatPercentage(summary.total_pnl_percentage) : '••••'}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-full ${summary.total_pnl_inr >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                        {summary.total_pnl_inr >= 0 ? (
+                          <TrendingUp className="h-6 w-6 text-green-500" />
                         ) : (
-                          <TrendingDown className="h-4 w-4" />
+                          <TrendingDown className="h-6 w-6 text-red-500" />
                         )}
-                        <span className="text-sm font-medium">
-                          {formatPercentage(metrics.dailyChangePercentage)} today
-                        </span>
                       </div>
                     </div>
-                    <div className="p-3 bg-primary/10 rounded-full">
-                      <DollarSign className="h-6 w-6 text-primary" />
-                    </div>
-                  </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total P&L</p>
-                      <p className={`text-2xl font-bold ${metrics.totalProfitLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {formatCurrency(Math.abs(metrics.totalProfitLoss))}
-                      </p>
-                      <p className={`text-sm mt-1 ${metrics.totalProfitLossPercentage >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {formatPercentage(metrics.totalProfitLossPercentage)}
-                      </p>
-              </div>
-                    <div className={`p-3 rounded-full ${metrics.totalProfitLoss >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                      {metrics.totalProfitLoss >= 0 ? (
-                        <TrendingUp className="h-6 w-6 text-green-500" />
-                      ) : (
-                        <TrendingDown className="h-6 w-6 text-red-500" />
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">CAGR</p>
-                      <p className="text-2xl font-bold">{metrics.cagr.toFixed(2)}%</p>
-                      <p className="text-sm text-muted-foreground mt-1">Annual Growth</p>
-                    </div>
-                    <div className="p-3 bg-blue-500/10 rounded-full">
-                      <Percent className="h-6 w-6 text-blue-500" />
-                    </div>
-                  </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Risk Score</p>
-                      <p className="text-2xl font-bold">{metrics.riskScore.toFixed(0)}/100</p>
-                      <div className="mt-2">
-                        <Progress value={metrics.riskScore} className="h-2" />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">INR Balance</p>
+                        <p className="text-2xl font-bold">
+                          {showBalances ? formatCurrency(summary.inr_balance) : '••••••'}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">Available to trade</p>
+                      </div>
+                      <div className="p-3 bg-blue-500/10 rounded-full">
+                        <IndianRupee className="h-6 w-6 text-blue-500" />
                       </div>
                     </div>
-                    <div className="p-3 bg-orange-500/10 rounded-full">
-                      <Shield className="h-6 w-6 text-orange-500" />
+                  </CardContent>
+                </Card>
+              </motion.div>
+          
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Holdings</p>
+                        <p className="text-2xl font-bold">{summary.holdings_count}</p>
+                        <div className="mt-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Risk Score</span>
+                            <span className="text-xs font-medium">{metrics.riskScore.toFixed(0)}/100</span>
+                          </div>
+                          <Progress value={metrics.riskScore} className="h-2 mt-1" />
+                        </div>
+                      </div>
+                      <div className="p-3 bg-purple-500/10 rounded-full">
+                        <BarChart3 className="h-6 w-6 text-purple-500" />
+                      </div>
                     </div>
-                  </div>
-            </CardContent>
-          </Card>
-        </div>
-        
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
+            
             {/* Main Content Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-4">
@@ -518,210 +437,111 @@ export default function PortfolioPage() {
               {/* Overview Tab */}
               <TabsContent value="overview" className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Portfolio Chart */}
-                  <Card>
-            <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>Portfolio Value</CardTitle>
-                        <div className="flex gap-1">
-                          {(['1D', '1W', '1M', '3M', '1Y', 'ALL'] as const).map((tf: string) => (
-                            <Button
-                              key={tf}
-                              variant={timeframe === tf ? 'default' : 'ghost'}
-                              size="sm"
-                              onClick={() => setTimeframe(tf as '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL')}
-                            >
-                              {tf}
-                            </Button>
-                          ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={portfolioHistory}>
-                    <defs>
-                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis
-                      dataKey="date"
-                              stroke="#9ca3af"
-                      tick={{ fontSize: 12 }}
-                    />
-                    <YAxis
-                              stroke="#9ca3af"
-                      tick={{ fontSize: 12 }}
-                              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                                backgroundColor: '#1f2937', 
-                                border: 'none',
-                                borderRadius: '8px'
-                              }}
-                              formatter={(value: any) => formatCurrency(value)}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                              stroke="#10b981"
-                      fillOpacity={1}
-                      fill="url(#colorValue)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-                  {/* Asset Allocation */}
+                  {/* Portfolio Chart */}
                   <Card>
                     <CardHeader>
                       <CardTitle>Asset Allocation</CardTitle>
-                      <CardDescription>Portfolio distribution by asset</CardDescription>
+                      <CardDescription>Portfolio distribution by cryptocurrency</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPie>
-                            <Pie
-                              data={pieChartData}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={({ name, percentage }: { name: string; percentage: number }) => `${name} ${percentage.toFixed(1)}%`}
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              {pieChartData.map((entry: any, index: number) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                          </RechartsPie>
-                        </ResponsiveContainer>
-                      </div>
+                      {pieChartData.length > 0 ? (
+                        <div className="h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RechartsPie>
+                              <Pie
+                                data={pieChartData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={({ name, percentage }) => `${name} ${percentage.toFixed(1)}%`}
+                                outerRadius={80}
+                                fill="#8884d8"
+                                dataKey="value"
+                              >
+                                {pieChartData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                              <Legend />
+                            </RechartsPie>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                          <div className="text-center">
+                            <PieChart className="h-12 w-12 mx-auto mb-4" />
+                            <p>No holdings to display</p>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
-                </div>
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Performance Summary */}
                   <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">Best Performer</CardTitle>
+                    <CardHeader>
+                      <CardTitle>Performance Summary</CardTitle>
+                      <CardDescription>Key portfolio metrics</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                       {metrics.bestPerformer && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                              <TrendingUp className="h-4 w-4 text-green-500" />
-                            </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-green-600 mb-2">Best Performer</h4>
+                          <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
                             <div>
                               <p className="font-medium">{metrics.bestPerformer.symbol}</p>
-                              <p className="text-sm text-muted-foreground">{metrics.bestPerformer.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {metrics.bestPerformer.balance.toFixed(6)} coins
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-green-600 font-medium">
+                                {formatPercentage(metrics.bestPerformer.pnl_percentage)}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {formatCurrency(metrics.bestPerformer.pnl_inr)}
+                              </p>
                             </div>
                           </div>
-                          <p className="text-green-500 font-medium">
-                            {formatPercentage(metrics.bestPerformer.profitLossPercentage)}
-                          </p>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
 
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">Worst Performer</CardTitle>
-                    </CardHeader>
-                    <CardContent>
                       {metrics.worstPerformer && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
-                              <TrendingDown className="h-4 w-4 text-red-500" />
-                            </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-red-600 mb-2">Worst Performer</h4>
+                          <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/20 rounded-lg">
                             <div>
                               <p className="font-medium">{metrics.worstPerformer.symbol}</p>
-                              <p className="text-sm text-muted-foreground">{metrics.worstPerformer.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {metrics.worstPerformer.balance.toFixed(6)} coins
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-red-600 font-medium">
+                                {formatPercentage(metrics.worstPerformer.pnl_percentage)}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {formatCurrency(metrics.worstPerformer.pnl_inr)}
+                              </p>
                             </div>
                           </div>
-                          <p className="text-red-500 font-medium">
-                            {formatPercentage(metrics.worstPerformer.profitLossPercentage)}
-                          </p>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
 
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">Portfolio Health</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Diversification</span>
-                          <Badge variant={holdings.length >= 5 ? 'default' : 'secondary'}>
-                            <span>{holdings.length >= 5 ? 'Good' : 'Low'}</span>
-                          </Badge>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-muted/50 rounded-lg">
+                          <p className="text-sm text-muted-foreground">Diversification</p>
+                          <p className="text-lg font-medium">{metrics.diversificationScore.toFixed(0)}/100</p>
+                          <Progress value={metrics.diversificationScore} className="h-2 mt-1" />
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Risk Level</span>
-                          <Badge variant={metrics.riskScore < 50 ? 'default' : 'destructive'}>
-                            <span>{metrics.riskScore < 30 ? 'Low' : metrics.riskScore < 70 ? 'Medium' : 'High'}</span>
-                          </Badge>
+                        <div className="p-3 bg-muted/50 rounded-lg">
+                          <p className="text-sm text-muted-foreground">Holdings Count</p>
+                          <p className="text-lg font-medium">{metrics.holdingsCount}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {metrics.holdingsCount >= 5 ? 'Well diversified' : 'Consider diversifying'}
+                          </p>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Coming Soon Sections */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card className="border-dashed">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">Stocks Portfolio</CardTitle>
-                        <Badge variant="secondary">
-                          <span>Coming Soon</span>
-                        </Badge>
-                      </div>
-                      <CardDescription>Track your stock market investments</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center py-8">
-                        <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-sm text-muted-foreground">
-                          Stock trading integration will be available soon
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-dashed">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">Mutual Funds</CardTitle>
-                        <Badge variant="secondary">
-                          <span>Coming Soon</span>
-                        </Badge>
-                      </div>
-                      <CardDescription>Manage your mutual fund investments</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center py-8">
-                        <LineChart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-sm text-muted-foreground">
-                          Mutual funds integration will be available soon
-                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -731,66 +551,79 @@ export default function PortfolioPage() {
               {/* Holdings Tab */}
               <TabsContent value="holdings">
                 <Card>
-          <CardHeader>
+                  <CardHeader>
                     <CardTitle>Current Holdings</CardTitle>
                     <CardDescription>Your cryptocurrency positions</CardDescription>
-          </CardHeader>
-          <CardContent>
-              <div className="overflow-x-auto">
-                      <table className="w-full">
-                  <thead>
-                          <tr className="border-b">
-                            <th className="text-left p-4">Asset</th>
-                            <th className="text-right p-4">Quantity</th>
-                            <th className="text-right p-4">Avg Buy Price</th>
-                            <th className="text-right p-4">Current Price</th>
-                            <th className="text-right p-4">Current Value</th>
-                            <th className="text-right p-4">P&L</th>
-                            <th className="text-right p-4">Allocation</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                          {holdings.map((holding: Holding) => (
-                            <motion.tr
-                              key={holding.id}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              className="border-b hover:bg-muted/50 transition-colors"
-                            >
-                              <td className="p-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                                    <Bitcoin className="h-4 w-4" />
-                                  </div>
-                          <div>
-                            <p className="font-medium">{holding.symbol}</p>
-                                    <p className="text-sm text-muted-foreground">{holding.name}</p>
-                                  </div>
-                          </div>
-                        </td>
-                              <td className="text-right p-4">{holding.quantity.toFixed(4)}</td>
-                              <td className="text-right p-4">{formatCurrency(holding.averageBuyPrice)}</td>
-                              <td className="text-right p-4">{formatCurrency(holding.currentPrice)}</td>
-                              <td className="text-right p-4 font-medium">{formatCurrency(holding.currentValue)}</td>
-                              <td className="text-right p-4">
-                                <div className={holding.profitLoss >= 0 ? 'text-green-500' : 'text-red-500'}>
-                                  <p className="font-medium">{formatCurrency(Math.abs(holding.profitLoss))}</p>
-                                  <p className="text-sm">{formatPercentage(holding.profitLossPercentage)}</p>
+                  </CardHeader>
+                  <CardContent>
+                    {holdings.length > 0 ? (
+                      <div className="space-y-4">
+                        {holdings.map((holding, index) => (
+                          <motion.div
+                            key={holding.symbol}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold">
+                                  {holding.symbol.substring(0, 2)}
                                 </div>
-                        </td>
-                              <td className="text-right p-4">
-                                <div className="flex items-center justify-end gap-2">
-                                  <span>{holding.allocation.toFixed(1)}%</span>
-                                  <div className="w-16">
-                                    <Progress value={holding.allocation} className="h-2" />
-                                  </div>
+                                <div>
+                                  <p className="font-medium">{holding.symbol}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {holding.balance.toFixed(8)} coins
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Avg: {formatCurrency(holding.average_buy_price)}
+                                  </p>
                                 </div>
-                        </td>
-                            </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium text-lg">
+                                  {showBalances ? formatCurrency(holding.current_value_inr) : '••••••'}
+                                </p>
+                                <p className={`text-sm ${holding.pnl_inr >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                  {showBalances ? (
+                                    <>
+                                      {formatPercentage(holding.pnl_percentage)} ({formatCurrency(holding.pnl_inr)})
+                                    </>
+                                  ) : '••••••'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Current: {formatCurrency(holding.current_price_inr)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                                <span>Allocation</span>
+                                <span>{((holding.current_value_inr / summary.current_value_inr) * 100).toFixed(1)}%</span>
+                              </div>
+                              <Progress 
+                                value={(holding.current_value_inr / summary.current_value_inr) * 100} 
+                                className="h-2" 
+                              />
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <p className="text-muted-foreground">No holdings yet</p>
+                        <Button 
+                          variant="outline" 
+                          className="mt-4" 
+                          onClick={() => router.push('/crypto')}
+                        >
+                          <Bitcoin className="h-4 w-4 mr-2" />
+                          Start Trading
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -798,49 +631,26 @@ export default function PortfolioPage() {
               {/* Performance Tab */}
               <TabsContent value="performance" className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Performance Chart */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>Performance Analysis</CardTitle>
+                      <CardTitle>Performance Metrics</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Total Return</span>
-                            <span className={`font-medium ${metrics.totalProfitLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                              {formatCurrency(Math.abs(metrics.totalProfitLoss))}
-                            </span>
-                          </div>
-                          <Progress 
-                            value={Math.abs(metrics.totalProfitLossPercentage)} 
-                            className="h-2"
-                          />
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Total Return</span>
+                          <span className={`font-medium ${summary.total_pnl_inr >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {showBalances ? formatCurrency(Math.abs(summary.total_pnl_inr)) : '••••••'}
+                          </span>
                         </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">CAGR</span>
-                            <span className="font-medium">{metrics.cagr.toFixed(2)}%</span>
-                          </div>
-                          <Progress value={metrics.cagr} className="h-2" />
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Win Rate</span>
-                            <span className="font-medium">
-                              {((holdings.filter((h: Holding) => h.profitLoss >= 0).length / holdings.length) * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <Progress 
-                            value={(holdings.filter((h: Holding) => h.profitLoss >= 0).length / holdings.length) * 100} 
-                            className="h-2" 
-                          />
-                        </div>
-              </div>
-          </CardContent>
-        </Card>
-        
-                  {/* Risk Analysis */}
+                        <Progress 
+                          value={Math.min(100, Math.abs(summary.total_pnl_percentage))} 
+                          className="h-2"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   <Card>
                     <CardHeader>
                       <CardTitle>Risk Analysis</CardTitle>
@@ -857,19 +667,13 @@ export default function PortfolioPage() {
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-muted-foreground">Volatility</span>
                             <Badge variant={metrics.riskScore < 50 ? 'default' : 'destructive'}>
-                              <span>{metrics.riskScore < 30 ? 'Low' : metrics.riskScore < 70 ? 'Medium' : 'High'}</span>
+                              {metrics.riskScore < 30 ? 'Low' : metrics.riskScore < 70 ? 'Medium' : 'High'}
                             </Badge>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Concentration Risk</span>
-                            <Badge variant={holdings[0]?.allocation < 50 ? 'default' : 'destructive'}>
-                              <span>{holdings[0]?.allocation < 50 ? 'Balanced' : 'High'}</span>
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Market Exposure</span>
-                            <Badge>
-                              <span>Crypto Only</span>
+                            <span className="text-sm text-muted-foreground">Diversification</span>
+                            <Badge variant={metrics.diversificationScore > 70 ? 'default' : 'secondary'}>
+                              {metrics.diversificationScore > 70 ? 'Good' : 'Needs Improvement'}
                             </Badge>
                           </div>
                         </div>
@@ -877,120 +681,83 @@ export default function PortfolioPage() {
                     </CardContent>
                   </Card>
                 </div>
-
-                {/* Individual Asset Performance */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Individual Asset Performance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {holdings.map((holding: Holding) => (
-                        <div key={holding.id} className="p-4 border rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-3">
-                              <Bitcoin className="h-6 w-6 text-orange-500" />
-                              <div>
-                                <p className="font-medium">{holding.name}</p>
-                                <p className="text-sm text-muted-foreground">{holding.symbol}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className={`font-medium ${holding.profitLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                {formatPercentage(holding.profitLossPercentage)}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {formatCurrency(holding.profitLoss)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="h-[100px]">
-                            <LightweightChart 
-                              symbol={holding.symbol.toLowerCase()} 
-                              height={100}
-                              showVolume={false}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
               </TabsContent>
 
               {/* Transactions Tab */}
               <TabsContent value="transactions">
-        <Card>
-          <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Transaction History</CardTitle>
-                      <Button variant="outline" size="sm">
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filter
-                      </Button>
-                    </div>
-          </CardHeader>
-          <CardContent>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Transaction History</CardTitle>
+                    <CardDescription>Your recent cryptocurrency trades</CardDescription>
+                  </CardHeader>
+                  <CardContent>
                     <ScrollArea className="h-[600px]">
-                      <div className="space-y-2">
-                        {transactions.map((tx: Transaction) => (
-                          <div
-                            key={tx.id}
-                            className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-full ${
-                                  tx.type === 'buy' ? 'bg-green-500/10' : 'bg-red-500/10'
-                                }`}>
-                                  {tx.type === 'buy' ? (
-                                    <ArrowDownRight className="h-4 w-4 text-green-500" />
-                                  ) : (
-                                    <ArrowUpRight className="h-4 w-4 text-red-500" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                                    {tx.type === 'buy' ? 'Bought' : 'Sold'} {tx.quantity} {tx.symbol}
+                      {tradeHistory.length > 0 ? (
+                        <div className="space-y-2">
+                          {tradeHistory.map((trade, index) => (
+                            <motion.div
+                              key={trade.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                              className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-full ${
+                                    trade.trade_type === 'buy' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
+                                  }`}>
+                                    {trade.trade_type === 'buy' ? (
+                                      <ArrowDownRight className="h-4 w-4" />
+                                    ) : (
+                                      <ArrowUpRight className="h-4 w-4" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">
+                                      {trade.trade_type === 'buy' ? 'Bought' : 'Sold'} {trade.quantity.toFixed(8)} {trade.symbol}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      @ {formatCurrency(trade.price_inr)} • Fee: {formatCurrency(trade.brokerage_fee)}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(trade.created_at).toLocaleString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-medium">
+                                    {showBalances ? formatCurrency(trade.net_amount) : '••••••'}
                                   </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {new Date(tx.date).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                                <p className="font-medium">{formatCurrency(tx.total)}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  @ {formatCurrency(tx.price)}
-                                </p>
+                                  <Badge variant={trade.status === 'completed' ? 'default' : 'secondary'}>
+                                    {trade.status}
+                                  </Badge>
+                                </div>
                               </div>
-                    </div>
-                  </div>
-                ))}
-                      </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                          <p className="text-muted-foreground">No transactions yet</p>
+                          <Button 
+                            variant="outline" 
+                            className="mt-4"
+                            onClick={() => router.push('/crypto')}
+                          >
+                            <Activity className="h-4 w-4 mr-2" />
+                            Start Trading
+                          </Button>
+                        </div>
+                      )}
                     </ScrollArea>
                   </CardContent>
                 </Card>
               </TabsContent>
             </Tabs>
-              </div>
-            ) : (
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader className="text-center">
-                <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <CardTitle>No Holdings Yet</CardTitle>
-              <CardDescription>
-                Start building your portfolio by purchasing cryptocurrencies
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button onClick={() => router.push('/crypto')} className="gap-2">
-                <Bitcoin className="h-4 w-4" />
-                Start Trading
-                </Button>
-          </CardContent>
-        </Card>
-        )}
+          </div>
+        ) : null}
       </div>
     </main>
   );

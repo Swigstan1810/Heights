@@ -426,3 +426,292 @@
     }
   }
 }
+
+/* Enhanced mobile-first responsive design */
+@media (max-width: 640px) {
+  /* Container adjustments */
+  .container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Card adjustments for mobile */
+  .card {
+    margin-bottom: 1rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .card-header {
+    padding: 1rem !important;
+  }
+
+  .card-content {
+    padding: 1rem !important;
+  }
+
+  /* Typography adjustments */
+  h1 {
+    font-size: 2rem !important;
+    line-height: 2.25rem !important;
+  }
+
+  h2 {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
+
+  h3 {
+    font-size: 1.25rem !important;
+    line-height: 1.75rem !important;
+  }
+
+  /* Button adjustments */
+  .btn {
+    min-height: 44px; /* Minimum touch target size */
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+  }
+
+  .btn-sm {
+    min-height: 36px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  /* Input adjustments */
+  input, textarea, select {
+    min-height: 44px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  /* Navigation adjustments */
+  .navbar {
+    padding: 0.75rem 1rem;
+  }
+
+  .navbar-brand {
+    font-size: 1.25rem;
+  }
+
+  /* Trading interface adjustments */
+  .trading-interface {
+    padding: 1rem;
+  }
+
+  .market-stats {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .market-stat-card {
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  /* Portfolio grid adjustments */
+  .portfolio-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* Chart container adjustments */
+  .chart-container {
+    height: 300px !important;
+    margin: 0 -1rem;
+    border-radius: 0;
+  }
+
+  /* Table adjustments */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    min-width: 600px;
+  }
+
+  .table th,
+  .table td {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  /* Modal adjustments */
+  .modal {
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    padding: 1rem;
+  }
+
+  .modal-content {
+    padding: 1rem;
+  }
+
+  /* Form adjustments */
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Tabs adjustments */
+  .tabs-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs-trigger {
+    white-space: nowrap;
+    min-width: fit-content;
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+
+  .market-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .portfolio-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+
+  .chart-container {
+    height: 400px !important;
+  }
+}
+
+/* Touch-friendly interactions */
+@media (hover: none) and (pointer: coarse) {
+  .hover\:bg-accent:hover {
+    background-color: initial;
+  }
+
+  .group:hover .group-hover\:opacity-100 {
+    opacity: initial;
+  }
+
+  /* Make sure interactive elements are touch-friendly */
+  button, [role="button"], .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Improve scroll performance */
+  .scroll-smooth {
+    scroll-behavior: auto;
+  }
+  
+  /* Reduce motion for battery saving */
+  .animate-spin {
+    animation-duration: 2s;
+  }
+  
+  .animate-pulse {
+    animation-duration: 3s;
+  }
+}
+
+/* Enhanced focus styles for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary));
+}
+
+/* Loading states */
+.loading-skeleton {
+  background: linear-gradient(90deg, 
+    hsl(var(--muted)) 25%, 
+    hsl(var(--muted-foreground) / 0.1) 50%, 
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Improved touch feedback */
+.touch-feedback {
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.touch-feedback:active {
+  transform: scale(0.98);
+  opacity: 0.8;
+}
+
+/* Safe area adjustments for mobile devices */
+@supports (padding: max(0px)) {
+  .safe-area-inset-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .safe-area-inset-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  .safe-area-inset-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  
+  .safe-area-inset-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
