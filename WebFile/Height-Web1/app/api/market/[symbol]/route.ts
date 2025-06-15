@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchMarketData, fetchHistoricalData } from '@/lib/market-data-api';
+import { coinbaseRealtimeService } from '@/lib/services/coinbase-realtime-service';
 
 export async function GET(
   request: Request,
@@ -14,13 +14,11 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '30', 10);
     
     // Fetch current market data
-    const marketData = await fetchMarketData(symbol, type);
+    const marketData = await coinbaseRealtimeService.getMarketData(symbol);
     
-    // If requested, add historical data
-    if (includeHistorical) {
-      const historicalData = await fetchHistoricalData(symbol, type, interval, limit);
-      marketData.historical = historicalData;
-    }
+    // If requested, add historical data (if available)
+    // const historicalData = await coinbaseRealtimeService.getHistoricalData(symbol, interval, limit);
+    // marketData.historical = historicalData;
     
     return NextResponse.json(marketData);
     

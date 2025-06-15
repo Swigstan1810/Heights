@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/navbar";
-import { marketDataService, type MarketData } from '@/lib/market-data';
+import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -175,10 +175,9 @@ export default function Home() {
   // 2. Add request caching and subscribe only to 3 major crypto pairs
   useEffect(() => {
     const controller = new AbortController();
-    marketDataService.connect();
-    const symbols = ['CRYPTO:BTC', 'CRYPTO:ETH', 'CRYPTO:BNB'];
+    const symbols = ['BTC', 'ETH', 'BNB'];
     const unsubscribes = symbols.map(symbol => 
-      marketDataService.subscribe(symbol, (data) => {
+      coinbaseRealtimeService.subscribe(symbol, (data: MarketData) => {
         setCryptoData(prev => new Map(prev).set(symbol, data));
         setLoadingCrypto(false);
       })

@@ -35,7 +35,7 @@ import {
   WifiOff
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import TradingViewWidget, { TradingViewAdvancedChart } from '@/components/trading/tradingview-widget';
+import TradingViewWidget from '@/components/trading/tradingview-widget';
 import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
 
 interface CryptoData {
@@ -765,7 +765,7 @@ export default function CryptoPage() {
                       {/* Chart Tab */}
                       <TabsContent value="chart" className="p-0">
                         <div className="h-[600px] w-full">
-                          <TradingViewAdvancedChart
+                          <TradingViewWidget
                             symbol={`COINBASE:${selectedCrypto.symbol}USD`}
                             height={600}
                           />

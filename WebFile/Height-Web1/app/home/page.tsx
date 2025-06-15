@@ -52,7 +52,8 @@ import {
   WifiOff
 } from "lucide-react";
 import Link from 'next/link';
-import TradingViewWidget, { TradingViewAdvancedChart, TradingViewMiniChart } from '@/components/trading/tradingview-widget';
+import TradingViewWidget from '@/components/trading/tradingview-widget';
+import TradingViewAdvancedChart from '@/components/trading/tradingview-widget';
 
 // Enhanced TradingView Widget Component with real-time symbol updates
 const LiveTradingViewWidget = ({ symbol, height = 400, marketData }: {
@@ -76,8 +77,6 @@ const LiveTradingViewWidget = ({ symbol, height = 400, marketData }: {
       <TradingViewAdvancedChart
         symbol={displaySymbol}
         height={height}
-        interval="1D"
-        studies={["RSI@tv-basicstudies"]}
       />
       {marketData && (
         <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm rounded-lg p-2 border">

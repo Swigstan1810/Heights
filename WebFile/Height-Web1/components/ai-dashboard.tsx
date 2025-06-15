@@ -1,4 +1,4 @@
-// components/ai-dashboard.tsx - Fully Responsive Design
+// components/ai-dashboard.tsx - Mobile-Optimized Responsive Design
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -72,6 +72,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useMarketData } from '@/hooks/use-market-data';
 
 // Message Interface
 interface Message {
@@ -195,12 +196,12 @@ export default function EnhancedAIDashboard() {
     responseTime: 0,
     activeAlerts: 0
   });
-  const [marketData, setMarketData] = useState<MarketDataPoint[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const { data: marketDataMap, loading: isLoadingData } = useMarketData({ symbols: ['BTC', 'ETH', 'SOL', 'MATIC', 'AAPL', 'GOOGL', 'TSLA'] });
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const supabase = createClientComponentClient();
 
   // Initialize with welcome message
@@ -210,7 +211,7 @@ export default function EnhancedAIDashboard() {
       role: 'assistant',
       content: `👋 **Welcome to Heights AI Investment Assistant!**
 
-I'm powered by Claude AI and Perplexity to provide you with:
+I'm powered by Heights + to provide you with:
 
 📊 **Real-time Market Analysis** - Live prices and trends
 💡 **Investment Insights** - AI-powered recommendations
@@ -230,23 +231,41 @@ How can I help you today?`,
     setMessages([welcomeMessage]);
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom with better mobile handling
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        });
+      }
+    };
+    
+    // Delay scroll on mobile to account for keyboard
+    const isMobile = window.innerWidth < 768;
+    const delay = isMobile ? 300 : 100;
+    
+    const timer = setTimeout(scrollToBottom, delay);
+    return () => clearTimeout(timer);
   }, [messages]);
 
-  // Fetch market data (mock for now)
+  // Handle viewport height changes on mobile
   useEffect(() => {
-    // Mock market data
-    setMarketData([
-      { symbol: 'BTC', price: 45234.56, changePercent: 2.34, source: 'crypto' },
-      { symbol: 'ETH', price: 2456.78, changePercent: -1.23, source: 'crypto' },
-      { symbol: 'AAPL', price: 178.45, changePercent: 0.56, source: 'stock' },
-      { symbol: 'GOOGL', price: 142.34, changePercent: 1.78, source: 'stock' },
-      { symbol: 'TSLA', price: 234.56, changePercent: -2.34, source: 'stock' },
-      { symbol: 'SOL', price: 98.76, changePercent: 5.67, source: 'crypto' },
-    ]);
-    setIsLoadingData(false);
+    const handleResize = () => {
+      // Update CSS custom property for mobile viewport height
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
   // Send message function
@@ -342,9 +361,9 @@ How can I help you today?`,
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6 group`}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6 group px-2 sm:px-0`}
       >
-        <div className={`max-w-[90%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`w-full max-w-[85%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
           <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg ${
             isUser
@@ -359,7 +378,7 @@ How can I help you today?`,
           </div>
 
           {/* Message Content */}
-          <div className={`rounded-xl sm:rounded-2xl shadow-lg max-w-full ${
+          <div className={`rounded-xl sm:rounded-2xl shadow-lg w-full ${
             isUser
               ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white'
               : 'bg-card border border-border'
@@ -382,33 +401,33 @@ How can I help you today?`,
             )}
 
             {/* Message Body */}
-            <div className="px-3 sm:px-4 py-2 sm:py-3">
-              <div className="prose prose-sm dark:prose-invert max-w-none text-xs sm:text-sm">
+            <div className="px-3 sm:px-4 py-3 sm:py-4">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-sm sm:text-base leading-relaxed">
                 {message.content.split('\n').map((line, i) => (
-                  <p key={i} className="mb-1 sm:mb-2 last:mb-0">{line}</p>
+                  <p key={i} className="mb-2 last:mb-0 break-words">{line}</p>
                 ))}
               </div>
             </div>
 
             {/* Message Actions */}
             {!isUser && (
-              <div className="px-3 sm:px-4 pb-2 sm:pb-3 pt-1 sm:pt-2 border-t border-border/10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex items-center gap-1 sm:gap-2">
+              <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1 border-t border-border/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 sm:h-7 text-[10px] sm:text-xs px-2"
+                    className="h-7 sm:h-8 text-xs px-2 sm:px-3"
                     onClick={() => copyToClipboard(message.content, message.id)}
                   >
                     {copiedMessageId === message.id ? (
-                      <Check className="h-3 w-3 mr-0.5 sm:mr-1" />
+                      <Check className="h-3 w-3 mr-1" />
                     ) : (
-                      <Copy className="h-3 w-3 mr-0.5 sm:mr-1" />
+                      <Copy className="h-3 w-3 mr-1" />
                     )}
                     Copy
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 sm:h-7 text-[10px] sm:text-xs px-2">
-                    <Share2 className="h-3 w-3 mr-0.5 sm:mr-1" />
+                  <Button size="sm" variant="ghost" className="h-7 sm:h-8 text-xs px-2 sm:px-3">
+                    <Share2 className="h-3 w-3 mr-1" />
                     Share
                   </Button>
                 </div>
@@ -459,44 +478,52 @@ How can I help you today?`,
           Live Market
         </h3>
         <div className="space-y-1.5 sm:space-y-2">
-          {marketData.length > 0 ? (
-            marketData.slice(0, 8).map((asset, idx) => (
-              <div key={idx} className="flex items-center justify-between p-2 sm:p-3 bg-background rounded-lg">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                    asset.source === 'crypto' ? 'bg-orange-500' : 'bg-blue-500'
-                  }`} />
-                  <span className="font-medium text-xs sm:text-sm">{asset.symbol}</span>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-xs sm:text-sm">${asset.price.toFixed(2)}</p>
-                  <p className={cn(
-                    "text-[10px] sm:text-xs",
-                    asset.changePercent >= 0 ? "text-green-600" : "text-red-600"
-                  )}>
-                    {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-            ))
-          ) : (
+          {isLoadingData ? (
             <div className="text-center py-6 sm:py-8">
               <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
               <p className="text-xs sm:text-sm text-muted-foreground">Loading market data...</p>
             </div>
+          ) : (
+            (() => {
+              const validAssets = Array.from(marketDataMap.values()).filter(
+                asset => typeof asset.price === 'number' && typeof asset.change24hPercent === 'number'
+              );
+              if (validAssets.length === 0) {
+                return <div className="text-center py-6 text-muted-foreground text-xs">No market data available</div>;
+              }
+              return validAssets.slice(0, 8).map((asset, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 sm:p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
+                      ['BTC','ETH','SOL','MATIC'].includes(asset.symbol) ? 'bg-orange-500' : 'bg-blue-500'
+                    }`} />
+                    <span className="font-medium text-xs sm:text-sm">{asset.symbol}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-xs sm:text-sm">${asset.price.toFixed(2)}</p>
+                    <p className={cn(
+                      "text-[10px] sm:text-xs",
+                      asset.change24hPercent >= 0 ? "text-green-600" : "text-red-600"
+                    )}>
+                      {asset.change24hPercent >= 0 ? '+' : ''}{asset.change24hPercent.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+              ));
+            })()
           )}
         </div>
       </div>
 
       {/* Resources */}
       <div className="p-3 sm:p-4 border-t">
-        <div className="space-y-1">
-          <Button variant="ghost" size="sm" className="w-full justify-start text-xs sm:text-sm">
-            <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-            User Guide
+        <div className="space-y-2">
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
+            <BookOpen className="h-3 w-3 mr-2" />
+            Help & Docs
           </Button>
-          <Button variant="ghost" size="sm" className="w-full justify-start text-xs sm:text-sm">
-            <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
+            <Settings className="h-3 w-3 mr-2" />
             Settings
           </Button>
         </div>
@@ -505,9 +532,9 @@ How can I help you today?`,
   );
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-background flex flex-col">
-      {/* Top Header */}
-      <div className="border-b bg-card/50 backdrop-blur-sm">
+    <div className="h-screen max-h-screen overflow-hidden bg-background flex flex-col" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+      {/* Top Header - Fixed */}
+      <div className="flex-shrink-0 border-b bg-card/50 backdrop-blur-sm z-10">
         <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -534,8 +561,8 @@ How can I help you today?`,
                 <HeightsLogo size="md" className="sm:hidden" />
                 <HeightsLogo size="lg" className="hidden sm:block" />
                 <div>
-                  <h1 className="text-base sm:text-xl font-bold">AI Investment Hub</h1>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">Powered by Claude & Perplexity</p>
+                  <h1 className="text-base sm:text-xl font-bold">Heights AI</h1>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Powered by Heights +</p>
                 </div>
               </div>
             </div>
@@ -544,26 +571,26 @@ How can I help you today?`,
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="hidden sm:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 bg-green-500/10 text-green-600 rounded-full text-xs sm:text-sm">
                 <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse" />
-                Live
+                Live Indicators
               </div>
-              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs">Claude AI</Badge>
-              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs">Perplexity</Badge>
+              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs">Heights</Badge>
+              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs">+</Badge>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Desktop Sidebar */}
         <div className="hidden lg:flex w-[320px] xl:w-[360px] border-r bg-card/50 backdrop-blur-sm flex-col">
           <SidebarContent />
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-background">
-          {/* Mode Tabs */}
-          <div className="border-b">
+        <div className="flex-1 min-w-0 flex flex-col bg-background">
+          {/* Mode Tabs - Fixed */}
+          <div className="flex-shrink-0 border-b z-10">
             <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full">
               <TabsList className="w-full h-10 sm:h-12 rounded-none bg-transparent border-b-0 p-0">
                 <TabsTrigger 
@@ -601,8 +628,8 @@ How can I help you today?`,
             </Tabs>
           </div>
 
-          {/* Tab Content */}
-          <div className="flex-1 overflow-hidden">
+          {/* Tab Content - Scrollable */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <Tabs value={activeMode} className="h-full">
               {/* Investment Tab */}
               <TabsContent value="investment" className="h-full m-0 p-0">
@@ -610,186 +637,200 @@ How can I help you today?`,
               </TabsContent>
 
               {/* Chat Tab */}
-              <TabsContent value="chat" className="h-full m-0 p-0">
-                <div className="h-full flex flex-col">
-                  {/* Messages Area */}
-                  <ScrollArea className="flex-1 px-3 sm:px-4 lg:px-8">
-                    <div className="max-w-2xl lg:max-w-4xl mx-auto py-4 sm:py-6">
-                      {messages.length === 1 && (
-                        <div className="text-center py-6 sm:py-12">
-                          <Brain className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
-                          <h3 className="text-base sm:text-lg font-semibold mb-2">Start a conversation</h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
-                          
-                          {/* Suggested Prompts */}
-                          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
-                            {SUGGESTED_PROMPTS.map((prompt, idx) => (
-                              <Button
-                                key={idx}
-                                variant="outline"
-                                size="sm"
-                                onClick={() => sendMessage(prompt)}
-                                className="text-[10px] sm:text-xs h-7 sm:h-8"
-                              >
-                                {prompt}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <AnimatePresence>
-                        {messages.map(renderMessage)}
-                      </AnimatePresence>
-
-                      {isLoading && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex justify-start mb-4 sm:mb-6"
-                        >
-                          <div className="max-w-[90%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3">
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                              <HeightsLogo size="sm" className="text-white" animate={false} />
+              <TabsContent value="chat" className="h-full m-0 p-0 flex flex-col">
+                {/* Messages Area - Flexible height with proper scrolling */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <div 
+                    ref={messagesContainerRef}
+                    className="h-full overflow-y-auto overscroll-behavior-contain"
+                    style={{ 
+                      WebkitOverflowScrolling: 'touch',
+                      scrollBehavior: 'smooth'
+                    }}
+                  >
+                    <div className="min-h-full flex flex-col justify-end">
+                      <div className="w-full max-w-4xl mx-auto py-4 sm:py-6">
+                        {messages.length === 1 && (
+                          <div className="text-center py-6 sm:py-12 px-4">
+                            <Brain className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+                            <h3 className="text-base sm:text-lg font-semibold mb-2">Start a conversation</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
+                            
+                            {/* Suggested Prompts */}
+                            <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
+                              {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                                <Button
+                                  key={idx}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => sendMessage(prompt)}
+                                  className="text-[10px] sm:text-xs h-7 sm:h-8"
+                                >
+                                  {prompt}
+                                </Button>
+                              ))}
                             </div>
-                            <div className="bg-card border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3">
-                              <div className="flex items-center gap-2">
-                                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                                <span className="text-xs sm:text-sm text-muted-foreground">Analyzing...</span>
+                          </div>
+                        )}
+                        
+                        <AnimatePresence>
+                          {messages.map(renderMessage)}
+                        </AnimatePresence>
+
+                        {isLoading && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex justify-start mb-4 sm:mb-6 px-2 sm:px-0"
+                          >
+                            <div className="w-full max-w-[85%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
+                                <HeightsLogo size="sm" className="text-white" animate={false} />
+                              </div>
+                              <div className="bg-card border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-3 sm:py-4">
+                                <div className="flex items-center gap-2">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-sm text-muted-foreground">Analyzing...</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      )}
-                      
-                      <div ref={messagesEndRef} />
-                    </div>
-                  </ScrollArea>
-
-                  {/* Input Area */}
-                  <div className="border-t bg-card/50 backdrop-blur-sm p-3 sm:p-4">
-                    <div className="max-w-2xl lg:max-w-4xl mx-auto">
-                      {/* Quick Actions Bar - Horizontal scroll on mobile */}
-                      <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 sm:pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
-                        {QUICK_ACTIONS.slice(0, 4).map((action) => (
-                          <Button
-                            key={action.id}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => sendMessage(action.prompt)}
-                            disabled={isLoading}
-                            className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0"
-                          >
-                            <action.icon className={cn("h-3 w-3 mr-1", action.color)} />
-                            {action.label}
-                          </Button>
-                        ))}
+                          </motion.div>
+                        )}
+                        
+                        <div ref={messagesEndRef} className="h-4" />
                       </div>
+                    </div>
+                  </div>
+                </div>
 
-                      {/* Input Field */}
-                      <div className="flex gap-2">
-                        <div className="flex-1 relative">
-                          <Textarea
-                            ref={inputRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyPress={handleKeyPress}
-                            placeholder="Ask about any stock, crypto, or investment strategy..."
-                            className="min-h-[60px] sm:min-h-[80px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-xs sm:text-sm"
-                            disabled={isLoading}
-                          />
-                          <div className="absolute bottom-2 right-2 flex items-center gap-0.5 sm:gap-1">
-                            <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0" disabled>
-                              <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0" disabled>
-                              <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                          </div>
-                        </div>
+                {/* Input Area - Fixed at bottom */}
+                <div className="flex-shrink-0 border-t bg-card/50 backdrop-blur-sm p-3 sm:p-4">
+                  <div className="w-full max-w-4xl mx-auto">
+                    {/* Quick Actions Bar - Horizontal scroll on mobile */}
+                    <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 sm:pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-hide">
+                      {QUICK_ACTIONS.slice(0, 4).map((action) => (
                         <Button
-                          onClick={() => sendMessage(input)}
-                          disabled={isLoading || !input.trim()}
-                          size="lg"
-                          className="h-[60px] sm:h-[80px] px-4 sm:px-8 bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53]"
+                          key={action.id}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendMessage(action.prompt)}
+                          disabled={isLoading}
+                          className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0"
                         >
-                          {isLoading ? (
-                            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                          ) : (
-                            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-                          )}
+                          <action.icon className={cn("h-3 w-3 mr-1", action.color)} />
+                          {action.label}
                         </Button>
-                      </div>
-
-                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 sm:mt-2 text-center">
-                        Press Enter to send • Shift+Enter for new line • Powered by Claude AI & Perplexity
-                      </p>
+                      ))}
                     </div>
+
+                    {/* Input Field */}
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Textarea
+                          ref={inputRef}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyPress={handleKeyPress}
+                          placeholder="Ask about any stock, crypto, or investment strategy..."
+                          className="min-h-[50px] sm:min-h-[60px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-sm leading-normal"
+                          disabled={isLoading}
+                          rows={2}
+                        />
+                        <div className="absolute bottom-2 right-2 flex items-center gap-0.5 sm:gap-1">
+                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0" disabled>
+                            <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0" disabled>
+                            <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => sendMessage(input)}
+                        disabled={isLoading || !input.trim()}
+                        size="lg"
+                        className="h-[50px] sm:h-[60px] px-4 sm:px-6 bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53] flex-shrink-0"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+                        )}
+                      </Button>
+                    </div>
+
+                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 sm:mt-2 text-center">
+                      Press Enter to send • Shift+Enter for new line • Powered by Heights +
+                    </p>
                   </div>
                 </div>
               </TabsContent>
 
               {/* Analysis Tab */}
-              <TabsContent value="analysis" className="h-full m-0 p-4 sm:p-6 lg:p-8 overflow-auto">
-                <div className="max-w-2xl lg:max-w-4xl mx-auto">
-                  <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6">Market Analysis</h2>
-                  <div className="grid gap-3 sm:gap-4">
-                    <Card>
-                      <CardHeader className="p-4 sm:p-6">
-                        <CardTitle className="text-sm sm:text-base">AI Performance Metrics</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
-                        <div className="space-y-3 sm:space-y-4">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs sm:text-sm">Total Analyses Today</span>
-                            <span className="font-bold text-xs sm:text-sm">{metrics.totalAnalyses}</span>
+              <TabsContent value="analysis" className="h-full m-0 overflow-auto">
+                <div className="p-4 sm:p-6 lg:p-8">
+                  <div className="max-w-4xl mx-auto">
+                    <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6">Market Analysis</h2>
+                    <div className="grid gap-3 sm:gap-4">
+                      <Card>
+                        <CardHeader className="p-4 sm:p-6">
+                          <CardTitle className="text-sm sm:text-base">AI Performance Metrics</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+                          <div className="space-y-3 sm:space-y-4">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs sm:text-sm">Total Analyses Today</span>
+                              <span className="font-bold text-xs sm:text-sm">{metrics.totalAnalyses}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs sm:text-sm">Average Confidence</span>
+                              <span className="font-bold text-xs sm:text-sm">{metrics.averageConfidence.toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs sm:text-sm">Success Rate</span>
+                              <span className="font-bold text-xs sm:text-sm">{metrics.successRate.toFixed(1)}%</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs sm:text-sm">Average Confidence</span>
-                            <span className="font-bold text-xs sm:text-sm">{metrics.averageConfidence.toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs sm:text-sm">Success Rate</span>
-                            <span className="font-bold text-xs sm:text-sm">{metrics.successRate.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </div>
               </TabsContent>
 
               {/* Insights Tab */}
-              <TabsContent value="insights" className="h-full m-0 p-4 sm:p-6 lg:p-8 overflow-auto">
-                <div className="max-w-2xl lg:max-w-4xl mx-auto">
-                  <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6">Market Insights</h2>
-                  <div className="grid gap-3 sm:gap-4">
-                    <Card>
-                      <CardHeader className="p-4 sm:p-6">
-                        <CardTitle className="text-sm sm:text-base">Today's Top Movers</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
-                        <div className="space-y-2 sm:space-y-3">
-                          {marketData.slice(0, 5).map((asset, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted rounded-lg">
-                              <div>
-                                <p className="font-medium text-xs sm:text-sm">{asset.symbol}</p>
-                                <p className="text-[10px] sm:text-xs text-muted-foreground">{asset.source}</p>
+              <TabsContent value="insights" className="h-full m-0 overflow-auto">
+                <div className="p-4 sm:p-6 lg:p-8">
+                  <div className="max-w-4xl mx-auto">
+                    <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6">Market Insights</h2>
+                    <div className="grid gap-3 sm:gap-4">
+                      <Card>
+                        <CardHeader className="p-4 sm:p-6">
+                          <CardTitle className="text-sm sm:text-base">Today's Top Movers</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+                          <div className="space-y-2 sm:space-y-3">
+                            {Array.from(marketDataMap.values()).slice(0, 5).map((asset, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted rounded-lg">
+                                <div>
+                                  <p className="font-medium text-xs sm:text-sm">{asset.symbol}</p>
+                                  <p className="text-[10px] sm:text-xs text-muted-foreground">{asset.source}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-medium text-xs sm:text-sm">${asset.price.toFixed(2)}</p>
+                                  <p className={cn(
+                                    "text-[10px] sm:text-xs",
+                                    asset.change24hPercent >= 0 ? "text-green-600" : "text-red-600"
+                                  )}>
+                                    {asset.change24hPercent >= 0 ? '+' : ''}{asset.change24hPercent.toFixed(2)}%
+                                  </p>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-medium text-xs sm:text-sm">${asset.price.toFixed(2)}</p>
-                                <p className={cn(
-                                  "text-[10px] sm:text-xs",
-                                  asset.changePercent >= 0 ? "text-green-600" : "text-red-600"
-                                )}>
-                                  {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </div>
               </TabsContent>

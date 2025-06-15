@@ -1,10 +1,11 @@
-// components/ai-assistant/enhanced-assistant.tsx
+// components/ai-assistant/enhanced-assistant.tsx - Mobile-Optimized
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -13,8 +14,15 @@ import {
   BarChart,
   Activity,
   Loader2,
+  User,
+  TrendingUp,
+  TrendingDown,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
-import { marketDataService, type MarketData } from '@/lib/market-data';
+import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
+import { HeightsLogo } from '@/components/ui/heights-logo';
+import { cn } from '@/lib/utils';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -30,28 +38,59 @@ interface Message {
 interface EnhancedAIAssistantProps {
   defaultSymbol?: string;
   onTradeRecommendation?: (recommendation: unknown) => void;
+  className?: string;
 }
 
 export function EnhancedAIAssistant({ 
   defaultSymbol = 'CRYPTO:BTC',
-  onTradeRecommendation 
+  onTradeRecommendation,
+  className 
 }: EnhancedAIAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [marketData, setMarketData] = useState<Map<string, MarketData>>(new Map());
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Track major cryptos
-  const trackedSymbols = ['CRYPTO:BTC', 'CRYPTO:ETH', 'CRYPTO:SOL', 'CRYPTO:MATIC'];
+  const trackedSymbols = ['BTC', 'ETH', 'SOL', 'MATIC'];
+
+  // Check if mobile and handle viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    // Handle viewport height on mobile
+    const handleResize = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     // Subscribe to market data
     const unsubscribes: (() => void)[] = [];
     
     trackedSymbols.forEach(symbol => {
-      const unsubscribe = marketDataService.subscribe(symbol, (data) => {
+      const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (data: MarketData) => {
         setMarketData(prev => new Map(prev).set(symbol, data));
       });
       unsubscribes.push(unsubscribe);
@@ -77,10 +116,25 @@ What would you like to know about the markets today?`,
     };
   }, []);
 
+  // Auto-scroll to bottom with mobile handling
+  useEffect(() => {
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        });
+      }
+    };
+    
+    const delay = isMobile ? 300 : 100;
+    const timer = setTimeout(scrollToBottom, delay);
+    return () => clearTimeout(timer);
+  }, [messages, isMobile]);
+
   const analyzeMarket = async () => {
     setIsAnalyzing(true);
     
-    // Get current market data
     const marketDataArray = Array.from(marketData.values());
     const marketSummary = marketDataArray.map(data => ({
       symbol: data.symbol,
@@ -170,7 +224,7 @@ Please provide specific, actionable insights based on this real-time data.`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: enhancedMessage,
-          history: messages.filter(m => m.role !== 'system').slice(-10) // Last 10 messages for context
+          history: messages.filter(m => m.role !== 'system').slice(-10)
         })
       });
 
@@ -204,6 +258,13 @@ Please provide specific, actionable insights based on this real-time data.`;
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   // Quick action buttons
   const quickActions = [
     { label: 'Analyze BTC', query: 'What\'s your analysis of Bitcoin right now?' },
@@ -212,20 +273,80 @@ Please provide specific, actionable insights based on this real-time data.`;
     { label: 'Technical Analysis', query: 'Perform technical analysis on ETH with support/resistance levels' }
   ];
 
-  useEffect(() => {
-    // Auto-scroll to bottom
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+  const renderMessage = (message: Message, index: number) => {
+    const isUser = message.role === 'user';
+    
+    return (
+      <div
+        key={index}
+        className={cn(
+          "flex mb-4",
+          isUser ? "justify-end" : "justify-start"
+        )}
+      >
+        <div className={cn(
+          "flex items-start gap-2 max-w-[85%] sm:max-w-[80%]",
+          isUser ? "flex-row-reverse" : "flex-row"
+        )}>
+          {/* Avatar */}
+          <div className={cn(
+            "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+            isUser 
+              ? "bg-primary text-primary-foreground" 
+              : "bg-gradient-to-br from-[#255F38] to-[#1F7D53] text-white"
+          )}>
+            {isUser ? (
+              <User className="h-4 w-4" />
+            ) : (
+              <HeightsLogo size="sm" className="text-white" animate={false} />
+            )}
+          </div>
+
+          {/* Message Content */}
+          <div className={cn(
+            "rounded-lg p-3 shadow-sm",
+            isUser 
+              ? "bg-primary text-primary-foreground" 
+              : "bg-muted"
+          )}>
+            {message.role === 'assistant' && message.metadata?.confidence && (
+              <div className="flex items-center gap-2 mb-2">
+                <Brain className="h-4 w-4" />
+                <span className="text-xs font-medium">AI Assistant</span>
+                <Badge variant="secondary" className="text-xs">
+                  {(message.metadata.confidence * 100).toFixed(0)}% confident
+                </Badge>
+              </div>
+            )}
+            <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+              {message.content}
+            </div>
+            <div className="text-xs opacity-70 mt-2">
+              {message.timestamp.toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <Card className="h-[600px] flex flex-col">
-      <CardHeader className="border-b">
-        <CardTitle className="flex items-center justify-between">
+    <Card 
+      className={cn(
+        "flex flex-col",
+        isMobile 
+          ? "h-[calc(100vh-8rem)]" 
+          : "h-[600px]",
+        className
+      )}
+      style={isMobile ? { height: 'calc(var(--vh, 1vh) * 100 - 8rem)' } : {}}
+    >
+      <CardHeader className="border-b flex-shrink-0 p-3 sm:p-6">
+        <CardTitle className="flex items-center justify-between text-sm sm:text-base">
           <div className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-primary" />
-            AI Trading Assistant (Claude-Powered)
+            <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <span className="hidden sm:inline">AI Trading Assistant (Claude-Powered)</span>
+            <span className="sm:hidden">AI Assistant</span>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
@@ -237,70 +358,60 @@ Please provide specific, actionable insights based on this real-time data.`;
               variant="outline"
               onClick={analyzeMarket}
               disabled={isAnalyzing}
+              className="text-xs px-2 sm:px-3"
             >
               {isAnalyzing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
               ) : (
-                <BarChart className="h-4 w-4" />
+                <BarChart className="h-3 w-3 sm:h-4 sm:w-4" />
               )}
-              <span className="ml-2">Full Analysis</span>
+              <span className="ml-1 sm:ml-2 hidden sm:inline">Full Analysis</span>
+              <span className="ml-1 sm:hidden">Analyze</span>
             </Button>
           </div>
         </CardTitle>
       </CardHeader>
       
-      <CardContent className="flex-1 p-0 flex flex-col">
+      <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-          <div className="space-y-4">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[80%] rounded-lg p-3 ${
-                  message.role === 'user' 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'bg-muted'
-                }`}>
-                  {message.role === 'assistant' && (
-                    <div className="flex items-center gap-2 mb-1">
-                      <Brain className="h-4 w-4" />
-                      <span className="text-xs font-medium">AI Assistant</span>
-                      {message.metadata?.confidence && (
-                        <Badge variant="secondary" className="text-xs">
-                          {(message.metadata.confidence * 100).toFixed(0)}% confident
-                        </Badge>
-                      )}
+        <div 
+          className="flex-1 min-h-0 overflow-y-auto overscroll-behavior-contain p-3 sm:p-4"
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            scrollBehavior: 'smooth'
+          }}
+        >
+          <div className="min-h-full flex flex-col justify-end">
+            <div className="space-y-3 sm:space-y-4">
+              {messages.map(renderMessage)}
+              
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="flex items-start gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
+                      <HeightsLogo size="sm" className="text-white" animate={false} />
                     </div>
-                  )}
-                  <div className="text-sm whitespace-pre-wrap">{message.content}</div>
-                  <div className="text-xs opacity-70 mt-1">
-                    {message.timestamp.toLocaleTimeString()}
+                    <div className="bg-muted rounded-lg p-3">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-lg p-3">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
-              </div>
-            )}
+              )}
+            </div>
+            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Quick Actions */}
-        <div className="p-3 border-t">
-          <div className="flex gap-2 mb-3 flex-wrap">
+        <div className="flex-shrink-0 p-3 border-t">
+          <div className="flex gap-1 sm:gap-2 mb-3 overflow-x-auto pb-1">
             {quickActions.map((action, index) => (
               <Button
                 key={index}
                 size="sm"
                 variant="outline"
                 onClick={() => setInput(action.query)}
-                className="text-xs"
+                className="text-xs whitespace-nowrap flex-shrink-0"
               >
                 {action.label}
               </Button>
@@ -309,14 +420,23 @@ Please provide specific, actionable insights based on this real-time data.`;
 
           {/* Input */}
           <div className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Ask about markets, trading strategies, or analysis..."
-              disabled={isLoading}
-            />
-            <Button onClick={sendMessage} disabled={isLoading || !input.trim()}>
+            <div className="flex-1">
+              <Textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask about markets, trading strategies, or analysis..."
+                disabled={isLoading}
+                className="min-h-[40px] max-h-[120px] resize-none text-sm"
+                rows={isMobile ? 1 : 2}
+              />
+            </div>
+            <Button 
+              onClick={sendMessage} 
+              disabled={isLoading || !input.trim()}
+              className="h-auto px-3 sm:px-4 py-2"
+            >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
