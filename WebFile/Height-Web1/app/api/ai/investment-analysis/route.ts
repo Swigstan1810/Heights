@@ -1,4 +1,5 @@
 // app/api/ai/investment-analysis/route.ts
+// Environment variables (API keys, etc.) can be set in .env, .env.local, or .env.production
 import { NextResponse } from 'next/server';
 import { investmentAnalyzer } from '@/lib/investment-api-handlers';
 import { tradingAgent } from '@/lib/claude-api';

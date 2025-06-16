@@ -45,6 +45,8 @@ class CoinbaseRealtimeService {
   private supabase = createClientComponentClient();
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private lastHeartbeat = Date.now();
+  private productCache: { products: any[]; timestamp: number } | null = null;
+  private PRODUCT_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   // Popular trading pairs on Coinbase
   private readonly POPULAR_PAIRS = [
@@ -150,17 +152,10 @@ class CoinbaseRealtimeService {
       const subscription = {
         type: 'subscribe',
         product_ids: productIds,
-        channels: [
-          'ticker',
-          {
-            name: 'level2',
-            product_ids: productIds.slice(0, 5) // Limit level2 to top 5 to avoid rate limits
-          }
-        ]
+        channels: ['ticker'] // Only subscribe to public ticker channel
       };
 
       this.ws.send(JSON.stringify(subscription));
-      
       productIds.forEach(id => this.subscribedProducts.add(id));
       console.log('[Coinbase] Subscribed to products:', productIds);
     }
@@ -171,11 +166,10 @@ class CoinbaseRealtimeService {
       const unsubscription = {
         type: 'unsubscribe',
         product_ids: productIds,
-        channels: ['ticker', 'level2']
+        channels: ['ticker'] // Only unsubscribe from public ticker channel
       };
 
       this.ws.send(JSON.stringify(unsubscription));
-      
       productIds.forEach(id => this.subscribedProducts.delete(id));
       console.log('[Coinbase] Unsubscribed from products:', productIds);
     }
@@ -214,8 +208,26 @@ class CoinbaseRealtimeService {
         source: 'coinbase'
       };
 
-      // Store in database
-      await this.storePriceData(marketData, ticker);
+      // Only update crypto_markets table
+      await this.supabase
+        .from('crypto_markets')
+        .upsert({
+          symbol: marketData.symbol,
+          name: this.getSymbolName(marketData.symbol),
+          price_usd: marketData.price,
+          price_inr: marketData.price * 83, // Approximate USD to INR conversion
+          change_24h: marketData.change24h,
+          change_24h_percent: marketData.change24hPercent,
+          volume_24h: marketData.volume24h,
+          high_24h: marketData.high24h,
+          low_24h: marketData.low24h,
+          coinbase_product_id: ticker.product_id,
+          websocket_active: true,
+          last_websocket_update: marketData.timestamp.toISOString(),
+          last_updated: new Date().toISOString()
+        }, {
+          onConflict: 'symbol'
+        });
 
       // Notify subscribers
       const callbacks = this.subscriptions.get(ticker.product_id);
@@ -243,55 +255,6 @@ class CoinbaseRealtimeService {
 
     } catch (error) {
       console.error('[Coinbase] Error handling ticker data:', error);
-    }
-  }
-
-  private async storePriceData(marketData: MarketData, ticker: CoinbaseTickerData): Promise<void> {
-    try {
-      // Store in coinbase_price_feed table
-      await this.supabase
-        .from('coinbase_price_feed')
-        .insert({
-          product_id: ticker.product_id,
-          symbol: marketData.symbol,
-          price: marketData.price,
-          size: parseFloat(ticker.last_size || '0'),
-          time: marketData.timestamp.toISOString(),
-          bid: parseFloat(ticker.best_bid || '0'),
-          ask: parseFloat(ticker.best_ask || '0'),
-          volume_24h: marketData.volume24h,
-          open_24h: parseFloat(ticker.open_24h),
-          high_24h: marketData.high24h,
-          low_24h: marketData.low24h,
-          change_24h: marketData.change24h,
-          change_24h_percent: marketData.change24hPercent,
-          sequence: ticker.sequence,
-          trade_id: ticker.trade_id
-        });
-
-      // Update the crypto_markets table with latest data
-      await this.supabase
-        .from('crypto_markets')
-        .upsert({
-          symbol: marketData.symbol,
-          name: this.getSymbolName(marketData.symbol),
-          price_usd: marketData.price,
-          price_inr: marketData.price * 83, // Approximate USD to INR conversion
-          change_24h: marketData.change24h,
-          change_24h_percent: marketData.change24hPercent,
-          volume_24h: marketData.volume24h,
-          high_24h: marketData.high24h,
-          low_24h: marketData.low24h,
-          coinbase_product_id: ticker.product_id,
-          websocket_active: true,
-          last_websocket_update: marketData.timestamp.toISOString(),
-          last_updated: new Date().toISOString()
-        }, {
-          onConflict: 'symbol'
-        });
-
-    } catch (error) {
-      console.error('[Coinbase] Error storing price data:', error);
     }
   }
 
@@ -349,47 +312,37 @@ class CoinbaseRealtimeService {
   }
 
   async getMarketData(symbol: string): Promise<MarketData | null> {
-    try {
-      // First try to get from database
-      const { data } = await this.supabase
-        .from('coinbase_price_feed')
-        .select('*')
-        .eq('symbol', symbol.toUpperCase())
-        .order('time', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (data) {
-        return {
-          symbol: data.symbol,
-          productId: data.product_id,
-          price: Number(data.price),
-          change24h: Number(data.change_24h || 0),
-          change24hPercent: Number(data.change_24h_percent || 0),
-          volume24h: Number(data.volume_24h || 0),
-          high24h: Number(data.high_24h || 0),
-          low24h: Number(data.low_24h || 0),
-          timestamp: new Date(data.time),
-          source: 'coinbase'
-        };
-      }
-
-      // Fallback to REST API
-      return await this.fetchFromRestAPI(symbol);
-
-    } catch (error) {
-      console.error('[Coinbase] Error getting market data:', error);
-      return null;
-    }
+    return await this.fetchFromRestAPI(symbol);
   }
 
   private async fetchFromRestAPI(symbol: string): Promise<MarketData | null> {
     try {
       const productId = `${symbol.toUpperCase()}-USD`;
+
+      // Use cached products if available and not expired
+      let products: any[] = [];
+      const now = Date.now();
+      if (
+        this.productCache &&
+        now - this.productCache.timestamp < this.PRODUCT_CACHE_DURATION
+      ) {
+        products = this.productCache.products;
+      } else {
+        const productsResponse = await fetch('https://api.exchange.coinbase.com/products');
+        products = await productsResponse.json();
+        this.productCache = { products, timestamp: now };
+      }
+
+      const validProduct = products.find((p: any) => p.id === productId);
+      if (!validProduct) {
+        console.error(`[Coinbase] Product ${productId} not found on Coinbase`);
+        return null;
+      }
+
       const response = await fetch(`https://api.exchange.coinbase.com/products/${productId}/ticker`);
-      
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        console.error(`[Coinbase] REST API error: HTTP ${response.status} for ${productId}`);
+        return null;
       }
 
       const ticker = await response.json();
@@ -407,9 +360,8 @@ class CoinbaseRealtimeService {
         high24h: parseFloat(ticker.high || ticker.price),
         low24h: parseFloat(ticker.low || ticker.price),
         timestamp: new Date(),
-        source: 'coinbase'
+        source: 'coinbase',
       };
-
     } catch (error) {
       console.error('[Coinbase] REST API error:', error);
       return null;

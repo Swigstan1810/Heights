@@ -50,6 +50,8 @@ interface NewsArticle {
   tags: string[];
   source: string;
   trending: boolean;
+  image?: string;
+  url?: string;
 }
 
 export default function NewsPage() {
@@ -411,8 +413,8 @@ export default function NewsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence>
               {filteredArticles.map((article, index) => {
-                const sentimentStyle = getSentimentStyle(article.sentiment);
-                const impactStyle = getImpactStyle(article.impact);
+                const sentimentStyle = getSentimentStyle(article.sentiment ?? 'neutral');
+                const impactStyle = getImpactStyle(article.impact ?? 'low');
                 const SentimentIcon = sentimentStyle.icon;
                 const ImpactIcon = impactStyle.icon;
                 
@@ -433,7 +435,7 @@ export default function NewsPage() {
                           <div className="flex flex-wrap gap-1">
                             <Badge variant="outline" className={`${sentimentStyle.bg} ${sentimentStyle.color} text-xs font-bold`}>
                               <SentimentIcon className="h-3 w-3 mr-1" />
-                              {article.sentiment.charAt(0).toUpperCase() + article.sentiment.slice(1)}
+                              {(article.sentiment ?? 'neutral').charAt(0).toUpperCase() + (article.sentiment ?? 'neutral').slice(1)}
                             </Badge>
                             <Badge variant="outline" className={`${impactStyle.bg} ${impactStyle.color} text-xs font-bold`}>
                               <ImpactIcon className="h-3 w-3 mr-1" />
@@ -470,8 +472,26 @@ export default function NewsPage() {
                           </div>
                         </div>
                         
+                        {article.image && (
+                          <a href={article.url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={article.image}
+                              alt={article.title}
+                              className="w-full h-40 object-cover rounded-lg mb-2 border"
+                              loading="lazy"
+                            />
+                          </a>
+                        )}
+                        
                         <CardTitle className="text-base font-bold line-clamp-2 group-hover:text-primary transition-colors">
-                          {article.title}
+                          {article.url ? (
+                            <a href={article.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              {article.title}
+                              <ExternalLink className="inline h-3 w-3 ml-1 align-text-top" />
+                            </a>
+                          ) : (
+                            article.title
+                          )}
                         </CardTitle>
                         
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -558,15 +578,20 @@ export default function NewsPage() {
                         {selectedArticle.title}
                       </h2>
                       <div className="flex flex-wrap gap-2 mb-3">
-                        <Badge variant="outline" className={`${getSentimentStyle(selectedArticle.sentiment).bg} ${getSentimentStyle(selectedArticle.sentiment).color} text-xs font-bold`}>
-                          {selectedArticle.sentiment.charAt(0).toUpperCase() + selectedArticle.sentiment.slice(1)}
+                        <Badge variant="outline" className={`${getSentimentStyle(selectedArticle.sentiment ?? 'neutral').bg} ${getSentimentStyle(selectedArticle.sentiment ?? 'neutral').color} text-xs font-bold`}>
+                          {(selectedArticle.sentiment ?? 'neutral').charAt(0).toUpperCase() + (selectedArticle.sentiment ?? 'neutral').slice(1)}
                         </Badge>
-                        <Badge variant="outline" className={`${getImpactStyle(selectedArticle.impact).bg} ${getImpactStyle(selectedArticle.impact).color} text-xs font-bold`}>
-                          {getImpactStyle(selectedArticle.impact).label}
+                        <Badge variant="outline" className={`${getImpactStyle(selectedArticle.impact ?? 'low').bg} ${getImpactStyle(selectedArticle.impact ?? 'low').color} text-xs font-bold`}>
+                          {getImpactStyle(selectedArticle.impact ?? 'low').label}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {selectedArticle.source}
-                        </Badge>
+                        {selectedArticle.url && (
+                          <Badge variant="outline" className="text-xs">
+                            <a href={selectedArticle.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              {selectedArticle.source}
+                              <ExternalLink className="inline h-3 w-3 ml-1 align-text-top" />
+                            </a>
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {formatTime(selectedArticle.timestamp)}
@@ -581,6 +606,17 @@ export default function NewsPage() {
                     </Button>
                   </div>
                 </div>
+                
+                {selectedArticle.image && (
+                  <a href={selectedArticle.url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={selectedArticle.image}
+                      alt={selectedArticle.title}
+                      className="w-full h-56 object-cover rounded-lg mb-4 border"
+                      loading="lazy"
+                    />
+                  </a>
+                )}
                 
                 <ScrollArea className="max-h-[50vh] p-6">
                   <div className="space-y-4">

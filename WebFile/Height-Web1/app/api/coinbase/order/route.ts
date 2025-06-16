@@ -1,5 +1,5 @@
-
 // app/api/coinbase/order/route.ts
+// Environment variables (API keys, etc.) can be set in .env, .env.local, or .env.production
 import { NextResponse } from 'next/server';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';

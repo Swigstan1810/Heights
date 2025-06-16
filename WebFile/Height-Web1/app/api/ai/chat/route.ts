@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { SimplifiedAIOrchestrator, aiOrchestrator } from '@/lib/services/enhanced-ai-orchestrator';
 import { ChatContext } from '@/types/ai-types';
 
+// Environment variables (API keys, URLs, etc.) can be set in .env, .env.local, or .env.production
+
 // Initialize Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

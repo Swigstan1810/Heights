@@ -7,6 +7,7 @@ import { Navbar } from "@/components/navbar";
 import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -26,20 +27,57 @@ import {
   DollarSign,
   Lock,
   LineChart,
-  Wallet
+  Wallet,
+  CheckCircle,
+  ArrowUp,
+  Crown,
+  Rocket,
+  Target,
+  TrendingDownIcon,
+  Eye,
+  Brain,
+  Heart
 } from "lucide-react";
 import Link from 'next/link';
 
-// Animated number component
-function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: { 
+// Animated Counter Component
+function AnimatedCounter({ 
+  value, 
+  prefix = "", 
+  suffix = "", 
+  decimals = 0,
+  className = ""
+}: { 
   value: number; 
   prefix?: string; 
   suffix?: string; 
   decimals?: number;
+  className?: string;
 }) {
   const [displayValue, setDisplayValue] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
   
   useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isVisible) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const element = document.getElementById(`counter-${value}`);
+    if (element) {
+      observer.observe(element);
+    }
+
+    return () => observer.disconnect();
+  }, [value, isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
     const duration = 2000;
     const steps = 60;
     const stepValue = value / steps;
@@ -56,136 +94,197 @@ function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: {
     }, duration / steps);
     
     return () => clearInterval(timer);
-  }, [value]);
+  }, [value, isVisible]);
   
   return (
-    <span>
+    <span id={`counter-${value}`} className={className}>
       {prefix}{displayValue.toFixed(decimals)}{suffix}
     </span>
   );
 }
 
-// Floating animation variants
-const floatingAnimation = {
-  initial: { y: 0 },
-  animate: {
-    y: [-5, 5, -5],
-    transition: {
-      duration: 4,
-      repeat: Infinity,
-      ease: "easeInOut" as const
-    }
+// Floating particles component
+const FloatingParticles = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    {[...Array(30)].map((_, i) => (
+      <motion.div
+        key={i}
+        className="absolute w-1 h-1 bg-emerald-400/30 rounded-full"
+        style={{
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+        }}
+        animate={{
+          y: [-20, 20, -20],
+          x: [-10, 10, -10],
+          opacity: [0.3, 0.8, 0.3],
+        }}
+        transition={{
+          duration: 3 + Math.random() * 4,
+          repeat: Infinity,
+          delay: Math.random() * 2,
+          ease: "easeInOut"
+        }}
+      />
+    ))}
+  </div>
+);
+
+// Enhanced Live Crypto Ticker
+const LiveCryptoTicker = () => {
+  const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const trackedSymbols = ['BTC', 'ETH', 'SOL', 'MATIC', 'LINK', 'AVAX'];
+
+  useEffect(() => {
+    const unsubscribes: (() => void)[] = [];
+    
+    trackedSymbols.forEach(symbol => {
+      const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (data) => {
+        setCryptoData(prev => new Map(prev).set(symbol, data));
+        setLoading(false);
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+        {trackedSymbols.map((symbol, index) => (
+          <div key={symbol} className="animate-pulse">
+            <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 md:p-4">
+              <div className="h-4 bg-gray-700 rounded w-12 mb-2"></div>
+              <div className="h-6 bg-gray-700 rounded w-20 mb-1"></div>
+              <div className="h-3 bg-gray-700 rounded w-16"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+      {Array.from(cryptoData.entries()).map(([symbol, data], index) => (
+        <motion.div
+          key={symbol}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className="group cursor-pointer"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-xl p-3 md:p-4 hover:border-emerald-500/30 transition-all duration-300 relative overflow-hidden">
+            {/* Glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs md:text-sm font-semibold text-gray-300">
+                  {symbol}
+                </span>
+                <div className={`w-2 h-2 rounded-full ${
+                  data.change24hPercent >= 0 ? 'bg-emerald-400' : 'bg-red-400'
+                } animate-pulse`} />
+              </div>
+              
+              <div className="space-y-1">
+                <p className="font-bold text-sm md:text-lg text-white">
+                  ${data.price.toLocaleString(undefined, { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: data.price < 1 ? 4 : 2
+                  })}
+                </p>
+                <div className={`text-xs md:text-sm flex items-center ${
+                  data.change24hPercent >= 0 ? 'text-emerald-400' : 'text-red-400'
+                }`}>
+                  {data.change24hPercent >= 0 ? (
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 mr-1" />
+                  )}
+                  {data.change24hPercent >= 0 ? '+' : ''}{data.change24hPercent.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
 };
 
-// Define the main asset categories
-const ASSET_CATEGORIES = [
-  {
-    id: 'crypto',
-    title: 'Cryptocurrencies',
-    subtitle: 'Trade Bitcoin, Ethereum and 100+ digital assets',
-    icon: Bitcoin,
-    color: 'from-orange-500 to-yellow-500',
-    bgColor: 'bg-orange-500/10',
-    borderColor: 'border-orange-500/20',
-    href: '/dashboard?tab=crypto',
-    stats: { markets: '150+', volume: '$3B', change: '+5.2%' }
-  },
-  {
-    id: 'stocks',
-    title: 'Stocks',
-    subtitle: 'Invest in NSE & BSE listed companies',
-    icon: BarChart3,
-    color: 'from-blue-500 to-cyan-500',
-    bgColor: 'bg-blue-500/10',
-    borderColor: 'border-blue-500/20',
-    href: '/dashboard?tab=stocks',
-    stats: { markets: '5000+', volume: '₹1.8B', change: '+2.1%' }
-  },
-  {
-    id: 'mutual-funds',
-    title: 'Mutual Funds',
-    subtitle: 'Diversified portfolio managed by experts',
-    icon: Building2,
-    color: 'from-purple-500 to-pink-500',
-    bgColor: 'bg-purple-500/10',
-    borderColor: 'border-purple-500/20',
-    href: '/dashboard?tab=mutual-funds',
-    stats: { funds: '2000+', aum: '₹45T', returns: '12.5%' }
-  }
-];
-
+// Feature cards with enhanced design
 const features = [
   {
     icon: Shield,
     title: "Bank-Grade Security",
-    description: "Your funds are protected with industry-leading security measures",
-    color: "from-green-500 to-emerald-500"
+    description: "Your assets are protected with industry-leading security measures and cold storage",
+    color: "from-emerald-500 to-teal-500",
+    stats: "99.9% Secure"
   },
   {
     icon: Zap,
-    title: "Lightning Fast",
-    description: "Execute trades in milliseconds with our high-performance engine",
-    color: "from-yellow-500 to-orange-500"
+    title: "Lightning Fast Execution",
+    description: "Execute trades in milliseconds with our high-performance matching engine",
+    color: "from-yellow-500 to-orange-500",
+    stats: "<10ms Latency"
   },
   {
-    icon: Award,
+    icon: Brain,
     title: "AI-Powered Insights",
-    description: "Get intelligent trading recommendations with Heights+ AI",
-    color: "from-purple-500 to-pink-500"
+    description: "Get intelligent trading recommendations powered by advanced machine learning",
+    color: "from-purple-500 to-pink-500",
+    stats: "95% Accuracy"
   },
   {
     icon: Globe,
-    title: "Global Markets",
-    description: "Access international markets and diverse investment options",
-    color: "from-blue-500 to-cyan-500"
+    title: "Global Markets Access",
+    description: "Trade across multiple exchanges and access international markets seamlessly",
+    color: "from-blue-500 to-cyan-500",
+    stats: "50+ Exchanges"
   },
   {
     icon: Users,
-    title: "Expert Support",
-    description: "24/7 customer support from trading professionals",
-    color: "from-red-500 to-rose-500"
+    title: "Expert Community",
+    description: "Join a community of professional traders and learn from the best",
+    color: "from-red-500 to-rose-500",
+    stats: "100K+ Traders"
   },
   {
-    icon: Lock,
-    title: "Secure Wallet",
-    description: "Multi-signature wallet with cold storage protection",
-    color: "from-indigo-500 to-purple-500"
+    icon: Crown,
+    title: "Premium Experience",
+    description: "Enjoy premium features with institutional-grade tools and analytics",
+    color: "from-indigo-500 to-purple-500",
+    stats: "Pro Tools"
   }
 ];
 
-// 1. Reduce initial crypto fetch to 3
-const MAIN_CRYPTOS = ['bitcoin', 'ethereum', 'binancecoin'];
-
-export default function Home() {
+export default function EnhancedHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
-  const [loadingCrypto, setLoadingCrypto] = useState(true);
-  const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const { scrollY } = useScroll();
   
-  // Parallax transforms
-  const heroY = useTransform(scrollY, [0, 500], [0, -50]);
-  const heroOpacity = useTransform(scrollY, [0, 300], [1, 0]);
-  const bgY1 = useTransform(scrollY, [0, 500], [0, -100]);
-  const bgY2 = useTransform(scrollY, [0, 500], [0, -200]);
-  
-  // 2. Add request caching and subscribe only to 3 major crypto pairs
+  // Parallax effects
+  const heroY = useTransform(scrollY, [0, 500], [0, -100]);
+  const heroOpacity = useTransform(scrollY, [0, 300], [1, 0.8]);
+
+  // Check mobile
   useEffect(() => {
-    const controller = new AbortController();
-    const symbols = ['BTC', 'ETH', 'BNB'];
-    const unsubscribes = symbols.map(symbol => 
-      coinbaseRealtimeService.subscribe(symbol, (data: MarketData) => {
-        setCryptoData(prev => new Map(prev).set(symbol, data));
-        setLoadingCrypto(false);
-      })
-    );
-    return () => {
-      unsubscribes.forEach(unsub => unsub());
-      controller.abort();
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
     };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   useEffect(() => {
@@ -194,106 +293,88 @@ export default function Home() {
     }
   }, [searchParams, router]);
 
-  const handleCategoryClick = (category: typeof ASSET_CATEGORIES[0]) => {
-    setSelectedCategory(category.id);
-    // Small delay for animation then navigate
-    setTimeout(() => {
-      router.push(category.href);
-    }, 300);
-  };
-
-  // 4. Remove heavy background animations on mobile
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-
   return (
-    <main className="min-h-screen bg-background relative overflow-hidden">
+    <main className="min-h-screen bg-black text-white relative overflow-hidden">
       <Navbar />
-      {/* Only render background animations if not mobile */}
-      {!isMobile && (
+      
+      {/* Enhanced Background Elements */}
       <div className="fixed inset-0 -z-10">
+        {/* Gradient overlays */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-black to-blue-500/5" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent" />
+        
+        {/* Grid pattern */}
+        <div 
+          className="absolute inset-0 opacity-20"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: '50px 50px'
+          }}
+        />
+        
+        {/* Animated orbs */}
         <motion.div
-          className="absolute top-20 left-[10%] w-96 h-96 bg-gradient-to-r from-primary/20 to-blue-600/20 rounded-full blur-3xl"
-          style={{ y: bgY1 }}
+          className="absolute top-20 left-[10%] w-96 h-96 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-full blur-3xl"
           animate={{
             scale: [1, 1.2, 1],
-            rotate: [0, 180, 360],
+            opacity: [0.3, 0.6, 0.3],
+            x: [0, 50, 0],
           }}
           transition={{
-            duration: 20,
+            duration: 8,
             repeat: Infinity,
-            ease: "linear"
+            ease: "easeInOut"
           }}
         />
         <motion.div
           className="absolute bottom-20 right-[10%] w-80 h-80 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"
-          style={{ y: bgY2 }}
           animate={{
             scale: [1.2, 1, 1.2],
-            rotate: [360, 180, 0],
+            opacity: [0.2, 0.5, 0.2],
+            x: [0, -30, 0],
           }}
           transition={{
-            duration: 25,
+            duration: 10,
             repeat: Infinity,
-            ease: "linear"
+            ease: "easeInOut"
           }}
         />
         
-        {/* Floating particles */}
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-primary/30 rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              } as any}
-            animate={{
-              y: [-20, 20, -20],
-              x: [-10, 10, -10],
-              opacity: [0.3, 0.8, 0.3],
-            }}
-            transition={{
-              duration: 3 + Math.random() * 4,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-              ease: "easeInOut"
-            }}
-          />
-        ))}
+        <FloatingParticles />
       </div>
-      )}
       
-      {/* Hero Section with Parallax */}
+      {/* Hero Section */}
       <motion.section 
-        className="relative pt-24 pb-16 px-4 md:px-8 lg:px-16"
+        className="relative pt-24 pb-16 px-4 md:px-8"
+        style={{ y: heroY, opacity: heroOpacity }}
       >
         <div className="max-w-7xl mx-auto">
           <motion.div
-            style={{ y: heroY, opacity: heroOpacity } as any}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+            transition={{ duration: 0.8 }}
             className="text-center mb-12"
           >
+            {/* Trust badge */}
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6"
+              className="inline-flex items-center px-6 py-3 rounded-full bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-medium mb-8 backdrop-blur-sm"
             >
-              <Sparkles className="h-4 w-4 mr-2" />
-              Trusted by over 100,000+ traders
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Trusted by 25+ Professional Investors 
+              <Sparkles className="h-4 w-4 ml-2" />
             </motion.div>
             
-            <motion.h1 
-              className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-            >
-              Trading at New{" "}
+            {/* Main headline */}
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+              Experience{" "}
               <motion.span 
-                className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600 inline-block"
+                className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400 inline-block"
                 animate={{
                   backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
                 }}
@@ -302,420 +383,349 @@ export default function Home() {
                   repeat: Infinity,
                   ease: "linear"
                 }}
-                style={{
-                  backgroundSize: "200% 200%",
-                } as any}
+                style={{ backgroundSize: "200% 200%" }}
               >
-                Heights
+                Seamless
               </motion.span>
-            </motion.h1>
+              <br />
+              Heights
+            </h1>
             
+            {/* Subheadline */}
             <motion.p 
-              className="text-xl text-muted-foreground max-w-3xl mx-auto"
+              className="text-xl md:text-2xl text-gray-300 max-w-4xl mx-auto mb-8 leading-relaxed"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.5 }}
             >
-              Professional trading platform with real-time data from global markets. 
-              Trade crypto, stocks, and mutual funds all in one place.
+              Trade cryptocurrencies stocks and much more securely and efficiently on our Heights platform. 
+              Built for traders and investors who demand speed, security, and sophistication.
             </motion.p>
             
-            {/* Animated stats */}
+            {/* CTA Section */}
             <motion.div 
-              className="flex flex-wrap justify-center gap-8 mt-8"
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.7 }}
             >
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">
-                  <AnimatedNumber value={24} suffix="+" />
-                </div>
-                <div className="text-sm text-muted-foreground">Global Markets</div>
+              <Link href="/signup">
+                <Button 
+                  size="lg" 
+                  className="text-lg px-8 py-4 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-xl shadow-emerald-500/25 border-0 group relative overflow-hidden"
+                >
+                  <span className="relative z-10 flex items-center">
+                    Start Trading Now
+                    <motion.div
+                      className="ml-2"
+                      animate={{ x: [0, 5, 0] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      <ArrowRight className="h-5 w-5" />
+                    </motion.div>
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
+                </Button>
+              </Link>
+              
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="text-lg px-8 py-4 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:border-emerald-500/50"
+                onClick={() => router.push('/demo')}
+              >
+                <Eye className="h-5 w-5 mr-2" />
+                View Live Demo
+              </Button>
+            </motion.div>
+            
+            {/* Trust indicators */}
+            <motion.div 
+              className="flex flex-wrap justify-center items-center gap-8 text-gray-400"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.9 }}
+            >
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-emerald-400" />
+                <span className="text-sm">SOC 2 Certified</span>
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">
-                  <AnimatedNumber value={100} suffix="K+" />
-                </div>
-                <div className="text-sm text-muted-foreground">Active Traders</div>
+              <div className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-blue-400" />
+                <span className="text-sm">Secure</span>
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">
-                  ₹<AnimatedNumber value={10} suffix="B+" />
-                </div>
-                <div className="text-sm text-muted-foreground">Daily Volume</div>
+              <div className="flex items-center gap-2">
+                <Award className="h-5 w-5 text-purple-400" />
+                <span className="text-sm">Bank-Grade Security</span>
               </div>
             </motion.div>
           </motion.div>
 
-          {/* Asset Categories Grid with Fixed Animations */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-            {ASSET_CATEGORIES.map((category, index) => (
-              <motion.div
-                key={category.id}
-                initial={{ opacity: 0, y: 50 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ 
-                  duration: 0.6, 
-                  delay: index * 0.2,
-                  ease: "easeOut" 
-                }}
-                className="relative"
-              >
-                <motion.div
-                  className="relative group cursor-pointer h-full"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => handleCategoryClick(category)}
-                >
-                  {/* Animated gradient background */}
-                  <motion.div
-                    className="absolute -inset-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    style={{
-                      background: `linear-gradient(135deg, ${
-                        category.id === 'crypto' ? '#f97316, #eab308' :
-                        category.id === 'stocks' ? '#3b82f6, #06b6d4' :
-                        '#a855f7, #ec4899'
-                      })`,
-                      filter: 'blur(20px)',
-                    } as any}
-                    animate={{
-                      scale: [1, 1.1, 1],
-                      opacity: [0.3, 0.5, 0.3],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  />
-                  <Card className={`relative h-full overflow-hidden transition-all duration-300 border-2 hover:shadow-2xl ${
-                    selectedCategory === category.id ? 'ring-2 ring-primary border-primary' : 'border-border'
-                  }`}>
-                    {/* Inner gradient overlay */}
-                    <div 
-                      className="absolute inset-0 opacity-5 group-hover:opacity-10 transition-opacity duration-300"
-                      style={{
-                        background: `linear-gradient(to bottom right, ${
-                          category.id === 'crypto' ? '#f97316, #eab308' :
-                          category.id === 'stocks' ? '#3b82f6, #06b6d4' :
-                          '#a855f7, #ec4899'
-                        })`,
-                      }}
+          {/* Key Stats */}
+          <motion.div 
+            className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 1.1 }}
+          >
+            {[
+              { value: 25, suffix: "+", label: "Active Traders", icon: Users },
+              { value: 50, suffix: "B+", label: "Daily Volume", prefix: "$", icon: DollarSign },
+              { value: 150, suffix: "+", label: "Trading Pairs", icon: BarChart3 },
+              { value: 99.9, suffix: "%", label: "Uptime", decimals: 1, icon: Target }
+            ].map((stat, index) => (
+              <div key={index} className="text-center">
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300">
+                  <stat.icon className="h-8 w-8 mx-auto mb-3 text-emerald-400" />
+                  <div className="text-3xl md:text-4xl font-bold text-white mb-2">
+                    <AnimatedCounter 
+                      value={stat.value} 
+                      prefix={stat.prefix} 
+                      suffix={stat.suffix}
+                      decimals={stat.decimals || 0}
                     />
-                    <CardHeader className="pb-4 relative z-10">
-                      <div className="flex items-start justify-between">
-                        <motion.div 
-                          className="p-3 rounded-lg relative overflow-hidden"
-                          style={{
-                            background: category.id === 'crypto' ? 'rgba(249, 115, 22, 0.1)' :
-                                      category.id === 'stocks' ? 'rgba(59, 130, 246, 0.1)' :
-                                      'rgba(168, 85, 247, 0.1)',
-                          } as any}
-                          whileHover={{ rotate: 360 }}
-                          transition={{ duration: 0.5 }}
-                        >
-                          <category.icon 
-                            className="h-8 w-8"
-                            style={{
-                              color: category.id === 'crypto' ? '#f97316' :
-                                     category.id === 'stocks' ? '#3b82f6' :
-                                     '#a855f7',
-                            }}
-                          />
-                        </motion.div>
-                        <motion.div
-                          animate={{ x: [0, 5, 0] }}
-                          transition={{ duration: 1.5, repeat: Infinity }}
-                        >
-                          <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </motion.div>
-                      </div>
-                      <CardTitle className="text-2xl mt-4">{category.title}</CardTitle>
-                      <p className="text-muted-foreground mt-2">{category.subtitle}</p>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <motion.div
-                          className="text-center"
-                          whileHover={{ y: -2 }}
-                          transition={{ type: "spring", stiffness: 400 }}
-                        >
-                          <p className="text-muted-foreground text-xs">Markets</p>
-                          <p className="font-semibold">{category.stats.markets}</p>
-                        </motion.div>
-                        <motion.div
-                          className="text-center"
-                          whileHover={{ y: -2 }}
-                          transition={{ type: "spring", stiffness: 400 }}
-                        >
-                          <p className="text-muted-foreground text-xs">Volume</p>
-                          <p className="font-semibold">{category.stats.volume}</p>
-                        </motion.div>
-                        <motion.div
-                          className="text-center"
-                          whileHover={{ y: -2 }}
-                          transition={{ type: "spring", stiffness: 400 }}
-                        >
-                          <p className="text-muted-foreground text-xs">24h</p>
-                          <motion.p 
-                            className={`font-semibold ${category.stats.change?.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}
-                            animate={{
-                              scale: [1, 1.05, 1],
-                            }}
-                            transition={{
-                              duration: 2,
-                              repeat: Infinity,
-                              ease: "easeInOut"
-                            }}
-                          >
-                            {category.stats.change ?? '--'}
-                          </motion.p>
-                        </motion.div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </motion.div>
+                  </div>
+                  <div className="text-sm text-gray-400">{stat.label}</div>
+                </div>
+              </div>
             ))}
-          </div>
-      
-          {/* Live Crypto Ticker with Enhanced Animation */}
+          </motion.div>
+
+          {/* Live Market Data */}
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.8 }}
+            transition={{ duration: 0.8, delay: 1.3 }}
             className="mb-16"
           >
-            <motion.h2 
-              className="text-2xl font-bold mb-6 flex items-center gap-2"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Activity className="h-6 w-6 text-primary" />
-              Live Cryptocurrency Prices
-            </motion.h2>
+            <div className="text-center mb-8">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Live Market Data
+              </h2>
+              <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+                Real-time price feeds from major exchanges with institutional-grade reliability
+              </p>
+            </div>
             
-            <motion.div 
-              className="bg-card rounded-lg border p-4"
-              initial={{ borderColor: "rgba(0,0,0,0.1)" }}
-              animate={{ borderColor: ["rgba(0,0,0,0.1)", "rgba(var(--primary-rgb),0.3)", "rgba(0,0,0,0.1)"] }}
-              transition={{ duration: 3, repeat: Infinity }}
-            >
-              <AnimatePresence mode="wait">
-                {loadingCrypto ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex items-center justify-center py-8"
-                  >
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    >
-                      <Activity className="h-6 w-6 text-primary" />
-                    </motion.div>
-                    <span className="ml-2 text-muted-foreground">Connecting to Coinbase...</span>
-                  </motion.div>
-                ) : (
-                  <motion.div 
-                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ staggerChildren: 0.1 }}
-                  >
-                    {Array.from(cryptoData.entries()).map(([symbol, data], index) => (
-                      <motion.div 
-                        key={symbol} 
-                        className="text-center p-3 rounded-lg hover:bg-muted/50 transition-all cursor-pointer relative overflow-hidden group"
-                        onClick={() => router.push('/dashboard?tab=crypto')}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        whileHover={{ scale: 1.05, backgroundColor: "rgba(var(--primary-rgb),0.1)" }}
-                      >
-                        <motion.div
-                          className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent"
-                          initial={{ x: "-100%" }}
-                          whileHover={{ x: "100%" }}
-                          transition={{ duration: 0.5 }}
-                        />
-                        
-                        <p className="font-semibold relative z-10">{symbol.split(':')[1]}/USD</p>
-                        <motion.p 
-                          className="text-xl font-bold relative z-10"
-                          animate={{ scale: [1, 1.02, 1] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        >
-                          ${data.price.toLocaleString()}
-                        </motion.p>
-                        <p className={`text-sm flex items-center justify-center relative z-10 ${
-                          data.change24hPercent >= 0 ? 'text-green-500' : 'text-red-500'
-                        }`}>
-                          {data.change24hPercent >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                          {Math.abs(data.change24hPercent).toFixed(2)}%
-                        </p>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          </motion.div>
-
-          {/* Features Section with Card Animations */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1 }}
-          >
-            <motion.h2 
-              className="text-3xl font-bold mb-8 text-center"
-              initial={{ opacity: 0, y: -20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-            >
-              Why Choose Heights?
-            </motion.h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {features.map((feature, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 50 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  onMouseEnter={() => setHoveredFeature(index)}
-                  onMouseLeave={() => setHoveredFeature(null)}
-                >
-                  <Card className="text-center h-full relative overflow-hidden group cursor-pointer hover:shadow-xl transition-all duration-300">
-                    <motion.div
-                      className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
-                    />
-                    
-                    <CardContent className="pt-6 relative z-10">
-                      <motion.div
-                        className="relative inline-block"
-                        animate={hoveredFeature === index ? floatingAnimation.animate : {} as any}
-                        initial={floatingAnimation.initial}
-                      >
-                        <motion.div
-                          className={`absolute inset-0 bg-gradient-to-br ${feature.color} blur-xl opacity-50`}
-                          animate={{
-                            scale: hoveredFeature === index ? [1, 1.5, 1] : 1,
-                          }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        />
-                        <feature.icon className="h-12 w-12 mx-auto mb-4 text-primary relative z-10" />
-                      </motion.div>
-                      
-                      <motion.h3 
-                        className="font-semibold mb-2"
-                        animate={{
-                          scale: hoveredFeature === index ? 1.05 : 1,
-                        }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        {feature.title}
-                      </motion.h3>
-                      
-                      <p className="text-sm text-muted-foreground">{feature.description}</p>
-                      
-                      {/* Animated background pattern */}
-                      <motion.div
-                        className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{
-                          backgroundImage: `linear-gradient(to right, var(--tw-gradient-stops))`,
-                          '--tw-gradient-from': feature.color.split(' ')[1],
-                          '--tw-gradient-to': feature.color.split(' ')[3],
-                        } as any}
-                        animate={{
-                          scaleX: hoveredFeature === index ? [0, 1] : 0,
-                        }}
-                        transition={{ duration: 0.3 }}
-                      />
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
+            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6 md:p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm">
+                    <Activity className="h-4 w-4" />
+                    Live Data
+                  </div>
+                  <span className="text-gray-400 text-sm">Updated every second</span>
+                </div>
+                <Badge variant="outline" className="border-gray-600 text-gray-300">
+                  Coinbase WebSocket
+                </Badge>
+              </div>
+              
+              <LiveCryptoTicker />
             </div>
           </motion.div>
+        </div>
+      </motion.section>
 
-          {/* CTA Section with Pulse Animation */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mt-20"
-          >
-            <motion.div
-              className="relative inline-block"
-              whileHover={{ scale: 1.05 }}
-              transition={{ type: "spring", stiffness: 400 }}
-            >
+      {/* Features Section */}
+      <motion.section 
+        className="py-20 px-4 md:px-8"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+              Why Choose Heights?
+            </h2>
+            <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+              Built for professional traders who demand the best. Every feature designed for performance, security, and user experience.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature, index) => (
               <motion.div
-                className="absolute inset-0 bg-primary blur-xl opacity-50"
-                animate={{
-                  scale: [1, 1.2, 1],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                }}
-              />
+                key={index}
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ scale: 1.05 }}
+                className="group"
+              >
+                <div className="h-full bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-8 hover:border-emerald-500/30 transition-all duration-500 relative overflow-hidden">
+                  {/* Gradient overlay */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-10 transition-opacity duration-500`} />
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className={`p-4 rounded-2xl bg-gradient-to-br ${feature.color} shadow-lg`}>
+                        <feature.icon className="h-8 w-8 text-white" />
+                      </div>
+                      <Badge variant="outline" className="border-gray-600 text-gray-300 text-xs">
+                        {feature.stats}
+                      </Badge>
+                    </div>
+                    
+                    <h3 className="text-2xl font-bold mb-4 text-white">
+                      {feature.title}
+                    </h3>
+                    
+                    <p className="text-gray-300 leading-relaxed">
+                      {feature.description}
+                    </p>
+                    
+                    <div className="mt-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="flex items-center text-emerald-400 text-sm font-medium">
+                        Learn more
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Social Proof Section */}
+      <motion.section 
+        className="py-20 px-4 md:px-8"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+      >
+        <div className="max-w-7xl mx-auto text-center">
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            Trusted by Professional Traders
+          </h2>
+          <p className="text-xl text-gray-300 mb-16 max-w-3xl mx-auto">
+            Join thousands of traders who have made Heights their platform of choice for cryptocurrency trading.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              {
+                quote: "Heights has transformed my trading experience. The platform is intuitive, fast, and reliable. I've seen a 40% improvement in my trading performance.",
+                author: "Alex Thompson",
+                role: "Professional Trader",
+                rating: 5
+              },
+              {
+                quote: "The security and transparency Heights offers is unmatched. I appreciate the real-time data and advanced analytics tools that help me make informed decisions.",
+                author: "Maria Rodriguez",
+                role: "Portfolio Manager",
+                rating: 5
+              },
+              {
+                quote: "Customer support is exceptional. The team is knowledgeable and always ready to help. Heights truly cares about its users' success.",
+                author: "David Kim",
+                role: "Crypto Investor",
+                rating: 5
+              }
+            ].map((testimonial, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.2 }}
+                className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-8"
+              >
+                <div className="flex items-center gap-1 mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <blockquote className="text-gray-300 mb-6 leading-relaxed">
+                  "{testimonial.quote}"
+                </blockquote>
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold mr-4">
+                    {testimonial.author.split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white">{testimonial.author}</div>
+                    <div className="text-gray-400 text-sm">{testimonial.role}</div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Final CTA Section */}
+      <motion.section 
+        className="py-20 px-4 md:px-8"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+      >
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-12 md:p-16 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-blue-500/10" />
+            
+            <div className="relative z-10">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                className="w-20 h-20 mx-auto mb-8 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full flex items-center justify-center"
+              >
+                <Rocket className="h-10 w-10 text-white" />
+              </motion.div>
               
-              <Link href="/signup">
-                <Button size="lg" className="text-lg px-8 relative z-10 group">
-                  <span className="relative z-10">Start Trading Now</span>
-                  <motion.div
-                    className="absolute right-6 top-1/2 -translate-y-1/2"
-                    animate={{ x: [0, 5, 0] }}
-                    transition={{ duration: 1, repeat: Infinity }}
+              <h2 className="text-4xl md:text-5xl font-bold mb-6">
+                Ready to Elevate Your Trading?
+              </h2>
+              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+                Join <AnimatedCounter value={50} suffix="+" className="text-emerald-400 font-bold" /> traders 
+                who have chosen Heights as their preferred trading platform.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link href="/signup">
+                  <Button 
+                    size="lg" 
+                    className="text-lg px-8 py-4 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-xl shadow-emerald-500/25 border-0"
                   >
-                    <ArrowRight className="h-5 w-5" />
-                  </motion.div>
-                </Button>
-              </Link>
-            </motion.div>
-            
-            <motion.p 
-              className="text-sm text-muted-foreground mt-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              Join <AnimatedNumber value={100000} prefix="" suffix="+" /> traders already using Heights
-            </motion.p>
-            
-            {/* Trust badges with floating animation */}
-            <motion.div 
-              className="flex justify-center gap-8 mt-8"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              {[Shield, Lock, Award].map((Icon, index) => (
-                <motion.div
-                  key={index}
-                  className="text-muted-foreground"
-                  animate={{
-                    y: [0, -5, 0],
-                  }}
-                  transition={{
-                    duration: 2,
-                    delay: index * 0.2,
-                    repeat: Infinity,
-                  }}
+                    <Rocket className="h-5 w-5 mr-2" />
+                    Start Trading Today
+                  </Button>
+                </Link>
+                
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="text-lg px-8 py-4 border-gray-600 text-gray-300 hover:bg-gray-800/50"
                 >
-                  <Icon className="h-8 w-8" />
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
+                  <Heart className="h-5 w-5 mr-2" />
+                  Learn More
+                </Button>
+              </div>
+              
+              <div className="flex items-center justify-center gap-6 mt-8 text-gray-400 text-sm">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  <span>No hidden fees</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  <span>24/7 support</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  <span>Instant setup</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </motion.section>
     </main>

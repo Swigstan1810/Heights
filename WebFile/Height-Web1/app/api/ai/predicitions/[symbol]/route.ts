@@ -1,4 +1,5 @@
 // app/api/ai/predictions/[symbol]/route.ts
+// Environment variables (API keys, etc.) can be set in .env, .env.local, or .env.production
 import { NextResponse } from 'next/server';
 import { ultimateAnalyst } from '@/lib/enhanced-ai-system';
 import { headers } from 'next/headers';
