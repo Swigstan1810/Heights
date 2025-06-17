@@ -381,19 +381,19 @@ How can I help you today?`,
           <div className={`rounded-xl sm:rounded-2xl shadow-lg w-full ${
             isUser
               ? 'bg-gradient-to-br from-[#27391C] to-[#1F7D53] text-white'
-              : 'bg-black border border-white/10'
+              : 'bg-background border border-border'
           }`}>
             {/* Message Header */}
             {!isUser && message.metadata?.confidence && (
-              <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-2 border-b border-white/10">
+              <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-2 border-b border-border">
                 <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                   <Badge className="text-[10px] sm:text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
                     Heights AI
                   </Badge>
-                  <Badge variant="outline" className="text-[10px] sm:text-xs border-white/20 text-white/70">
+                  <Badge variant="outline" className="text-[10px] sm:text-xs border-border text-muted-foreground">
                     {Math.round(message.metadata.confidence * 100)}% confident
                   </Badge>
-                  <span className="text-[10px] sm:text-xs text-white/50 ml-auto">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground ml-auto">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
@@ -404,21 +404,19 @@ How can I help you today?`,
             <div className="px-3 sm:px-4 py-3 sm:py-4">
               <div className="prose prose-sm max-w-none text-sm sm:text-base leading-relaxed">
                 {message.content.split('\n').map((line, i) => (
-                  <p key={i} className="mb-2 last:mb-0 break-words text-white">{line}</p>
+                  <p key={i} className="mb-2 last:mb-0 break-words text-foreground">{line}</p>
                 ))}
               </div>
             </div>
 
             {/* Message Actions */}
             {!isUser && (
-              <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1 border-t border-border opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-white/70 hover:text-white hover:bg-white/10"
-                    onClick={() => copyToClipboard(message.content, message.id)}
-                  >
+                    className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-card">
                     {copiedMessageId === message.id ? (
                       <Check className="h-3 w-3 mr-1" />
                     ) : (
@@ -426,7 +424,7 @@ How can I help you today?`,
                     )}
                     Copy
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-white/70 hover:text-white hover:bg-white/10">
+                  <Button size="sm" variant="ghost" className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-card">
                     <Share2 className="h-3 w-3 mr-1" />
                     Share
                   </Button>
@@ -443,8 +441,8 @@ How can I help you today?`,
   const SidebarContent = () => (
     <>
       {/* Quick Actions */}
-      <div className="p-3 sm:p-4 border-b border-white/10">
-        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-white">
+      <div className="p-3 sm:p-4 border-b border-border">
+        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-foreground">
           <Rocket className="h-3 w-3 sm:h-4 sm:w-4 text-[#1F7D53]" />
           Quick Actions
         </h3>
@@ -455,7 +453,7 @@ How can I help you today?`,
               variant="outline"
               size="sm"
               className={cn(
-                "h-auto py-2 sm:py-3 px-2 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 hover:border-[#1F7D53]/50 text-xs border-white/20 text-white hover:text-white",
+                "h-auto py-2 sm:py-3 px-2 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 hover:border-[#1F7D53]/50 text-xs border-border text-foreground hover:text-foreground",
                 action.bgColor
               )}
               onClick={() => {
@@ -473,15 +471,15 @@ How can I help you today?`,
 
       {/* Market Overview */}
       <div className="flex-1 overflow-auto p-3 sm:p-4">
-        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-white">
+        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-foreground">
           <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-[#1F7D53]" />
           Live Market
         </h3>
         <div className="space-y-1.5 sm:space-y-2">
           {isLoadingData ? (
             <div className="text-center py-6 sm:py-8">
-              <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin mx-auto mb-2 text-white/50" />
-              <p className="text-xs sm:text-sm text-white/50">Loading market data...</p>
+              <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin mx-auto mb-2 text-muted-foreground/50" />
+              <p className="text-xs sm:text-sm text-muted-foreground/50">Loading market data...</p>
             </div>
           ) : (
             (() => {
@@ -489,18 +487,18 @@ How can I help you today?`,
                 asset => typeof asset.price === 'number' && typeof asset.change24hPercent === 'number'
               );
               if (validAssets.length === 0) {
-                return <div className="text-center py-6 text-white/50 text-xs">No market data available</div>;
+                return <div className="text-center py-6 text-muted-foreground/50 text-xs">No market data available</div>;
               }
               return validAssets.slice(0, 8).map((asset, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 sm:p-3 bg-black/50 border border-white/10 rounded-lg">
+                <div key={idx} className="flex items-center justify-between p-2 sm:p-3 bg-card border border-border rounded-lg">
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                      ['BTC','ETH','SOL','MATIC'].includes(asset.symbol) ? 'bg-[#1F7D53]' : 'bg-white'
+                      ['BTC','ETH','SOL','MATIC'].includes(asset.symbol) ? 'bg-[#1F7D53]' : 'bg-foreground'
                     }`} />
-                    <span className="font-medium text-xs sm:text-sm text-white">{asset.symbol}</span>
+                    <span className="font-medium text-xs sm:text-sm text-foreground">{asset.symbol}</span>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-xs sm:text-sm text-white">${asset.price.toFixed(2)}</p>
+                    <p className="font-medium text-xs sm:text-sm text-foreground">${asset.price.toFixed(2)}</p>
                     <p className={cn(
                       "text-[10px] sm:text-xs",
                       asset.change24hPercent >= 0 ? "text-[#1F7D53]" : "text-red-500"
@@ -516,13 +514,13 @@ How can I help you today?`,
       </div>
 
       {/* Resources */}
-      <div className="p-3 sm:p-4 border-t border-white/10">
+      <div className="p-3 sm:p-4 border-t border-border">
         <div className="space-y-2">
-          <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-white/70 hover:text-white hover:bg-white/10">
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-muted-foreground hover:text-foreground hover:bg-card">
             <BookOpen className="h-3 w-3 mr-2" />
             Help & Docs
           </Button>
-          <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-white/70 hover:text-white hover:bg-white/10">
+          <Button variant="ghost" size="sm" className="w-full justify-start text-xs text-muted-foreground hover:text-foreground hover:bg-card">
             <Settings className="h-3 w-3 mr-2" />
             Settings
           </Button>
@@ -532,9 +530,9 @@ How can I help you today?`,
   );
 
   return (
-    <div className="h-screen max-h-screen overflow-hidden bg-black flex flex-col" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+    <div className="h-screen max-h-screen overflow-hidden bg-background flex flex-col" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {/* Top Header - Fixed */}
-      <div className="flex-shrink-0 border-b bg-black border-white/10 z-10">
+      <div className="flex-shrink-0 border-b bg-background border-border z-10">
         <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -544,12 +542,12 @@ How can I help you today?`,
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="lg:hidden h-8 w-8 p-0 text-white"
+                    className="lg:hidden h-8 w-8 p-0 text-foreground"
                   >
                     <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 bg-black border-white/10">
+                <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 bg-background border-border">
                   <SheetHeader className="sr-only">
                     <SheetTitle>Navigation Menu</SheetTitle>
                   </SheetHeader>
@@ -561,8 +559,8 @@ How can I help you today?`,
                 <HeightsLogo size="md" className="sm:hidden text-[#1F7D53]" />
                 <HeightsLogo size="lg" className="hidden sm:block text-[#1F7D53]" />
                 <div>
-                  <h1 className="text-base sm:text-xl font-bold text-white">Heights AI</h1>
-                  <p className="text-[10px] sm:text-xs text-white/60">Powered by Heights +</p>
+                  <h1 className="text-base sm:text-xl font-bold text-foreground">Heights AI</h1>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground/60">Powered by Heights +</p>
                 </div>
               </div>
             </div>
@@ -573,8 +571,8 @@ How can I help you today?`,
                 <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#1F7D53] rounded-full animate-pulse" />
                 Live
               </div>
-              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-black border-[#1F7D53]/30 text-[#1F7D53]">Heights</Badge>
-              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-black border-[#1F7D53]/30 text-[#1F7D53]">+</Badge>
+              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-background border-[#1F7D53]/30 text-[#1F7D53]">Heights</Badge>
+              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-background border-[#1F7D53]/30 text-[#1F7D53]">+</Badge>
             </div>
           </div>
         </div>
@@ -583,21 +581,21 @@ How can I help you today?`,
       {/* Main Content */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Desktop Sidebar */}
-        <div className="hidden lg:flex w-[320px] xl:w-[360px] border-r bg-black border-white/10 flex-col">
+        <div className="hidden lg:flex w-[320px] xl:w-[360px] border-r bg-background border-border flex-col">
           <SidebarContent />
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 min-w-0 flex flex-col bg-black">
+        <div className="flex-1 min-w-0 flex flex-col bg-background">
           {/* Mode Tabs - Fixed */}
-          <div className="flex-shrink-0 border-b z-10 border-white/10">
+          <div className="flex-shrink-0 border-b z-10 border-border">
             <div className="w-full">
               <div className="flex h-10 sm:h-12 border-b-0">
                 <button
                   onClick={() => setActiveMode('chat')}
                   className={cn(
-                    "flex-1 rounded-t-lg text-xs sm:text-sm text-white/70 flex items-center justify-center gap-1 sm:gap-2 transition-all",
-                    activeMode === 'chat' && "bg-[#1F7D53] text-white"
+                    "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all",
+                    activeMode === 'chat' && "bg-[#1F7D53] text-background"
                   )}
                 >
                   <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -606,8 +604,8 @@ How can I help you today?`,
                 <button
                   onClick={() => setActiveMode('analysis')}
                   className={cn(
-                    "flex-1 rounded-t-lg text-xs sm:text-sm text-white/70 flex items-center justify-center gap-1 sm:gap-2 transition-all",
-                    activeMode === 'analysis' && "bg-[#1F7D53] text-white"
+                    "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all",
+                    activeMode === 'analysis' && "bg-[#1F7D53] text-background"
                   )}
                 >
                   <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -617,8 +615,8 @@ How can I help you today?`,
                 <button
                   onClick={() => setActiveMode('insights')}
                   className={cn(
-                    "flex-1 rounded-t-lg text-xs sm:text-sm text-white/70 flex items-center justify-center gap-1 sm:gap-2 transition-all",
-                    activeMode === 'insights' && "bg-[#1F7D53] text-white"
+                    "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all",
+                    activeMode === 'insights' && "bg-[#1F7D53] text-background"
                   )}
                 >
                   <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -637,7 +635,7 @@ How can I help you today?`,
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <div 
                     ref={messagesContainerRef}
-                    className="h-full overflow-y-auto overscroll-behavior-contain bg-black"
+                    className="h-full overflow-y-auto overscroll-behavior-contain bg-background"
                     style={{ 
                       WebkitOverflowScrolling: 'touch',
                       scrollBehavior: 'smooth'
@@ -648,8 +646,8 @@ How can I help you today?`,
                         {messages.length === 1 && (
                           <div className="text-center py-6 sm:py-12 px-4">
                             <Brain className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-[#1F7D53]" />
-                            <h3 className="text-base sm:text-lg font-semibold mb-2 text-white">Start a conversation</h3>
-                            <p className="text-xs sm:text-sm text-white/60 mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
+                            <h3 className="text-base sm:text-lg font-semibold mb-2 text-foreground">Start a conversation</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground/60 mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
                             
                             {/* Suggested Prompts */}
                             <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
@@ -659,7 +657,7 @@ How can I help you today?`,
                                   variant="outline"
                                   size="sm"
                                   onClick={() => sendMessage(prompt)}
-                                  className="text-[10px] sm:text-xs h-7 sm:h-8 border-white/20 text-white hover:text-white hover:border-[#1F7D53]/50"
+                                  className="text-[10px] sm:text-xs h-7 sm:h-8 border-border text-foreground hover:text-foreground hover:border-[#1F7D53]/50"
                                 >
                                   {prompt}
                                 </Button>
@@ -680,12 +678,12 @@ How can I help you today?`,
                           >
                             <div className="w-full max-w-[85%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3">
                               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                                <HeightsLogo size="sm" className="text-white" animate={false} />
+                                <HeightsLogo size="sm" className="text-foreground" animate={false} />
                               </div>
-                              <div className="bg-black border border-white/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-3 sm:py-4">
+                              <div className="bg-background border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-3 sm:py-4">
                                 <div className="flex items-center gap-2">
                                   <Loader2 className="h-4 w-4 animate-spin text-[#1F7D53]" />
-                                  <span className="text-sm text-white/60">Analyzing...</span>
+                                  <span className="text-sm text-muted-foreground">Analyzing...</span>
                                 </div>
                               </div>
                             </div>
@@ -699,7 +697,7 @@ How can I help you today?`,
                 </div>
 
                 {/* Input Area - Fixed at bottom */}
-                <div className="flex-shrink-0 border-t bg-black border-white/10 p-3 sm:p-4">
+                <div className="flex-shrink-0 border-t bg-background border-border p-3 sm:p-4">
                   <div className="w-full max-w-4xl mx-auto">
                     {/* Quick Actions Bar - Horizontal scroll on mobile */}
                     <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 sm:pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-hide">
@@ -710,7 +708,7 @@ How can I help you today?`,
                           size="sm"
                           onClick={() => sendMessage(action.prompt)}
                           disabled={isLoading}
-                          className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0 border-white/20 text-white hover:text-white hover:border-[#1F7D53]/50"
+                          className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0 border-border text-foreground hover:text-foreground hover:border-[#1F7D53]/50"
                         >
                           <action.icon className={cn("h-3 w-3 mr-1", action.color)} />
                           {action.label}
@@ -727,15 +725,15 @@ How can I help you today?`,
                           onChange={(e) => setInput(e.target.value)}
                           onKeyPress={handleKeyPress}
                           placeholder="Ask about any stock, crypto, or investment strategy..."
-                          className="min-h-[50px] sm:min-h-[60px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-sm leading-normal bg-black border-white/20 text-white placeholder-white/50"
+                          className="min-h-[50px] sm:min-h-[60px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-sm leading-normal bg-background border-border text-foreground placeholder-foreground/50"
                           disabled={isLoading}
                           rows={2}
                         />
                         <div className="absolute bottom-2 right-2 flex items-center gap-0.5 sm:gap-1">
-                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-white/50 hover:text-white" disabled>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-foreground/50 hover:text-foreground" disabled>
                             <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-white/50 hover:text-white" disabled>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-foreground/50 hover:text-foreground" disabled>
                             <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </div>
@@ -754,7 +752,7 @@ How can I help you today?`,
                       </Button>
                     </div>
 
-                    <p className="text-[10px] sm:text-xs text-white/50 mt-1.5 sm:mt-2 text-center">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1.5 sm:mt-2 text-center">
                       Press Enter to send • Shift+Enter for new line • Powered by Heights +
                     </p>
                   </div>
@@ -763,63 +761,63 @@ How can I help you today?`,
             )}
             
             {activeMode === 'analysis' && (
-              <div className="h-full overflow-auto bg-black">
+              <div className="h-full overflow-auto bg-background">
                 <div className="p-4 sm:p-6 lg:p-8">
                   <div className="max-w-6xl mx-auto">
-                    <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6 text-white flex items-center gap-2">
+                    <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
                       <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-[#1F7D53]" />
                       Market Analysis Dashboard
                     </h2>
                     {/* Performance Metrics Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                      <Card className="bg-black border-white/10">
+                      <Card className="bg-background border-border">
                         <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-white/70">Total Analyses Today</CardTitle>
+                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Total Analyses Today</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-white">{metrics.totalAnalyses}</div>
+                          <div className="text-2xl font-bold text-foreground">{metrics.totalAnalyses}</div>
                           <p className="text-xs text-[#1F7D53] flex items-center gap-1 mt-1">
                             <TrendingUp className="h-3 w-3" />
                             +12% from yesterday
                           </p>
                         </CardContent>
                       </Card>
-                      <Card className="bg-black border-white/10">
+                      <Card className="bg-background border-border">
                         <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-white/70">Avg Confidence Score</CardTitle>
+                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Avg Confidence Score</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-white">{metrics.averageConfidence.toFixed(1)}%</div>
+                          <div className="text-2xl font-bold text-foreground">{metrics.averageConfidence.toFixed(1)}%</div>
                           <Progress value={metrics.averageConfidence} className="mt-2 h-1" />
                         </CardContent>
                       </Card>
-                      <Card className="bg-black border-white/10">
+                      <Card className="bg-background border-border">
                         <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-white/70">Success Rate</CardTitle>
+                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Success Rate</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-white">{metrics.successRate.toFixed(1)}%</div>
+                          <div className="text-2xl font-bold text-foreground">{metrics.successRate.toFixed(1)}%</div>
                           <Badge variant="outline" className="mt-1 text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
                             High Accuracy
                           </Badge>
                         </CardContent>
                       </Card>
-                      <Card className="bg-black border-white/10">
+                      <Card className="bg-background border-border">
                         <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-white/70">Response Time</CardTitle>
+                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Response Time</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-white">{metrics.responseTime || '1.2'}s</div>
-                          <p className="text-xs text-white/50 mt-1">Avg processing time</p>
+                          <div className="text-2xl font-bold text-foreground">{metrics.responseTime || '1.2'}s</div>
+                          <p className="text-xs text-muted-foreground/50 mt-1">Avg processing time</p>
                         </CardContent>
                       </Card>
                     </div>
                     {/* Asset Performance Analysis */}
-                    <Card className="bg-black border-white/10 mb-6">
+                    <Card className="bg-background border-border mb-6">
                       <CardHeader className="p-6">
-                        <CardTitle className="text-base sm:text-lg text-white flex items-center justify-between">
+                        <CardTitle className="text-base sm:text-lg text-foreground flex items-center justify-between">
                           <span>Asset Performance Analysis</span>
-                          <Button variant="outline" size="sm" className="text-xs border-white/20 text-white hover:text-white">
+                          <Button variant="outline" size="sm" className="text-xs border-border text-foreground hover:text-foreground">
                             <RefreshCw className="h-3 w-3 mr-1" />
                             Refresh
                           </Button>
@@ -828,18 +826,18 @@ How can I help you today?`,
                       <CardContent className="p-6 pt-0">
                         <div className="space-y-4">
                           {Array.from(marketDataMap.values()).slice(0, 5).map((asset, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-4 bg-black/50 border border-white/10 rounded-lg hover:border-[#1F7D53]/50 transition-all">
+                            <div key={idx} className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:border-[#1F7D53]/50 transition-all">
                               <div className="flex items-center gap-4">
                                 <div className="w-10 h-10 rounded-full bg-[#1F7D53]/20 flex items-center justify-center">
                                   <span className="text-sm font-bold text-[#1F7D53]">{asset.symbol.slice(0, 2)}</span>
                                 </div>
                                 <div>
-                                  <p className="font-medium text-white">{asset.symbol}</p>
-                                  <p className="text-xs text-white/50">{asset.source}</p>
+                                  <p className="font-medium text-foreground">{asset.symbol}</p>
+                                  <p className="text-xs text-muted-foreground">{asset.source}</p>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-medium text-white">${asset.price.toFixed(2)}</p>
+                                <p className="font-medium text-foreground">${asset.price.toFixed(2)}</p>
                                 <p className={cn(
                                   "text-xs flex items-center justify-end gap-1",
                                   asset.change24hPercent >= 0 ? "text-[#1F7D53]" : "text-red-500"
@@ -865,39 +863,39 @@ How can I help you today?`,
                     </Card>
                     {/* AI Model Performance */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <Card className="bg-black border-white/10">
+                      <Card className="bg-background border-border">
                         <CardHeader className="p-6">
-                          <CardTitle className="text-base text-white">AI Model Performance</CardTitle>
+                          <CardTitle className="text-base text-foreground">AI Model Performance</CardTitle>
                         </CardHeader>
                         <CardContent className="p-6 pt-0">
                           <div className="space-y-4">
                             <div>
                               <div className="flex justify-between mb-1">
-                                <span className="text-sm text-white/70">Claude 3.5 Sonnet</span>
-                                <span className="text-sm text-white">98.2%</span>
+                                <span className="text-sm text-foreground/70">Claude 3.5 Sonnet</span>
+                                <span className="text-sm text-foreground">98.2%</span>
                               </div>
                               <Progress value={98.2} className="h-2" />
                             </div>
                             <div>
                               <div className="flex justify-between mb-1">
-                                <span className="text-sm text-white/70">Perplexity Integration</span>
-                                <span className="text-sm text-white">94.7%</span>
+                                <span className="text-sm text-foreground/70">Perplexity Integration</span>
+                                <span className="text-sm text-foreground">94.7%</span>
                               </div>
                               <Progress value={94.7} className="h-2" />
                             </div>
                             <div>
                               <div className="flex justify-between mb-1">
-                                <span className="text-sm text-white/70">Market Data Accuracy</span>
-                                <span className="text-sm text-white">99.1%</span>
+                                <span className="text-sm text-foreground/70">Market Data Accuracy</span>
+                                <span className="text-sm text-foreground">99.1%</span>
                               </div>
                               <Progress value={99.1} className="h-2" />
                             </div>
                           </div>
                         </CardContent>
                       </Card>
-                      <Card className="bg-black border-white/10">
+                      <Card className="bg-background border-border">
                         <CardHeader className="p-6">
-                          <CardTitle className="text-base text-white">Query Categories</CardTitle>
+                          <CardTitle className="text-base text-foreground">Query Categories</CardTitle>
                         </CardHeader>
                         <CardContent className="p-6 pt-0">
                           <div className="space-y-3">
@@ -910,11 +908,11 @@ How can I help you today?`,
                               <div key={idx} className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <div className="w-2 h-2 rounded-full bg-[#1F7D53]" />
-                                  <span className="text-sm text-white/70">{item.category}</span>
+                                  <span className="text-sm text-foreground/70">{item.category}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  <span className="text-sm text-white">{item.count}</span>
-                                  <div className="w-20 bg-white/10 rounded-full h-2">
+                                  <span className="text-sm text-foreground">{item.count}</span>
+                                  <div className="w-20 bg-card rounded-full h-2">
                                     <div 
                                       className="h-2 bg-[#1F7D53] rounded-full"
                                       style={{ width: `${item.percentage}%` }}
@@ -933,7 +931,7 @@ How can I help you today?`,
             )}
             
             {activeMode === 'insights' && (
-              <div className="h-full overflow-auto bg-black p-4 sm:p-6 lg:p-8">
+              <div className="h-full overflow-auto bg-background p-4 sm:p-6 lg:p-8">
                 <NewsInsights />
               </div>
             )}
