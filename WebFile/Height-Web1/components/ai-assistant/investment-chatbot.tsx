@@ -1,23 +1,16 @@
-// components/ai-assistant/investment-chatbot.tsx - Mobile-Optimized
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/auth-context';
 import { HeightsLogo } from '@/components/ui/heights-logo';
 import {
   Send,
   Mic,
   MicOff,
-  Bot,
   User,
   TrendingUp,
   TrendingDown,
@@ -43,158 +36,191 @@ import {
   Target,
   Shield,
   Info,
-  Lightbulb
+  Lightbulb,
+  PieChart,
+  Bell,
+  Search,
+  Menu,
+  X,
+  ArrowUp,
+  ArrowDown,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
-import { AIResponse, MarketDataPoint, NewsItem, AnalysisResult } from '@/types/ai-types';
 import { cn } from '@/lib/utils';
 
-interface Message extends AIResponse {
-  role: 'user' | 'assistant';
-}
-
-interface QuickAction {
+interface Message {
   id: string;
-  label: string;
-  icon: any;
-  prompt: string;
-  category: 'crypto' | 'stocks' | 'general' | 'analysis';
-  color: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  metadata?: {
+    confidence?: number;
+    sources?: string[];
+    actionable?: boolean;
+    category?: string;
+    priority?: 'low' | 'medium' | 'high';
+    analysis?: any;
+    symbols?: string[];
+    assetType?: string;
+  };
+  marketData?: MarketDataPoint[];
+  news?: NewsItem[];
+  analysis?: AnalysisResult;
 }
 
-const QUICK_ACTIONS: QuickAction[] = [
+interface MarketDataPoint {
+  symbol: string;
+  name: string;
+  price: number;
+  changePercent: number;
+  volume?: string;
+  marketCap?: string;
+  sentiment?: 'bullish' | 'bearish' | 'neutral';
+  source: string;
+}
+
+interface NewsItem {
+  title: string;
+  summary: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  url: string;
+  source: string;
+  publishedAt: string;
+}
+
+interface AnalysisResult {
+  symbol: string;
+  recommendation: string;
+  confidence: number;
+  reasoning: string;
+  technicalIndicators?: {
+    rsi?: number;
+    support?: number;
+    resistance?: number;
+  };
+}
+
+// Mock market data - replace with your real API calls
+const mockMarketData: MarketDataPoint[] = [
+  { symbol: 'BTC', name: 'Bitcoin', price: 67234.50, changePercent: 2.34, volume: '23.4B', marketCap: '1.32T', sentiment: 'bullish', source: 'coinbase' },
+  { symbol: 'ETH', name: 'Ethereum', price: 3456.78, changePercent: -1.23, volume: '12.8B', marketCap: '415B', sentiment: 'neutral', source: 'coinbase' },
+  { symbol: 'AAPL', name: 'Apple Inc', price: 185.64, changePercent: 0.87, volume: '45.2M', marketCap: '2.89T', sentiment: 'bullish', source: 'polygon' },
+  { symbol: 'TSLA', name: 'Tesla Inc', price: 248.73, changePercent: -2.14, volume: '67.3M', marketCap: '793B', sentiment: 'bearish', source: 'polygon' },
+  { symbol: 'SOL', name: 'Solana', price: 148.92, changePercent: 4.67, volume: '1.8B', marketCap: '68B', sentiment: 'bullish', source: 'coinbase' },
+  { symbol: 'GOOGL', name: 'Alphabet', price: 147.23, changePercent: 1.45, volume: '28.7M', marketCap: '1.85T', sentiment: 'bullish', source: 'polygon' }
+];
+
+const QUICK_ACTIONS = [
   {
-    id: 'btc_analysis',
-    label: 'Bitcoin Analysis',
-    icon: TrendingUp,
-    prompt: 'Give me a comprehensive analysis of Bitcoin including current price, recent news, and predictions',
-    category: 'crypto',
-    color: 'text-orange-500'
+    id: 'portfolio',
+    label: 'Portfolio',
+    icon: PieChart,
+    color: 'text-[#1F7D53]',
+    bgColor: 'bg-[#1F7D53]/10',
+    prompt: 'Analyze my portfolio performance and suggest optimizations based on current market conditions',
   },
   {
-    id: 'market_summary',
-    label: 'Market Summary',
+    id: 'market',
+    label: 'Market',
     icon: BarChart3,
-    prompt: 'Provide a summary of today\'s market performance across major indices',
-    category: 'general',
-    color: 'text-blue-500'
+    color: 'text-[#1F7D53]',
+    bgColor: 'bg-[#1F7D53]/10',
+    prompt: 'Give me today\'s market overview including major movers and sentiment analysis',
   },
   {
-    id: 'stock_recommendation',
-    label: 'Stock Picks',
-    icon: Target,
-    prompt: 'What are some good stock investment opportunities right now?',
-    category: 'stocks',
-    color: 'text-green-500'
+    id: 'crypto',
+    label: 'Crypto',
+    icon: TrendingUp,
+    color: 'text-[#1F7D53]',
+    bgColor: 'bg-[#1F7D53]/10',
+    prompt: 'Show me the top cryptocurrency opportunities and technical analysis',
   },
   {
-    id: 'risk_assessment',
-    label: 'Risk Check',
+    id: 'ai-picks',
+    label: 'AI Picks',
+    icon: Brain,
+    color: 'text-[#1F7D53]',
+    bgColor: 'bg-[#1F7D53]/10',
+    prompt: 'Generate AI-powered investment recommendations with confidence scores',
+  },
+  {
+    id: 'news',
+    label: 'News',
+    icon: Newspaper,
+    color: 'text-[#1F7D53]',
+    bgColor: 'bg-[#1F7D53]/10',
+    prompt: 'Summarize the latest financial news and market-moving events',
+  },
+  {
+    id: 'risk',
+    label: 'Risk',
     icon: Shield,
-    prompt: 'What are the current market risks I should be aware of?',
-    category: 'analysis',
-    color: 'text-red-500'
-  },
-  {
-    id: 'gold_analysis',
-    label: 'Gold Outlook',
-    icon: Sparkles,
-    prompt: 'Is gold a good investment this week? What\'s the outlook?',
-    category: 'general',
-    color: 'text-yellow-500'
-  },
-  {
-    id: 'reliance_info',
-    label: 'Reliance Stock',
-    icon: LineChart,
-    prompt: 'Tell me about Reliance Industries stock performance and history',
-    category: 'stocks',
-    color: 'text-purple-500'
+    color: 'text-[#1F7D53]',
+    bgColor: 'bg-[#1F7D53]/10',
+    prompt: 'Analyze current market risks and provide risk management strategies',
   }
 ];
 
-export default function InvestmentChatbot() {
+const SUGGESTED_PROMPTS = [
+  "What's Bitcoin's price outlook this week?",
+  "Best crypto investments under $100?",
+  "Analyze Apple stock fundamentals",
+  "Portfolio diversification strategy",
+  "Market sentiment analysis today",
+  "Tesla vs traditional automakers"
+];
+
+export default function EnhancedInvestmentChatbot() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [streamingMessage, setStreamingMessage] = useState<string>('');
-  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [marketData, setMarketData] = useState<MarketDataPoint[]>(mockMarketData);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [marketData, setMarketData] = useState<MarketDataPoint[]>([]);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Check if mobile and handle viewport
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    // Handle viewport height on mobile
-    const handleResize = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-    };
-  }, []);
-
-  // Welcome message
+  // Initialize with welcome message
   useEffect(() => {
     const welcomeMessage: Message = {
       id: 'welcome',
       role: 'assistant',
       content: `🚀 **Welcome to Heights AI Investment Assistant!**
 
-I'm your intelligent financial companion, powered by Heights +. I can help you with:
+I'm powered by Heights+ to provide you with:
 
-📊 **Live Market Data** - Real-time prices from Coinbase, Alpha Vantage, Polygon
-📈 **Technical Analysis** - RSI, MACD, support/resistance levels  
-📰 **Breaking News** - Latest financial news from Benzinga, GNews
-🔮 **AI Predictions** - Smart forecasts using Heights +
-💼 **Investment Advice** - Personalized recommendations and risk analysis
-🌍 **Global Markets** - Crypto, stocks, mutual funds, commodities
+📊 **Real-time Market Analysis** - Live prices and trends
+💡 **Investment Insights** - AI-powered recommendations
+📈 **Portfolio Optimization** - Personalized strategies
+🎯 **Trading Signals** - Entry and exit points
+📰 **Breaking News** - Latest financial developments
 
-**Try asking naturally:**
+**Try asking:**
 • "What's Bitcoin doing today?"
-• "Should I invest in Tesla?"
-• "Tell me about Reliance Industries"
-• "Is gold a good investment this week?"
+• "Best investment opportunities now?"
+• "Analyze Tesla stock performance"
+• "Portfolio risk assessment"
 
-Ready to get started? 🎯`,
-      type: 'text',
+How can I help you today? 💼`,
+      timestamp: new Date(),
       metadata: {
-        sources: [],
-        confidence: 1.0,
-        dataFreshness: 'historical',
-        processingTime: 0,
-        classification: {
-          intent: 'explanation',
-          assetType: 'stock',
-          confidence: 1.0,
-          suggestedServices: [],
-          parameters: {}
-        }
-      },
-      timestamp: new Date().toISOString()
+        category: 'welcome',
+        actionable: true,
+        confidence: 1.0
+      }
     };
+
     setMessages([welcomeMessage]);
   }, []);
 
-  // Auto-scroll to bottom with mobile handling
+  // Auto-scroll to bottom
   useEffect(() => {
     const scrollToBottom = () => {
       if (messagesEndRef.current) {
@@ -205,126 +231,107 @@ Ready to get started? 🎯`,
       }
     };
     
-    const delay = isMobile ? 300 : 100;
-    const timer = setTimeout(scrollToBottom, delay);
+    const timer = setTimeout(scrollToBottom, 100);
     return () => clearTimeout(timer);
-  }, [messages, streamingMessage, isMobile]);
+  }, [messages]);
 
-  // Fetch real market data on mount
+  // Handle viewport height on mobile
   useEffect(() => {
-    const fetchMarketData = async () => {
-      try {
-        const perplexityRes = await fetch('/api/market/perplexity?symbols=BTC,ETH,SOL,MATIC,AAPL,GOOGL,TSLA,MSFT');
-        const perplexityData = (await perplexityRes.json()).data || [];
-        setMarketData(perplexityData as MarketDataPoint[]);
-      } catch (error) {
-        console.error('Error fetching market data:', error);
-      }
+    const handleResize = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
     };
-    fetchMarketData();
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
+  // Online/offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Send message function
+  const sendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: `user_${Date.now()}`,
+      id: Date.now().toString(),
       role: 'user',
-      content: text,
-      type: 'text',
-      metadata: {
-        sources: [],
-        confidence: 1.0,
-        dataFreshness: 'historical',
-        processingTime: 0,
-        classification: {
-          intent: 'explanation',
-          assetType: 'stock',
-          confidence: 1.0,
-          suggestedServices: [],
-          parameters: {}
-        }
-      },
-      timestamp: new Date().toISOString()
+      content,
+      timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
-    setStreamingMessage('');
 
     try {
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: text,
-          history: messages.slice(-5), // Send last 5 messages for context
-          userId: user?.id
-        }),
+          message: content,
+          history: messages,
+          userId: user?.id,
+          preferences: {
+            usePerplexity: true,
+            structured: true
+          }
+        })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error('Request failed');
 
       const data = await response.json();
       
-      const assistantMessage: Message = {
-        id: `assistant_${Date.now()}`,
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.message || data.content,
-        type: data.type || 'text',
-        metadata: data.metadata || {
-          sources: ['claude'],
-          confidence: 0.8,
-          dataFreshness: 'recent',
-          processingTime: data.responseTime || 0,
-          classification: data.classification
+        content: data.content || data.message,
+        timestamp: new Date(),
+        metadata: {
+          confidence: data.metadata?.confidence,
+          actionable: true,
+          category: 'analysis',
+          analysis: data.analysis,
+          assetType: data.metadata?.classification?.assetType
         },
-        marketData: data.marketData,
+        marketData: data.marketData || (content.toLowerCase().includes('market') || content.toLowerCase().includes('price') ? marketData.slice(0, 4) : undefined),
         news: data.news,
-        analysis: data.analysis,
-        suggestions: data.suggestions,
-        timestamp: new Date().toISOString()
+        analysis: data.analysis
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, aiMessage]);
 
     } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: Message = {
-        id: `error_${Date.now()}`,
+      console.error('Error:', error);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: `I apologize, but I encountered an error processing your request. Please try again or rephrase your question.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'text',
-        metadata: {
-          sources: [],
-          confidence: 0,
-          dataFreshness: 'historical',
-          processingTime: 0,
-          classification: {
-            intent: 'explanation',
-            assetType: 'stock',
-            confidence: 0,
-            suggestedServices: [],
-            parameters: {}
-          }
-        },
-        timestamp: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+        content: 'I apologize, but I encountered an error. Please try again.',
+        timestamp: new Date(),
+        metadata: { actionable: false, category: 'error' }
+      }]);
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, messages, user?.id]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(input);
-  };
+  }, [isLoading, messages, user?.id, marketData]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -333,42 +340,48 @@ Ready to get started? 🎯`,
     }
   };
 
-  const handleQuickAction = (action: QuickAction) => {
-    sendMessage(action.prompt);
+  const copyToClipboard = (text: string, messageId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMessageId(messageId);
+    setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  const formatPrice = (price: number, symbol?: string) => {
-    const formatted = new Intl.NumberFormat('en-US', {
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
-      maximumFractionDigits: symbol?.includes('BTC') ? 0 : 2,
+      maximumFractionDigits: 2,
     }).format(price);
-    return formatted;
   };
 
   const renderMarketData = (marketData: MarketDataPoint[]) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 mt-3 sm:mt-4">
-      {marketData.slice(0, 3).map((data, index) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+      {marketData.slice(0, 4).map((data, index) => (
         <motion.div
           key={index}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.1 }}
-          className="p-2.5 sm:p-3 bg-muted/50 rounded-lg border"
+          className="p-3 bg-black/50 border border-white/10 rounded-lg"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="font-semibold text-xs sm:text-sm">{data.symbol}</span>
-            <Badge variant="outline" className="text-[10px] sm:text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-[#1F7D53] rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-bold">{data.symbol.slice(0, 2)}</span>
+              </div>
+              <span className="font-semibold text-white text-sm">{data.symbol}</span>
+            </div>
+            <Badge variant="outline" className="text-xs border-white/20 text-white/70">
               {data.source}
             </Badge>
           </div>
           <div className="space-y-1">
-            <div className="text-sm sm:text-lg font-bold">
-              {formatPrice(data.price, data.symbol)}
+            <div className="text-lg font-bold text-white">
+              {formatPrice(data.price)}
             </div>
-            <div className={`flex items-center gap-1 text-xs sm:text-sm ${
-              data.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
+            <div className={`flex items-center gap-1 text-sm ${
+              data.changePercent >= 0 ? 'text-[#1F7D53]' : 'text-red-500'
             }`}>
               {data.changePercent >= 0 ? (
                 <TrendingUp className="h-3 w-3" />
@@ -383,108 +396,6 @@ Ready to get started? 🎯`,
     </div>
   );
 
-  const renderNews = (news: NewsItem[]) => (
-    <div className="space-y-2 sm:space-y-3 mt-3 sm:mt-4">
-      <h4 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
-        <Newspaper className="h-4 w-4" />
-        Recent News
-      </h4>
-      {news.slice(0, 3).map((item, index) => (
-        <motion.div
-          key={index}
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="p-2.5 sm:p-3 bg-muted/30 rounded-lg border-l-2 border-l-primary/50"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h5 className="font-medium text-xs sm:text-sm leading-tight mb-1 line-clamp-2">
-                {item.title}
-              </h5>
-              <p className="text-[10px] sm:text-xs text-muted-foreground mb-2 line-clamp-2">
-                {item.summary.slice(0, isMobile ? 80 : 100)}...
-              </p>
-              <div className="flex items-center gap-2 text-[10px] sm:text-xs">
-                <Badge 
-                  variant={item.sentiment === 'positive' ? 'default' : item.sentiment === 'negative' ? 'destructive' : 'secondary'}
-                  className="text-[8px] sm:text-xs"
-                >
-                  {item.sentiment}
-                </Badge>
-                <span className="text-muted-foreground truncate">{item.source}</span>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 flex-shrink-0"
-              onClick={() => window.open(item.url, '_blank')}
-            >
-              <ExternalLink className="h-3 w-3" />
-            </Button>
-          </div>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  const renderAnalysis = (analysis: AnalysisResult) => (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border border-primary/20"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-        <h4 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
-          <Brain className="h-4 w-4 text-primary" />
-          AI Analysis for {analysis.symbol}
-        </h4>
-        <Badge 
-          variant={analysis.recommendation.includes('buy') ? 'default' : 
-                  analysis.recommendation.includes('sell') ? 'destructive' : 'secondary'}
-          className="uppercase text-xs w-fit"
-        >
-          {analysis.recommendation.replace('_', ' ')}
-        </Badge>
-      </div>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Target className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-            <span className="font-medium text-xs sm:text-sm">Confidence</span>
-          </div>
-          <Progress value={analysis.confidence * 100} className="h-2" />
-          <span className="text-xs text-muted-foreground">
-            {(analysis.confidence * 100).toFixed(1)}%
-          </span>
-        </div>
-        
-        {analysis.technicalIndicators && (
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <LineChart className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-              <span className="font-medium text-xs sm:text-sm">Technical Signals</span>
-            </div>
-            <div className="text-xs space-y-1">
-              {analysis.technicalIndicators.rsi && (
-                <div>RSI: {analysis.technicalIndicators.rsi.toFixed(1)}</div>
-              )}
-              {analysis.technicalIndicators.support && (
-                <div>Support: {formatPrice(analysis.technicalIndicators.support)}</div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <p className="text-xs sm:text-sm mt-3 text-muted-foreground">
-        {analysis.reasoning}
-      </p>
-    </motion.div>
-  );
-
   const renderMessage = (message: Message) => {
     const isUser = message.role === 'user';
     
@@ -492,252 +403,252 @@ Ready to get started? 🎯`,
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6 group px-2 sm:px-0`}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group px-4 sm:px-0`}
       >
-        <div className={`w-full max-w-[90%] sm:max-w-[85%] flex items-start gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`w-full max-w-[90%] sm:max-w-[80%] flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
-          <div className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${
+          <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
             isUser 
-              ? 'bg-primary text-primary-foreground' 
-              : 'bg-gradient-to-br from-[#255F38] to-[#1F7D53] text-white'
+              ? 'bg-white text-black'
+              : 'bg-[#1F7D53] text-white'
           }`}>
             {isUser ? (
-              <User className="h-3 w-3 sm:h-4 sm:w-4" />
+              <User size={16} className="sm:w-5 sm:h-5" />
             ) : (
               <HeightsLogo size="sm" className="text-white" animate={false} />
             )}
           </div>
 
           {/* Message Content */}
-          <div className={`rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm w-full ${
+          <div className={`rounded-xl sm:rounded-2xl w-full ${
             isUser
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-card border border-border'
+              ? 'bg-white text-black'
+              : 'bg-black border border-white/10 text-white'
           }`}>
-            {/* Message Header for Assistant */}
-            {!isUser && (
-              <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-2">
-                <Badge variant="secondary" className="text-[10px] sm:text-xs">
+            {/* Message Header */}
+            {!isUser && message.metadata?.confidence && (
+              <div className="px-4 pt-3 pb-2 border-b border-white/10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
                   Heights AI
                 </Badge>
-                {message.metadata?.sources?.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    {message.metadata.sources.slice(0, isMobile ? 2 : 3).map(source => (
-                      <Badge key={source} variant="outline" className="text-[8px] sm:text-xs">
-                        {source}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                {message.metadata?.confidence !== undefined && (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">
-                    {(message.metadata.confidence * 100).toFixed(0)}% confident
+                  <Badge variant="outline" className="text-xs border-white/20 text-white/70">
+                    {Math.round(message.metadata.confidence * 100)}% confident
                   </Badge>
-                )}
-              </div>
-            )}
-
-            {/* Message Text */}
-            <div className="prose prose-sm max-w-none">
-              <div className="whitespace-pre-wrap text-sm sm:text-base leading-relaxed break-words">
-                {message.content}
-              </div>
-            </div>
-
-            {/* Market Data */}
-            {message.marketData && renderMarketData(message.marketData)}
-
-            {/* News */}
-            {message.news && renderNews(message.news)}
-
-            {/* Analysis */}
-            {message.analysis && renderAnalysis(message.analysis)}
-
-            {/* Suggestions */}
-            {message.suggestions && message.suggestions.length > 0 && (
-              <div className="mt-3 sm:mt-4">
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  {message.suggestions.slice(0, isMobile ? 2 : 3).map((suggestion, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      className="text-[10px] sm:text-xs h-6 sm:h-7 px-2"
-                      onClick={() => sendMessage(suggestion)}
-                    >
-                      {isMobile && suggestion.length > 20 ? `${suggestion.slice(0, 20)}...` : suggestion}
-                    </Button>
-                  ))}
+                  <span className="text-xs text-white/50 ml-auto">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
               </div>
             )}
 
-            {/* Timestamp and Actions */}
-            <div className="flex items-center justify-between mt-2 sm:mt-3 pt-2 border-t border-border/30 opacity-0 group-hover:opacity-100 transition-opacity">
-              <span className="text-[10px] sm:text-xs opacity-70">
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </span>
+            {/* Message Body */}
+            <div className="px-4 py-4">
+              <div className="prose prose-sm max-w-none text-sm sm:text-base leading-relaxed">
+                {message.content.split('\n').map((line, i) => (
+                  <p key={i} className="mb-2 last:mb-0 break-words">{line}</p>
+                ))}
+              </div>
+
+              {/* Market Data Display */}
+              {message.marketData && renderMarketData(message.marketData)}
+            </div>
+
+            {/* Message Actions */}
               {!isUser && (
-                <div className="flex items-center gap-1">
+              <div className="px-4 pb-4 pt-1 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="ghost"
                     size="sm"
-                    className="h-5 w-5 sm:h-6 sm:w-6 p-0 opacity-70 hover:opacity-100"
-                    onClick={() => navigator.clipboard.writeText(message.content)}
+                    variant="ghost"
+                    className="h-7 text-xs px-3 text-white/70 hover:text-white hover:bg-white/10"
+                    onClick={() => copyToClipboard(message.content, message.id)}
                   >
-                    <Copy className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                    {copiedMessageId === message.id ? (
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                    ) : (
+                      <Copy className="h-3 w-3 mr-1" />
+                    )}
+                    Copy
+                  </Button>
+                  <Button 
+                    size="sm"
+                    variant="ghost" 
+                    className="h-7 text-xs px-3 text-white/70 hover:text-white hover:bg-white/10"
+                  >
+                    <Share className="h-3 w-3 mr-1" />
+                    Share
                   </Button>
                   <Button
+                    size="sm" 
                     variant="ghost"
-                    size="sm"
-                    className="h-5 w-5 sm:h-6 sm:w-6 p-0 opacity-70 hover:opacity-100"
+                    className="h-7 text-xs px-3 text-white/70 hover:text-white hover:bg-white/10"
                   >
-                    <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                    <Star className="h-3 w-3 mr-1" />
+                    Save
                   </Button>
+                </div>
                 </div>
               )}
-            </div>
           </div>
         </div>
       </motion.div>
     );
   };
 
-  const filteredActions = selectedCategory === 'all' 
-    ? QUICK_ACTIONS 
-    : QUICK_ACTIONS.filter(action => action.category === selectedCategory);
+  // Mobile ticker component
+  const MobileTicker = () => (
+    <div className="relative overflow-hidden bg-black/50 border-b border-white/10">
+      <motion.div
+        className="flex gap-6 py-2"
+        animate={{ x: [-100, -1500] }}
+        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+      >
+        {[...marketData, ...marketData].map((item, idx) => (
+          <div key={idx} className="flex items-center gap-2 whitespace-nowrap">
+            <span className="text-white font-medium text-sm">{item.symbol}</span>
+            <span className="text-white font-semibold">${item.price.toLocaleString()}</span>
+            <span className={`flex items-center gap-1 text-sm ${
+              item.changePercent > 0 ? 'text-[#1F7D53]' : 'text-red-500'
+            }`}>
+              {item.changePercent > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+              {Math.abs(item.changePercent).toFixed(2)}%
+            </span>
+          </div>
+        ))}
+      </motion.div>
+    </div>
+  );
 
   return (
-    <div 
-      className="flex flex-col w-full max-w-6xl mx-auto"
-      style={isMobile ? { 
-        height: 'calc(var(--vh, 1vh) * 100 - 12rem)',
-        minHeight: '400px'
-      } : { 
-        height: 'clamp(400px, 70vh, 800px)',
-        minHeight: '400px'
-      }}
-    >
-      {/* Header - Fixed */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-card to-muted/20 border-b p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-              <HeightsLogo size="sm" className="text-white" />
+    <div className="h-screen max-h-screen overflow-hidden bg-black flex flex-col" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+      {/* Mobile Ticker */}
+      {/* <MobileTicker /> */}
+      
+      {/* Top Header */}
+      <div className="flex-shrink-0 border-b border-white/10 bg-black/90 backdrop-blur-sm z-10">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <HeightsLogo size="md" className="text-[#1F7D53]" />
+                <div>
+                  <h1 className="text-lg font-bold text-white">Heights AI</h1>
+                  <p className="text-xs text-white/60">Investment Assistant</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-sm sm:text-lg">Heights AI Assistant</h2>
-              <p className="text-xs sm:text-sm text-muted-foreground">Powered by Heights + with Real-time Data</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200 dark:border-green-800 text-xs">
-              <Activity className="h-3 w-3 mr-1" />
-              Live
-            </Badge>
-            <Button variant="ghost" size="sm" onClick={() => setMessages([messages[0]])}>
-              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
-            </Button>
-          </div>
-        </div>
 
-        {/* Quick Actions */}
-        <div className="mt-3 sm:mt-4">
-          <div className="flex items-center gap-2 mb-2 sm:mb-3">
-            <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-            <span className="text-xs sm:text-sm font-medium">Quick Actions</span>
-          </div>
-          
-          {/* Category Filter */}
-          <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1">
-            {['all', 'crypto', 'stocks', 'general', 'analysis'].map(category => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? 'default' : 'outline'}
-                size="sm"
-                className="text-[10px] sm:text-xs h-6 sm:h-7 capitalize whitespace-nowrap flex-shrink-0"
-                onClick={() => setSelectedCategory(category)}
-              >
-                {category}
+            {/* Status Indicators */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 px-2 py-1 bg-[#1F7D53]/20 text-[#1F7D53] rounded-full text-xs">
+                {isOnline ? (
+                  <Wifi className="w-3 h-3" />
+                ) : (
+                  <WifiOff className="w-3 h-3" />
+                )}
+                <span className="hidden sm:inline">{isOnline ? 'Live' : 'Offline'}</span>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-white/70 hover:text-white">
+                <Bell className="h-4 w-4" />
               </Button>
-            ))}
-          </div>
-
-          {/* Action Buttons */}
-          <div className={cn(
-            "grid gap-1.5 sm:gap-2",
-            isMobile 
-              ? "grid-cols-2" 
-              : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
-          )}>
-            {filteredActions.map(action => (
-              <motion.div key={action.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-auto p-2 sm:p-3 flex flex-col items-center gap-1 sm:gap-2 hover:bg-primary/5"
-                  onClick={() => handleQuickAction(action)}
-                  disabled={isLoading}
-                >
-                  <action.icon className={`h-3 w-3 sm:h-4 sm:w-4 ${action.color}`} />
-                  <span className="text-[10px] sm:text-xs font-medium text-center leading-tight">
-                    {action.label}
-                  </span>
-                </Button>
-              </motion.div>
-            ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Messages Area - Scrollable */}
+      {/* Quick Actions Bar */}
+      <div className="flex-shrink-0 border-b border-white/10 bg-black/50 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Lightbulb className="h-4 w-4 text-[#1F7D53]" />
+          <span className="text-sm font-medium text-white">Quick Actions</span>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {QUICK_ACTIONS.map((action) => (
+            <Button
+              key={action.id}
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-auto py-3 px-2 flex flex-col items-center gap-2 hover:border-[#1F7D53]/50 text-xs border-white/20 text-white hover:text-white",
+                action.bgColor
+              )}
+              onClick={() => sendMessage(action.prompt)}
+            >
+              <action.icon className={cn("h-4 w-4", action.color)} />
+              <span className="text-xs text-center leading-tight">{action.label}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Messages Area */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-behavior-contain"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-behavior-contain bg-black"
         style={{ 
           WebkitOverflowScrolling: 'touch',
           scrollBehavior: 'smooth'
         }}
       >
         <div className="min-h-full flex flex-col justify-end">
-          <div className="w-full p-3 sm:p-4">
+          <div className="w-full max-w-4xl mx-auto py-4">
+            {messages.length === 1 && (
+              <div className="text-center py-8 px-4">
+                <Brain className="h-12 w-12 mx-auto mb-4 text-[#1F7D53]" />
+                <h3 className="text-lg font-semibold mb-2 text-white">Start investing smarter</h3>
+                <p className="text-sm text-white/60 mb-6">Ask me anything about markets, crypto, or investments</p>
+                
+                {/* Suggested Prompts */}
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                    <Button
+                      key={idx}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => sendMessage(prompt)}
+                      className="text-xs h-8 border-white/20 text-white hover:text-white hover:border-[#1F7D53]/50"
+                    >
+                      {prompt}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <AnimatePresence>
               {messages.map(renderMessage)}
             </AnimatePresence>
 
-            {/* Loading State */}
             {isLoading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex justify-start mb-4 sm:mb-6 px-2 sm:px-0"
+                className="flex justify-start mb-6 px-4 sm:px-0"
               >
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                    <HeightsLogo size="sm" className="text-white" animate={false} />
+                <div className="w-full max-w-[90%] sm:max-w-[80%] flex items-start gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#1F7D53] flex items-center justify-center">
+                    <HeightsLogo size="sm" className="text-white" animate />
                   </div>
-                  <div className="bg-card border border-border rounded-lg sm:rounded-xl p-3 sm:p-4 max-w-xs">
-                    <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="bg-black border border-white/10 rounded-xl px-4 py-4">
+                    <div className="flex items-center gap-3 mb-3">
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
                       >
-                        <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                        <Brain className="h-5 w-5 text-[#1F7D53]" />
                       </motion.div>
                       <div>
-                        <div className="text-xs sm:text-sm font-medium">AI is analyzing...</div>
-                        <div className="text-[10px] sm:text-xs text-muted-foreground">
-                          Using Heights +
-                        </div>
+                        <div className="text-sm font-medium text-white">Analyzing markets...</div>
+                        <div className="text-xs text-white/60">Powered by Heights+</div>
                       </div>
                     </div>
                     
-                    {/* Animated dots */}
-                    <div className="flex gap-1 mt-2">
+                    <div className="flex gap-1">
                       {[0, 1, 2].map(i => (
                         <motion.div
                           key={i}
-                          className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-primary/40"
+                          className="h-2 w-2 rounded-full bg-[#1F7D53]/40"
                           animate={{ scale: [1, 1.5, 1] }}
                           transition={{ 
                             repeat: Infinity, 
@@ -747,59 +658,9 @@ Ready to get started? 🎯`,
                         />
                       ))}
                     </div>
-
-                    {/* Progress steps */}
-                    <div className="mt-2 sm:mt-3 space-y-1">
-                      <div className="flex items-center gap-2 text-[10px] sm:text-xs">
-                        <div className="w-1 h-1 rounded-full bg-green-500"></div>
-                        <span className="text-muted-foreground">Gathering market data...</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] sm:text-xs">
-                        <div className="w-1 h-1 rounded-full bg-blue-500"></div>
-                        <span className="text-muted-foreground">Searching latest news...</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] sm:text-xs">
-                        <div className="w-1 h-1 rounded-full bg-purple-500"></div>
-                        <span className="text-muted-foreground">AI analysis in progress...</span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </motion.div>
-            )}
-
-            {/* Streaming Message */}
-            {streamingMessage && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex justify-start mb-4 sm:mb-6 px-2 sm:px-0"
-              >
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                    <HeightsLogo size="sm" className="text-white" animate={false} />
-                  </div>
-                  <div className="bg-card border border-border rounded-lg sm:rounded-xl p-3 sm:p-4 max-w-2xl">
-                    <div className="whitespace-pre-wrap text-sm">
-                      {streamingMessage}
-                      <motion.span
-                        animate={{ opacity: [1, 0] }}
-                        transition={{ repeat: Infinity, duration: 1 }}
-                        className="ml-1"
-                      >
-                        |
-                      </motion.span>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Show real market data below welcome message if present and no AI response marketData */}
-            {messages.length === 1 && marketData.length > 0 && (
-              <div className="mt-3 sm:mt-4 px-2 sm:px-0">
-                {renderMarketData(marketData)}
-              </div>
             )}
 
             <div ref={messagesEndRef} className="h-4" />
@@ -807,105 +668,109 @@ Ready to get started? 🎯`,
         </div>
       </div>
 
-      {/* Input Area - Fixed */}
-      <div className="flex-shrink-0 border-t bg-background/80 backdrop-blur-sm p-3 sm:p-4">
-        <div className="w-full">
-          <form onSubmit={handleSubmit} className="flex gap-2">
+      {/* Input Area */}
+      <div className="flex-shrink-0 border-t border-white/10 bg-black/90 backdrop-blur-sm p-4">
+        <div className="w-full max-w-4xl mx-auto">
+          <div className="flex gap-2">
             <div className="flex-1 relative">
               <Textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={isMobile 
-                  ? "Ask about investments, stocks, crypto..." 
-                  : "Ask about any stock, crypto, commodity, or investment... (e.g., 'Detailed analysis of Tesla stock')"
-                }
-                className="min-h-[40px] sm:min-h-[50px] max-h-[120px] resize-none pr-10 sm:pr-12 text-sm"
+                placeholder="Ask about investments, markets, or crypto..."
+                className="min-h-[50px] max-h-[120px] resize-none pr-12 text-sm bg-black border-white/20 text-white placeholder-white/50 focus:border-[#1F7D53] focus:ring-[#1F7D53]/20"
                 disabled={isLoading}
-                maxLength={500}
-                rows={isMobile ? 1 : 2}
+                rows={2}
               />
-              
-              {/* Voice Input Button */}
+              <div className="absolute bottom-2 right-2 flex items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-2 top-2 h-6 w-6 sm:h-8 sm:w-8 p-0"
+                  className="h-6 w-6 p-0 text-white/50 hover:text-white"
                 onClick={() => setIsListening(!isListening)}
-                disabled={isLoading}
               >
                 {isListening ? (
-                  <MicOff className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
+                    <MicOff className="h-3 w-3 text-red-500" />
                 ) : (
-                  <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <Mic className="h-3 w-3" />
                 )}
               </Button>
+              </div>
             </div>
-
             <Button
-              type="submit"
+              onClick={() => sendMessage(input)}
               disabled={isLoading || !input.trim()}
               size="lg"
-              className="h-[40px] sm:h-[50px] px-4 sm:px-6 bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53] flex-shrink-0"
+              className="h-[50px] px-6 bg-[#1F7D53] hover:bg-[#1F7D53]/80 text-white flex-shrink-0"
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
-                <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+                <Send className="h-5 w-5" />
               )}
             </Button>
-          </form>
-
-          {/* Input Helper */}
-          <div className="flex flex-wrap items-center justify-between mt-2 text-[10px] sm:text-xs text-muted-foreground">
-            <div className="flex items-center gap-2 sm:gap-4">
-              <span className="hidden sm:block">Try: "Bitcoin analysis", "Tesla vs Apple", "Gold investment outlook"</span>
-              <span className="sm:hidden">Press Enter to send</span>
-              <div className="hidden sm:flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <Brain className="h-3 w-3" />
-                  <span>Heights +</span>
-                </div>
-                <span>+</span>
-                <div className="flex items-center gap-1">
-                  <Globe className="h-3 w-3" />
-                  <span>Heights +</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Activity className="h-3 w-3 text-green-500" />
-              <span>Real-time data</span>
-            </div>
           </div>
 
-          {/* Features Showcase */}
-          {!isMobile && (
-            <div className="mt-3 pt-3 border-t border-border/30">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <TrendingUp className="h-3 w-3 text-green-500" />
-                  <span>Live Prices</span>
+          <p className="text-xs text-white/50 mt-2 text-center">
+            Press Enter to send • Shift+Enter for new line • Powered by Heights+
+          </p>
+        </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Newspaper className="h-3 w-3 text-blue-500" />
-                  <span>Breaking News</span>
+
+      {/* Voice Recording Indicator */}
+      <AnimatePresence>
+        {isListening && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center"
+          >
+            <div className="bg-black border border-white/20 rounded-2xl p-6">
+              <div className="flex flex-col items-center gap-4">
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 1 }}
+                  className="w-16 h-16 bg-[#1F7D53] rounded-full flex items-center justify-center"
+                >
+                  <Mic className="w-8 h-8 text-white" />
+                </motion.div>
+                <div className="text-center">
+                  <h3 className="text-white font-semibold">Listening...</h3>
+                  <p className="text-white/60 text-sm">Speak your investment question</p>
                 </div>
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <BarChart3 className="h-3 w-3 text-purple-500" />
-                  <span>Technical Analysis</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Target className="h-3 w-3 text-orange-500" />
-                  <span>AI Predictions</span>
-                </div>
+                <Button
+                  onClick={() => setIsListening(false)}
+                  variant="outline"
+                  className="border-white/20 text-white hover:text-white hover:bg-white/10"
+                >
+                  Stop Recording
+                </Button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Connection Status Toast */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-20 left-4 bg-red-500/20 border border-red-500/50 rounded-xl p-3 backdrop-blur-sm"
+          >
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 text-red-400" />
+              <span className="text-red-400 text-sm font-medium">No connection</span>
+            </div>
+            <p className="text-white/60 text-xs mt-1">Some features may be limited</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

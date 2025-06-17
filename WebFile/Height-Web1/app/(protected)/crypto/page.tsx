@@ -1,4 +1,4 @@
-// app/(protected)/crypto/page.tsx - Updated with real-time Coinbase data
+// app/(protected)/crypto/page.tsx - Integrated with Portfolio
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -16,12 +16,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { 
-  Bitcoin,
-  RefreshCw,
-  Loader2,
   TrendingUp,
   TrendingDown,
-  Star,
+  RefreshCw,
+  Loader2,
+  Activity,
   ArrowUpRight,
   ArrowDownRight,
   Wallet,
@@ -30,37 +29,70 @@ import {
   DollarSign,
   BarChart3,
   AlertCircle,
-  Activity,
-  Wifi,
-  WifiOff
+  Star,
+  Plus,
+  Minus,
+  ChevronDown,
+  Sparkles,
+  Target,
+  Zap,
+  Shield,
+  Eye,
+  EyeOff,
+  Bitcoin,
+  LineChart,
+  CheckCircle2,
+  PieChart
 } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import TradingViewWidget from '@/components/trading/tradingview-widget';
-import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
+import { motion, AnimatePresence } from 'framer-motion';
+import EnhancedTradingViewWidget from '@/components/trading/tradingview-widget';
 
 interface CryptoData {
+  id?: string;
+  symbol: string;
+  name: string;
+  price_usd: number;
+  price_inr: number;
+  change_24h: number;
+  change_24h_percent: number;
+  volume_24h: number;
+  market_cap: number;
+  high_24h: number;
+  low_24h: number;
+  coinbase_product_id?: string;
+  last_updated?: string;
+  isFavorite?: boolean;
+}
+
+interface PortfolioHolding {
   id: string;
   symbol: string;
   name: string;
+  asset_type: string;
+  quantity: number;
+  average_buy_price: number;
   current_price: number;
-  price_change_percentage_24h: number;
-  market_cap: number;
-  total_volume: number;
-  high_24h: number;
-  low_24h: number;
-  image?: string;
-  isFavorite?: boolean;
-  productId?: string;
-  lastUpdate?: Date;
+  total_invested: number;
+  current_value: number;
+  profit_loss: number;
+  profit_loss_percentage: number;
 }
 
-export default function CryptoPage() {
+interface WalletBalance {
+  balance: number;
+  currency: string;
+}
+
+export default function IntegratedCryptoPage() {
   const { user, isAuthenticated, isInitialized } = useAuth();
   const { address, isConnected } = useAccount();
   const router = useRouter();
+  
+  // State management
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
   const [filteredData, setFilteredData] = useState<CryptoData[]>([]);
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoData | null>(null);
+  const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHolding[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -71,11 +103,24 @@ export default function CryptoPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'volume' | 'price' | 'change'>('volume');
   const [activeTab, setActiveTab] = useState('overview');
-  const [connectionStatus, setConnectionStatus] = useState('connecting');
-  const [realTimeData, setRealTimeData] = useState<Map<string, MarketData>>(new Map());
-  
-  const supabase = createClientComponentClient();
-  const subscriptionsRef = useRef<Map<string, () => void>>(new Map());
+  const [showBalances, setShowBalances] = useState(true);
+  const [walletBalance, setWalletBalance] = useState<WalletBalance>({ balance: 500000, currency: 'INR' });
+  const [portfolioSummary, setPortfolioSummary] = useState({
+    total_value: 0,
+    total_invested: 0,
+    total_pnl: 0,
+    total_pnl_percentage: 0,
+    holdings_count: 0
+  });
+
+  // Demo holdings for Laven Patel
+  const demoHoldings = [
+    { symbol: 'BTC', balance: 0.0156, value: 45000 * 0.0156, change: 5.2 },
+    { symbol: 'ETH', balance: 0.25, value: 3000 * 0.25, change: 3.8 },
+    { symbol: 'SOL', balance: 5.8, value: 100 * 5.8, change: -2.1 },
+    { symbol: 'ADA', balance: 1200, value: 0.5 * 1200, change: 8.4 },
+    { symbol: 'MATIC', balance: 850, value: 0.8 * 850, change: 1.9 }
+  ];
 
   // Check authentication
   useEffect(() => {
@@ -84,159 +129,83 @@ export default function CryptoPage() {
     }
   }, [isInitialized, isAuthenticated, router]);
 
-  // Monitor connection status
-  useEffect(() => {
-    const statusInterval = setInterval(() => {
-      setConnectionStatus(coinbaseRealtimeService.getConnectionState());
-    }, 1000);
-
-    return () => clearInterval(statusInterval);
-  }, []);
-
-  // Get popular cryptocurrencies from Coinbase
-  const getPopularCryptos = useCallback(async () => {
+  // Fetch crypto markets data
+  const fetchCryptoData = useCallback(async () => {
     try {
       setError(null);
       
-      // Get available products from Coinbase
-      const products = await coinbaseRealtimeService.getAvailableProducts();
+      const response = await fetch('/api/crypto/markets');
+      const result = await response.json();
       
-      // Filter and format popular USD pairs
-      const popularSymbols = ['BTC', 'ETH', 'LTC', 'BCH', 'SOL', 'MATIC', 'LINK', 'AVAX', 'DOT', 'ADA', 'UNI', 'AAVE'];
-      const popularProducts = products.filter(p => 
-        popularSymbols.includes(p.base_currency) && 
-        p.quote_currency === 'USD'
-      );
-
-      // Get initial market data
-      const marketDataPromises = popularProducts.map(async (product) => {
-        const marketData = await coinbaseRealtimeService.getMarketData(product.base_currency);
-        return {
-          id: product.id,
-          symbol: product.base_currency,
-          name: getCryptoName(product.base_currency),
-          current_price: marketData?.price || 0,
-          price_change_percentage_24h: marketData?.change24hPercent || 0,
-          market_cap: (marketData?.price || 0) * (marketData?.volume24h || 0), // Estimate
-          total_volume: marketData?.volume24h || 0,
-          high_24h: marketData?.high24h || 0,
-          low_24h: marketData?.low24h || 0,
-          image: getCryptoIcon(product.base_currency),
-          isFavorite: favorites.has(product.base_currency),
-          productId: product.id,
-          lastUpdate: marketData?.timestamp || new Date()
-        };
-      });
-
-      const formattedData = await Promise.all(marketDataPromises);
-      
-      setCryptoData(formattedData);
-      setFilteredData(formattedData);
-      
-      if (!selectedCrypto && formattedData.length > 0) {
-        setSelectedCrypto(formattedData[0]);
+      if (result.success) {
+        const formattedData = result.data.map((crypto: any) => ({
+          ...crypto,
+          isFavorite: favorites.has(crypto.symbol)
+        }));
+        
+        setCryptoData(formattedData);
+        setFilteredData(formattedData);
+        
+        if (!selectedCrypto && formattedData.length > 0) {
+          setSelectedCrypto(formattedData[0]);
+        }
+      } else {
+        throw new Error(result.error || 'Failed to fetch crypto data');
       }
-      
-      setError(null);
     } catch (error: any) {
       console.error('Error fetching crypto data:', error);
-      setError(error.message || 'Failed to fetch crypto data from Coinbase');
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      setError(error.message || 'Failed to fetch crypto data');
     }
   }, [favorites, selectedCrypto]);
 
-  // Subscribe to real-time updates for displayed cryptocurrencies
-  const subscribeToRealTimeUpdates = useCallback(() => {
-    // Clear existing subscriptions
-    subscriptionsRef.current.forEach(unsubscribe => unsubscribe());
-    subscriptionsRef.current.clear();
+  // Fetch portfolio data
+  const fetchPortfolioData = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const [holdingsRes, summaryRes, balanceRes] = await Promise.all([
+        fetch('/api/portfolio?action=holdings'),
+        fetch('/api/portfolio?action=summary'),
+        fetch('/api/portfolio?action=balance')
+      ]);
 
-    // Subscribe to each cryptocurrency
-    cryptoData.forEach(crypto => {
-      const unsubscribe = coinbaseRealtimeService.subscribe(crypto.symbol, (marketData) => {
-        setRealTimeData(prev => new Map(prev).set(crypto.symbol, marketData));
-        
-        // Update crypto data with real-time prices
-        setCryptoData(prevData => 
-          prevData.map(item => 
-            item.symbol === crypto.symbol 
-              ? {
-                  ...item,
-                  current_price: marketData.price,
-                  price_change_percentage_24h: marketData.change24hPercent,
-                  total_volume: marketData.volume24h,
-                  high_24h: marketData.high24h,
-                  low_24h: marketData.low24h,
-                  lastUpdate: marketData.timestamp
-                }
-              : item
-          )
-        );
-      });
-      
-      subscriptionsRef.current.set(crypto.symbol, unsubscribe);
-    });
-  }, [cryptoData]);
+      const [holdingsData, summaryData, balanceData] = await Promise.all([
+        holdingsRes.json(),
+        summaryRes.json(),
+        balanceRes.json()
+      ]);
 
-  // Get crypto icon URL
-  const getCryptoIcon = (symbol: string) => {
-    const symbolMap: { [key: string]: string } = {
-      'BTC': 'bitcoin',
-      'ETH': 'ethereum',
-      'LTC': 'litecoin',
-      'BCH': 'bitcoin-cash',
-      'SOL': 'solana',
-      'MATIC': 'matic-network',
-      'LINK': 'chainlink',
-      'AVAX': 'avalanche-2',
-      'DOT': 'polkadot',
-      'ADA': 'cardano',
-      'UNI': 'uniswap',
-      'AAVE': 'aave'
-    };
+      if (holdingsData.holdings) {
+        setPortfolioHoldings(holdingsData.holdings.filter((h: any) => h.asset_type === 'crypto'));
+      }
 
-    const geckoId = symbolMap[symbol] || symbol.toLowerCase();
-    return `https://assets.coingecko.com/coins/images/1/thumb/${geckoId}.png`;
-  };
+      if (summaryData.summary) {
+        setPortfolioSummary(summaryData.summary);
+      }
 
-  // Get crypto name
-  const getCryptoName = (symbol: string) => {
-    const names: { [key: string]: string } = {
-      'BTC': 'Bitcoin',
-      'ETH': 'Ethereum',
-      'LTC': 'Litecoin',
-      'BCH': 'Bitcoin Cash',
-      'SOL': 'Solana',
-      'MATIC': 'Polygon',
-      'LINK': 'Chainlink',
-      'AVAX': 'Avalanche',
-      'DOT': 'Polkadot',
-      'ADA': 'Cardano',
-      'UNI': 'Uniswap',
-      'AAVE': 'Aave'
-    };
-    return names[symbol] || symbol;
-  };
+      if (balanceData.balance) {
+        setWalletBalance(balanceData.balance);
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio data:', error);
+    }
+  }, [user]);
 
   // Load favorites
   const loadFavorites = useCallback(async () => {
     if (!user) return;
     
     try {
-      const { data } = await supabase
-        .from('crypto_watchlist')
-        .select('symbol')
-        .eq('user_id', user.id);
+      const response = await fetch('/api/crypto/favorites');
+      const result = await response.json();
       
-      if (data) {
-        setFavorites(new Set(data.map(item => item.symbol)));
+      if (result.success && result.data) {
+        setFavorites(new Set(result.data.map((item: any) => item.symbol)));
       }
     } catch (error) {
       console.error('Error loading favorites:', error);
     }
-  }, [user, supabase]);
+  }, [user]);
 
   // Toggle favorite
   const toggleFavorite = useCallback(async (crypto: CryptoData) => {
@@ -250,27 +219,24 @@ export default function CryptoPage() {
     try {
       if (favorites.has(crypto.symbol)) {
         newFavorites.delete(crypto.symbol);
-        await supabase
-          .from('crypto_watchlist')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('symbol', crypto.symbol);
+        await fetch('/api/crypto/favorites', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: crypto.symbol })
+        });
         toast.success(`${crypto.name} removed from favorites`);
       } else {
         newFavorites.add(crypto.symbol);
-        await supabase
-          .from('crypto_watchlist')
-          .insert({
-            user_id: user.id,
-            symbol: crypto.symbol,
-            name: crypto.name
-          });
+        await fetch('/api/crypto/favorites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: crypto.symbol, name: crypto.name })
+        });
         toast.success(`${crypto.name} added to favorites`);
       }
       
       setFavorites(newFavorites);
       
-      // Update local data
       const updatedData = cryptoData.map(c => ({
         ...c,
         isFavorite: newFavorites.has(c.symbol)
@@ -281,12 +247,12 @@ export default function CryptoPage() {
       console.error('Error updating favorite:', error);
       toast.error('Failed to update favorite');
     }
-  }, [user, favorites, cryptoData, supabase]);
+  }, [user, favorites, cryptoData]);
 
-  // Handle trade through Coinbase
+  // Handle trade with real portfolio integration
   const handleTrade = useCallback(async () => {
-    if (!isConnected || !address || !selectedCrypto || !user) {
-      toast.error('Please connect your wallet first');
+    if (!selectedCrypto || !user) {
+      toast.error('Please select a cryptocurrency and ensure you are logged in');
       return;
     }
 
@@ -297,41 +263,65 @@ export default function CryptoPage() {
 
     setIsTrading(true);
     try {
-      // Call your API route that handles Coinbase orders
-      const response = await fetch('/api/coinbase/order', {
+      const amount = parseFloat(tradeAmount);
+      const priceUSD = selectedCrypto.price_usd;
+      const priceINR = selectedCrypto.price_inr;
+      
+      let quantity: number;
+      let totalINR: number;
+
+      if (tradeType === 'buy') {
+        // Amount is in USD for buying
+        quantity = amount / priceUSD;
+        totalINR = amount * 83; // Convert USD to INR
+        
+        if (totalINR > walletBalance.balance) {
+          toast.error('Insufficient balance');
+          return;
+        }
+      } else {
+        // Amount is in crypto quantity for selling
+        quantity = amount;
+        totalINR = quantity * priceINR;
+        
+        // Check if user has enough crypto
+        const userHolding = portfolioHoldings.find(h => h.symbol === selectedCrypto.symbol);
+        if (!userHolding || quantity > userHolding.quantity) {
+          toast.error('Insufficient crypto balance');
+          return;
+        }
+      }
+      
+      // Execute trade via API
+      const response = await fetch('/api/crypto/trade', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          side: tradeType,
-          productId: selectedCrypto.productId || `${selectedCrypto.symbol}-USD`,
-          amount: parseFloat(tradeAmount),
-          userId: user.id,
-          walletAddress: address
+          symbol: selectedCrypto.symbol,
+          tradeType,
+          quantity,
+          priceUSD,
+          totalINR,
+          userId: user.id
         })
       });
 
       const result = await response.json();
 
       if (result.success) {
-        toast.success(`${tradeType === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
-        setTradeAmount('');
+        toast.success(result.message);
         
-        // Log to database
-        await supabase.from('crypto_transactions').insert({
-          user_id: user.id,
-          wallet_address: address,
-          transaction_type: tradeType,
-          currency_pair: selectedCrypto.productId || `${selectedCrypto.symbol}-USD`,
-          amount: parseFloat(tradeAmount),
-          price: selectedCrypto.current_price,
-          total_value: parseFloat(tradeAmount) * (tradeType === 'buy' ? 1 : selectedCrypto.current_price),
-          status: 'completed',
-          coinbase_order_id: result.orderId
-        });
+        // Refresh portfolio and balance
+        await fetchPortfolioData();
+        
+        // Show success animation
+        setTimeout(() => {
+          toast.success(`Trade completed! ${quantity.toFixed(6)} ${selectedCrypto.symbol} ${tradeType === 'buy' ? 'purchased' : 'sold'}`);
+        }, 500);
+        
+        setTradeAmount('');
       } else {
-        toast.error(result.error || 'Trade failed');
+        throw new Error(result.error || 'Trade execution failed');
       }
     } catch (error) {
       console.error('Trade error:', error);
@@ -339,13 +329,12 @@ export default function CryptoPage() {
     } finally {
       setIsTrading(false);
     }
-  }, [isConnected, address, selectedCrypto, user, tradeAmount, tradeType, supabase]);
+  }, [selectedCrypto, user, tradeAmount, tradeType, walletBalance.balance, portfolioHoldings, fetchPortfolioData]);
 
   // Search and filter
   useEffect(() => {
     let filtered = [...cryptoData];
     
-    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(crypto => 
         crypto.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -353,16 +342,15 @@ export default function CryptoPage() {
       );
     }
     
-    // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price':
-          return b.current_price - a.current_price;
+          return b.price_usd - a.price_usd;
         case 'change':
-          return b.price_change_percentage_24h - a.price_change_percentage_24h;
+          return b.change_24h_percent - a.change_24h_percent;
         case 'volume':
         default:
-          return b.total_volume - a.total_volume;
+          return b.volume_24h - a.volume_24h;
       }
     });
     
@@ -371,25 +359,37 @@ export default function CryptoPage() {
 
   // Initial load
   useEffect(() => {
-    getPopularCryptos();
-  }, []);
-
-  // Load user-specific data and set up real-time subscriptions
-  useEffect(() => {
-    if (user) {
-      loadFavorites();
-    }
-    
-    if (cryptoData.length > 0) {
-      subscribeToRealTimeUpdates();
-    }
-    
-    return () => {
-      // Cleanup subscriptions
-      subscriptionsRef.current.forEach(unsubscribe => unsubscribe());
-      subscriptionsRef.current.clear();
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchCryptoData(),
+          fetchPortfolioData(),
+          loadFavorites()
+        ]);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      } finally {
+        setLoading(false);
+      }
     };
-  }, [user, loadFavorites, cryptoData.length, subscribeToRealTimeUpdates]);
+
+    if (user) {
+      loadData();
+    }
+  }, [user, fetchCryptoData, fetchPortfolioData, loadFavorites]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isRefreshing) {
+        fetchCryptoData();
+        fetchPortfolioData();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isRefreshing, fetchCryptoData, fetchPortfolioData]);
 
   // Formatters
   const formatCurrency = (value: number) => {
@@ -402,26 +402,50 @@ export default function CryptoPage() {
     }).format(value);
   };
 
+  const formatINR = (value: number) => {
+    if (!value || isNaN(value)) return '₹0';
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   const formatVolume = (value: number) => {
     if (!value || isNaN(value)) return '$0';
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-    if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+    if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
     return formatCurrency(value);
   };
 
-  // Show loading skeleton
-  if (!isInitialized) {
+  const getCryptoIcon = (symbol: string) => {
+    const iconMap: { [key: string]: string } = {
+      'BTC': '₿',
+      'ETH': 'Ξ',
+      'LTC': 'Ł',
+      'SOL': '◎',
+      'MATIC': '⬡',
+      'LINK': '🔗',
+      'AVAX': '▲',
+      'ADA': '₳',
+      'UNI': '🦄',
+      'AAVE': 'Ⓐ'
+    };
+    return iconMap[symbol] || symbol.charAt(0);
+  };
+
+  // Loading skeleton
+  if (!isInitialized || loading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="container mx-auto px-4 pt-24 pb-16">
-          <div className="animate-pulse">
-            <div className="h-8 bg-muted rounded w-48 mb-8"></div>
+        <div className="container mx-auto px-4 pt-20 pb-16">
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-muted rounded w-48"></div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <div className="h-96 bg-muted rounded-lg"></div>
-              </div>
+              <div className="lg:col-span-1 h-96 bg-muted rounded-lg"></div>
               <div className="lg:col-span-2 space-y-6">
                 <div className="h-32 bg-muted rounded-lg"></div>
                 <div className="h-64 bg-muted rounded-lg"></div>
@@ -437,196 +461,233 @@ export default function CryptoPage() {
     <main className="min-h-screen bg-background">
       <Navbar />
       
-      <div className="container mx-auto px-4 pt-24 pb-16">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Bitcoin className="h-8 w-8 text-orange-500" />
-                Coinbase Trading
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Trade all available Coinbase cryptocurrencies with real-time data
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className={`${
-                connectionStatus === 'connected' 
-                  ? 'text-green-500 border-green-500' 
-                  : 'text-yellow-500 border-yellow-500'
-              }`}>
-                {connectionStatus === 'connected' ? (
-                  <Wifi className="h-3 w-3 mr-1" />
-                ) : (
-                  <WifiOff className="h-3 w-3 mr-1" />
-                )}
-                {connectionStatus === 'connected' ? 'Live' : 'Connecting...'}
-              </Badge>
-              <ConnectWalletButton />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsRefreshing(true);
-                  getPopularCryptos();
-                }}
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+      <div className="container mx-auto px-4 pt-20 pb-16">
+        {/* Enhanced Header */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/10 via-blue-500/10 to-purple-500/10 border border-border/50 p-6 md:p-8">
+            <div className="relative z-10">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white text-2xl shadow-lg">
+                      <Bitcoin className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                        Crypto Trading
+                      </h1>
+                      <p className="text-muted-foreground flex items-center gap-2 mt-1">
+                        <Sparkles className="h-4 w-4" />
+                        Integrated portfolio tracking with real-time trading
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Portfolio Summary */}
+                  <div className="flex items-center gap-2 px-4 py-2 bg-background/50 backdrop-blur-sm rounded-xl border border-border/50">
+                    <PieChart className="h-4 w-4 text-purple-500" />
+                    <div className="text-sm">
+                      <div className="font-medium">
+                        {showBalances ? formatINR(portfolioSummary.total_value * 83) : '••••••'}
+                      </div>
+                      <div className={`text-xs ${portfolioSummary.total_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {showBalances ? `${portfolioSummary.total_pnl >= 0 ? '+' : ''}${portfolioSummary.total_pnl_percentage.toFixed(2)}%` : '••••'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Wallet Balance */}
+                  <div className="flex items-center gap-2 px-4 py-2 bg-background/50 backdrop-blur-sm rounded-xl border border-border/50">
+                    <Wallet className="h-4 w-4 text-emerald-500" />
+                    <span className="font-medium text-sm">
+                      {showBalances ? formatINR(walletBalance.balance) : '••••••'}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowBalances(!showBalances)}
+                      className="h-6 w-6 p-0"
+                    >
+                      {showBalances ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                    </Button>
+                  </div>
+                  
+                  <ConnectWalletButton />
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsRefreshing(true);
+                      Promise.all([fetchCryptoData(), fetchPortfolioData()]).finally(() => {
+                        setIsRefreshing(false);
+                      });
+                    }}
+                    disabled={isRefreshing}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Error Alert */}
+              {error && (
+                <Alert className="mt-6 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-700 dark:text-red-300">{error}</AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
-
-          {/* Error Alert */}
-          {error && (
-            <Alert className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Crypto List */}
+          {/* Enhanced Crypto List */}
           <div className="lg:col-span-1">
-            <Card className="h-[calc(100vh-200px)]">
-              <CardHeader className="pb-3">
-                <CardTitle>Available Cryptocurrencies</CardTitle>
-                <CardDescription>Real-time Coinbase trading pairs</CardDescription>
-                <div className="space-y-3 pt-3">
-                  {/* Search Bar */}
+            <Card className="h-[calc(100vh-350px)] shadow-xl border-0 bg-card/50 backdrop-blur-sm">
+              <CardHeader className="pb-4 border-b border-border/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <BarChart3 className="h-5 w-5 text-emerald-500" />
+                      Live Markets
+                    </CardTitle>
+                    <CardDescription>Real-time crypto prices</CardDescription>
+                  </div>
+                  <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                    {filteredData.length}
+                  </Badge>
+                </div>
+                
+                <div className="space-y-3 pt-4">
+                  {/* Enhanced Search */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search coins..."
+                      placeholder="Search cryptocurrencies..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
+                      className="pl-10 bg-background/50 border-border/50 focus:bg-background"
                     />
                   </div>
-                  {/* Sort Options */}
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant={sortBy === 'volume' ? 'default' : 'outline'}
-                      onClick={() => setSortBy('volume')}
-                      className="flex-1"
-                    >
-                      <DollarSign className="h-3 w-3 mr-1" />
-                      Volume
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={sortBy === 'price' ? 'default' : 'outline'}
-                      onClick={() => setSortBy('price')}
-                      className="flex-1"
-                    >
-                      Price
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={sortBy === 'change' ? 'default' : 'outline'}
-                      onClick={() => setSortBy('change')}
-                      className="flex-1"
-                    >
-                      24h %
-                    </Button>
+                  
+                  {/* Enhanced Sort Options */}
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'volume', label: 'Volume', icon: DollarSign },
+                      { id: 'price', label: 'Price', icon: Target },
+                      { id: 'change', label: '24h %', icon: TrendingUp }
+                    ].map(({ id, label, icon: Icon }) => (
+                      <Button
+                        key={id}
+                        size="sm"
+                        variant={sortBy === id ? 'default' : 'outline'}
+                        onClick={() => setSortBy(id as any)}
+                        className="flex-1 gap-1 h-8"
+                      >
+                        <Icon className="h-3 w-3" />
+                        <span className="text-xs">{label}</span>
+                      </Button>
+                    ))}
                   </div>
                 </div>
               </CardHeader>
+              
               <CardContent className="p-0">
-                {loading ? (
-                  <div className="divide-y">
-                    {[...Array(10)].map((_, i) => (
-                      <div key={i} className="p-4 animate-pulse">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-muted rounded-full"></div>
-                            <div>
-                              <div className="h-4 bg-muted rounded w-20 mb-1"></div>
-                              <div className="h-3 bg-muted rounded w-12"></div>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="h-4 bg-muted rounded w-16 mb-1"></div>
-                            <div className="h-3 bg-muted rounded w-12"></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : filteredData.length === 0 ? (
+                {filteredData.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
                     <AlertCircle className="h-8 w-8 mx-auto mb-2" />
                     <p>No cryptocurrencies found</p>
                   </div>
                 ) : (
-                  <ScrollArea className="h-[calc(100vh-400px)]">
-                    <div className="divide-y">
-                      {filteredData.map((crypto) => (
-                        <div
-                          key={crypto.id}
-                          className={`p-4 hover:bg-muted/50 cursor-pointer transition-colors relative ${
-                            selectedCrypto?.id === crypto.id ? 'bg-muted' : ''
-                          }`}
-                          onClick={() => setSelectedCrypto(crypto)}
-                        >
-                          {/* Real-time indicator */}
-                          {realTimeData.has(crypto.symbol) && (
-                            <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                          )}
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="relative">
-                                <img 
-                                  src={crypto.image} 
-                                  alt={crypto.name}
-                                  className="w-8 h-8 rounded-full"
-                                  loading="lazy"
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="absolute -top-1 -right-1 h-4 w-4 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFavorite(crypto);
-                                  }}
-                                >
-                                  <Star className={`h-3 w-3 ${crypto.isFavorite ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'}`} />
-                                </Button>
+                  <ScrollArea className="h-[calc(100vh-500px)]">
+                    <div className="space-y-1 p-3">
+                      <AnimatePresence>
+                        {filteredData.map((crypto, index) => {
+                          const userHolding = portfolioHoldings.find(h => h.symbol === crypto.symbol);
+                          return (
+                            <motion.div
+                              key={crypto.symbol}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -20 }}
+                              transition={{ delay: index * 0.02 }}
+                              className={`relative p-4 rounded-xl cursor-pointer transition-all duration-200 hover:bg-muted/50 group border ${
+                                selectedCrypto?.symbol === crypto.symbol 
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 shadow-md' 
+                                  : 'border-transparent hover:border-border/50'
+                              }`}
+                              onClick={() => setSelectedCrypto(crypto)}
+                            >
+                              {/* Portfolio Indicator */}
+                              {userHolding && (
+                                <div className="absolute top-2 right-2 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800" />
+                              )}
+                              
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  {/* Crypto Icon */}
+                                  <div className="relative">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                      {getCryptoIcon(crypto.symbol)}
+                                    </div>
+                                    
+                                    {/* Favorite Star */}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="absolute -top-1 -right-1 h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFavorite(crypto);
+                                      }}
+                                    >
+                                      <Star className={`h-3 w-3 ${crypto.isFavorite ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'}`} />
+                                    </Button>
+                                  </div>
+                                  
+                                  <div>
+                                    <p className="font-semibold text-sm">{crypto.name}</p>
+                                    <p className="text-xs text-muted-foreground">{crypto.symbol}</p>
+                                    {userHolding && (
+                                      <p className="text-xs text-green-600 font-medium">
+                                        {userHolding.quantity.toFixed(6)} held
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <div className="text-right">
+                                  <p className="font-semibold text-sm">{formatCurrency(crypto.price_usd)}</p>
+                                  <div className={`text-xs flex items-center justify-end gap-1 ${
+                                    crypto.change_24h_percent >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}>
+                                    {crypto.change_24h_percent >= 0 ? (
+                                      <TrendingUp className="h-3 w-3" />
+                                    ) : (
+                                      <TrendingDown className="h-3 w-3" />
+                                    )}
+                                    {crypto.change_24h_percent.toFixed(2)}%
+                                  </div>
+                                  {userHolding && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {formatINR(userHolding.current_value)}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium text-sm">{crypto.name}</p>
-                                <p className="text-xs text-muted-foreground">{crypto.symbol}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium text-sm">{formatCurrency(crypto.current_price)}</p>
-                              <p className={`text-xs flex items-center justify-end ${
-                                crypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
-                              }`}>
-                                {crypto.price_change_percentage_24h >= 0 ? (
-                                  <TrendingUp className="h-3 w-3 mr-1" />
-                                ) : (
-                                  <TrendingDown className="h-3 w-3 mr-1" />
-                                )}
-                                {crypto.price_change_percentage_24h.toFixed(2)}%
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {/* Last update indicator */}
-                          {crypto.lastUpdate && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              Updated: {new Date(crypto.lastUpdate).toLocaleTimeString()}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   </ScrollArea>
                 )}
@@ -634,232 +695,304 @@ export default function CryptoPage() {
             </Card>
           </div>
 
-          {/* Trading Interface */}
+          {/* Enhanced Trading Interface */}
           <div className="lg:col-span-2 space-y-6">
             {selectedCrypto ? (
               <>
-                {/* Selected Crypto Info */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <img 
-                          src={selectedCrypto.image} 
-                          alt={selectedCrypto.name}
-                          className="w-12 h-12 rounded-full"
-                        />
-                        <div>
-                          <CardTitle className="text-2xl flex items-center gap-2">
-                            {selectedCrypto.name}
-                            {realTimeData.has(selectedCrypto.symbol) && (
-                              <Badge variant="outline" className="text-green-500 border-green-500">
+                {/* Enhanced Crypto Info */}
+                <Card className="overflow-hidden shadow-xl border-0 bg-card/50 backdrop-blur-sm">
+                  <CardContent className="p-0">
+                    <div className="bg-gradient-to-r from-emerald-50/50 to-blue-50/50 dark:from-emerald-950/10 dark:to-blue-950/10 p-6 border-b border-border/50">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                            {getCryptoIcon(selectedCrypto.symbol)}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <h2 className="text-2xl font-bold">{selectedCrypto.name}</h2>
+                              <Badge variant="outline" className="text-green-600 border-green-500/50 bg-green-500/10">
                                 <Activity className="h-3 w-3 mr-1" />
                                 Live
                               </Badge>
-                            )}
-                          </CardTitle>
-                          <p className="text-muted-foreground">{selectedCrypto.productId || `${selectedCrypto.symbol}-USD`}</p>
+                            </div>
+                            <p className="text-muted-foreground">{selectedCrypto.coinbase_product_id || `${selectedCrypto.symbol}-USD`}</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-bold">
-                          {formatCurrency(selectedCrypto.current_price)}
-                        </p>
-                        <div className="flex items-center justify-end gap-4 mt-1">
-                          <div className={`flex items-center ${
-                            selectedCrypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
+                        
+                        <div className="text-right">
+                          <p className="text-3xl font-bold">
+                            {formatCurrency(selectedCrypto.price_usd)}
+                          </p>
+                          <div className={`flex items-center justify-end gap-2 mt-1 ${
+                            selectedCrypto.change_24h_percent >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            {selectedCrypto.price_change_percentage_24h >= 0 ? (
-                              <ArrowUpRight className="h-4 w-4 mr-1" />
+                            {selectedCrypto.change_24h_percent >= 0 ? (
+                              <ArrowUpRight className="h-5 w-5" />
                             ) : (
-                              <ArrowDownRight className="h-4 w-4 mr-1" />
+                              <ArrowDownRight className="h-5 w-5" />
                             )}
-                            <span className="text-sm font-medium">
-                              {selectedCrypto.price_change_percentage_24h.toFixed(2)}% (24h)
+                            <span className="text-lg font-semibold">
+                              {selectedCrypto.change_24h_percent >= 0 ? '+' : ''}{selectedCrypto.change_24h_percent.toFixed(2)}%
                             </span>
+                            <span className="text-sm text-muted-foreground">(24h)</span>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">24h High</p>
-                        <p className="font-medium">{formatCurrency(selectedCrypto.high_24h)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">24h Low</p>
-                        <p className="font-medium">{formatCurrency(selectedCrypto.low_24h)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">24h Volume</p>
-                        <p className="font-medium">{formatVolume(selectedCrypto.total_volume)}</p>
+                      
+                      {/* Market Stats */}
+                      <div className="grid grid-cols-3 gap-4 mt-6 p-4 bg-background/30 backdrop-blur-sm rounded-xl border border-border/30">
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">24h High</p>
+                          <p className="font-semibold">{formatCurrency(selectedCrypto.high_24h)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">24h Low</p>
+                          <p className="font-semibold">{formatCurrency(selectedCrypto.low_24h)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">24h Volume</p>
+                          <p className="font-semibold">{formatVolume(selectedCrypto.volume_24h)}</p>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Trading Tabs */}
-                <Card>
+                {/* Enhanced Trading Tabs */}
+                <Card className="shadow-xl border-0 bg-card/50 backdrop-blur-sm">
                   <CardContent className="p-0">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                      <TabsList className="w-full rounded-none border-b">
-                        <TabsTrigger value="overview" className="flex-1">Overview</TabsTrigger>
-                        <TabsTrigger value="chart" className="flex-1">Chart</TabsTrigger>
-                        <TabsTrigger value="trade" className="flex-1">Trade</TabsTrigger>
+                      <TabsList className="w-full rounded-none border-b border-border/50 bg-transparent h-14">
+                        <TabsTrigger value="chart" className="flex-1 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-950/20">
+                          <LineChart className="h-4 w-4 mr-2" />
+                          Chart
+                        </TabsTrigger>
+                        <TabsTrigger value="trade" className="flex-1 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 dark:data-[state=active]:bg-purple-950/20">
+                          <Zap className="h-4 w-4 mr-2" />
+                          Trade
+                        </TabsTrigger>
+                        <TabsTrigger value="portfolio" className="flex-1 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-600 dark:data-[state=active]:bg-emerald-950/20">
+                          <PieChart className="h-4 w-4 mr-2" />
+                          Portfolio
+                        </TabsTrigger>
                       </TabsList>
                       
-                      {/* Overview Tab */}
-                      <TabsContent value="overview" className="p-6 space-y-4">
-                        <div>
-                          <h3 className="text-lg font-semibold mb-3">Market Statistics</h3>
-                          <div className="grid grid-cols-2 gap-4">
-                            <Card>
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-sm">Price Information</CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Current Price</span>
-                                  <span className="font-medium">{formatCurrency(selectedCrypto.current_price)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">24h Change</span>
-                                  <span className={`font-medium ${
-                                    selectedCrypto.price_change_percentage_24h >= 0 ? 'text-green-500' : 'text-red-500'
-                                  }`}>
-                                    {selectedCrypto.price_change_percentage_24h.toFixed(2)}%
-                                  </span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Trading Pair</span>
-                                  <span className="font-medium">{selectedCrypto.productId || `${selectedCrypto.symbol}-USD`}</span>
-                                </div>
-                              </CardContent>
-                            </Card>
-                            
-                            <Card>
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-sm">24h Trading Data</CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">High</span>
-                                  <span className="font-medium">{formatCurrency(selectedCrypto.high_24h)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Low</span>
-                                  <span className="font-medium">{formatCurrency(selectedCrypto.low_24h)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Volume</span>
-                                  <span className="font-medium">{formatVolume(selectedCrypto.total_volume)}</span>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </div>
-                      </TabsContent>
-
                       {/* Chart Tab */}
                       <TabsContent value="chart" className="p-0">
-                        <div className="h-[600px] w-full">
-                          <TradingViewWidget
-                            symbol={`COINBASE:${selectedCrypto.symbol}USD`}
-                            height={600}
+                        <div className="h-[500px] w-full">
+                          <EnhancedTradingViewWidget
+                            symbol={selectedCrypto.symbol}
+                            height={500}
                           />
                         </div>
                       </TabsContent>
 
-                      {/* Trade Tab */}
+                      {/* Enhanced Trade Tab */}
                       <TabsContent value="trade" className="p-6">
-                        <div className="max-w-md mx-auto">
+                        <div className="max-w-md mx-auto space-y-6">
+                          <div className="text-center">
+                            <h3 className="text-xl font-bold mb-2">Trade {selectedCrypto.symbol}</h3>
+                            <p className="text-muted-foreground">Execute instant trades with real portfolio updates</p>
+                          </div>
+
                           <Tabs value={tradeType} onValueChange={(v) => setTradeType(v as 'buy' | 'sell')}>
-                            <TabsList className="grid w-full grid-cols-2">
-                              <TabsTrigger value="buy">Buy {selectedCrypto.symbol}</TabsTrigger>
-                              <TabsTrigger value="sell">Sell {selectedCrypto.symbol}</TabsTrigger>
+                            <TabsList className="grid w-full grid-cols-2 bg-muted/50">
+                              <TabsTrigger value="buy" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Buy
+                              </TabsTrigger>
+                              <TabsTrigger value="sell" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
+                                <Minus className="h-4 w-4 mr-2" />
+                                Sell
+                              </TabsTrigger>
                             </TabsList>
-                            <TabsContent value="buy" className="space-y-4">
-                              <div>
+                            
+                            <TabsContent value="buy" className="space-y-4 mt-6">
+                              <div className="space-y-2">
                                 <label className="text-sm font-medium">Amount (USD)</label>
                                 <Input
                                   type="number"
-                                  placeholder="100.00"
+                                  placeholder="100"
                                   value={tradeAmount}
                                   onChange={(e) => setTradeAmount(e.target.value)}
-                                  disabled={!isConnected}
+                                  className="text-lg h-12"
                                 />
-                                {tradeAmount && selectedCrypto.current_price > 0 && (
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    ≈ {(parseFloat(tradeAmount) / selectedCrypto.current_price).toFixed(6)} {selectedCrypto.symbol}
-                                  </p>
+                                {tradeAmount && selectedCrypto.price_usd > 0 && (
+                                  <div className="text-sm text-muted-foreground space-y-1">
+                                    <p>≈ {(parseFloat(tradeAmount) / selectedCrypto.price_usd).toFixed(6)} {selectedCrypto.symbol}</p>
+                                    <p>Total: {formatINR(parseFloat(tradeAmount) * 83)}</p>
+                                  </div>
                                 )}
                               </div>
-                              <Alert>
-                                <Info className="h-4 w-4" />
-                                <AlertDescription>
-                                  Orders will be executed through Coinbase at market price
+
+                              <div className="grid grid-cols-3 gap-2">
+                                {[25, 50, 75].map((percent) => (
+                                  <Button
+                                    key={percent}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setTradeAmount(((walletBalance.balance * percent) / 100 / 83).toString())}
+                                    className="text-xs"
+                                  >
+                                    {percent}%
+                                  </Button>
+                                ))}
+                              </div>
+
+                              <Alert className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20">
+                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                <AlertDescription className="text-green-700 dark:text-green-300">
+                                  Trade will be executed instantly and portfolio updated automatically
                                 </AlertDescription>
                               </Alert>
+
                               <Button
-                                className="w-full"
+                                className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                                 onClick={handleTrade}
-                                disabled={!isConnected || isTrading || !tradeAmount}
+                                disabled={isTrading || !tradeAmount}
                               >
                                 {isTrading ? (
                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 ) : (
-                                  <Wallet className="h-4 w-4 mr-2" />
+                                  <Plus className="h-4 w-4 mr-2" />
                                 )}
-                                {isConnected ? `Buy ${selectedCrypto.symbol}` : 'Connect Wallet to Trade'}
+                                Buy {selectedCrypto.symbol}
                               </Button>
                             </TabsContent>
-                            <TabsContent value="sell" className="space-y-4">
-                              <div>
+                            
+                            <TabsContent value="sell" className="space-y-4 mt-6">
+                              <div className="space-y-2">
                                 <label className="text-sm font-medium">Amount ({selectedCrypto.symbol})</label>
                                 <Input
                                   type="number"
                                   placeholder="0.001"
                                   value={tradeAmount}
                                   onChange={(e) => setTradeAmount(e.target.value)}
-                                  disabled={!isConnected}
+                                  className="text-lg h-12"
                                 />
-                                {tradeAmount && selectedCrypto.current_price > 0 && (
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    ≈ {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.current_price)}
-                                  </p>
+                                {tradeAmount && selectedCrypto.price_usd > 0 && (
+                                  <div className="text-sm text-muted-foreground space-y-1">
+                                    <p>≈ {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.price_usd)}</p>
+                                    <p>Total: {formatINR(parseFloat(tradeAmount) * selectedCrypto.price_inr)}</p>
+                                  </div>
                                 )}
                               </div>
-                              <Alert>
-                                <Info className="h-4 w-4" />
-                                <AlertDescription>
-                                  Orders will be executed through Coinbase at market price
+
+                              {/* Show available balance for selling */}
+                              {(() => {
+                                const userHolding = portfolioHoldings.find(h => h.symbol === selectedCrypto.symbol);
+                                return userHolding && (
+                                  <div className="p-3 bg-muted/50 rounded-lg">
+                                    <p className="text-sm text-muted-foreground">Available to sell</p>
+                                    <p className="font-semibold">{userHolding.quantity.toFixed(6)} {selectedCrypto.symbol}</p>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setTradeAmount(userHolding.quantity.toString())}
+                                      className="mt-2 text-xs"
+                                    >
+                                      Sell All
+                                    </Button>
+                                  </div>
+                                );
+                              })()}
+
+                              <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20">
+                                <Info className="h-4 w-4 text-red-600" />
+                                <AlertDescription className="text-red-700 dark:text-red-300">
+                                  Trade will be executed instantly and portfolio updated automatically
                                 </AlertDescription>
                               </Alert>
+
                               <Button
-                                className="w-full"
-                                variant="destructive"
+                                className="w-full h-12 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600"
                                 onClick={handleTrade}
-                                disabled={!isConnected || isTrading || !tradeAmount}
+                                disabled={isTrading || !tradeAmount}
                               >
                                 {isTrading ? (
                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 ) : (
-                                  <Wallet className="h-4 w-4 mr-2" />
+                                  <Minus className="h-4 w-4 mr-2" />
                                 )}
-                                {isConnected ? `Sell ${selectedCrypto.symbol}` : 'Connect Wallet to Trade'}
+                                Sell {selectedCrypto.symbol}
                               </Button>
                             </TabsContent>
                           </Tabs>
                           
-                          {!isConnected && (
-                            <div className="mt-4 p-4 bg-muted rounded-lg">
-                              <div className="flex items-center gap-2 text-sm">
-                                <Info className="h-4 w-4 text-muted-foreground" />
-                                <p className="text-muted-foreground">
-                                  Connect your wallet to start trading on Coinbase
+                          {/* Available Balance */}
+                          <div className="p-4 bg-background/50 backdrop-blur-sm rounded-xl border border-border/30">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">INR Balance</span>
+                              <span className="font-medium">{formatINR(walletBalance.balance)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      {/* Portfolio Tab */}
+                      <TabsContent value="portfolio" className="p-6">
+                        <div className="space-y-6">
+                          <div className="text-center">
+                            <h3 className="text-xl font-bold mb-2">Your Crypto Portfolio</h3>
+                            <p className="text-muted-foreground">Live portfolio tracking with P&L</p>
+                          </div>
+
+                          {portfolioHoldings.length === 0 ? (
+                            <div className="text-center py-8">
+                              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4 shadow-lg">
+                                <PieChart className="h-8 w-8" />
+                              </div>
+                              <h3 className="text-lg font-semibold mb-2">No Holdings Yet</h3>
+                              <p className="text-muted-foreground mb-4">Start trading to build your crypto portfolio</p>
+                              <Button onClick={() => setActiveTab('trade')}>
+                                Start Trading
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              {portfolioHoldings.map((holding) => (
+                                <div key={holding.id} className="p-4 bg-background/50 backdrop-blur-sm rounded-xl hover:bg-background/70 transition-colors border border-border/30">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg">
+                                        {getCryptoIcon(holding.symbol)}
+                                      </div>
+                                      <div>
+                                        <p className="font-semibold">{holding.name}</p>
+                                        <p className="text-sm text-muted-foreground">{holding.quantity.toFixed(6)} {holding.symbol}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Avg: {formatINR(holding.average_buy_price)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-semibold">{formatINR(holding.current_value)}</p>
+                                      <p className={`text-sm ${holding.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {holding.profit_loss >= 0 ? '+' : ''}{formatINR(holding.profit_loss)}
+                                      </p>
+                                      <p className={`text-xs ${holding.profit_loss_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {holding.profit_loss_percentage >= 0 ? '+' : ''}{holding.profit_loss_percentage.toFixed(2)}%
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              {/* Portfolio Summary */}
+                              <div className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-xl text-center bg-background/30 backdrop-blur-sm">
+                                <p className="text-sm text-muted-foreground mb-2">Total Portfolio Value</p>
+                                <p className="text-2xl font-bold text-emerald-600">
+                                  {formatINR(portfolioSummary.total_value * 83)}
                                 </p>
+                                <div className="flex items-center justify-center gap-4 mt-2 text-sm">
+                                  <span className="text-muted-foreground">
+                                    Invested: {formatINR(portfolioSummary.total_invested * 83)}
+                                  </span>
+                                  <span className={portfolioSummary.total_pnl >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                    P&L: {portfolioSummary.total_pnl >= 0 ? '+' : ''}{portfolioSummary.total_pnl_percentage.toFixed(2)}%
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -872,8 +1005,11 @@ export default function CryptoPage() {
             ) : (
               <div className="flex items-center justify-center h-96">
                 <div className="text-center text-muted-foreground">
-                  <Bitcoin className="h-12 w-12 mx-auto mb-4" />
-                  <p>Select a cryptocurrency to view details</p>
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4 shadow-lg">
+                    <Bitcoin className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Select a Cryptocurrency</h3>
+                  <p>Choose from the list to view details and start trading</p>
                 </div>
               </div>
             )}

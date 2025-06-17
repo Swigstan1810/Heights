@@ -1,105 +1,181 @@
-// app/api/crypto/trade/route.ts
-import { NextResponse } from 'next/server';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+// app/api/crypto/trade/route.ts - Fixed Portfolio Integration API
+import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerComponentClient({ cookies });
+    const supabase = createRouteHandlerClient({ cookies });
     
-    // Verify user is authenticated
+    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
-    const { symbol, trade_type, amount, wallet_address } = body;
+    const { symbol, tradeType, quantity, priceUSD, totalINR, userId } = body;
 
     // Validate input
-    if (!symbol || !trade_type || !amount || amount <= 0) {
-      return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
+    if (!symbol || !tradeType || !quantity || !priceUSD || !totalINR) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
     }
 
-    // Get current market price
-    const { data: market, error: marketError } = await supabase
-      .from('crypto_markets')
-      .select('*')
-      .eq('symbol', symbol)
+    if (user.id !== userId) {
+      return NextResponse.json(
+        { error: 'User ID mismatch' },
+        { status: 403 }
+      );
+    }
+
+    const priceINR = priceUSD * 83; // USD to INR conversion
+
+    // Get current wallet balance - fixed to handle single result
+    const { data: wallet, error: walletError } = await supabase
+      .from('wallet_balance')
+      .select('balance')
+      .eq('user_id', user.id)
+      .eq('currency', 'INR')
       .single();
 
-    if (marketError || !market) {
-      return NextResponse.json({ error: 'Market not found' }, { status: 404 });
+    if (walletError) {
+      console.error('Wallet error:', walletError);
+      return NextResponse.json(
+        { error: 'Failed to fetch wallet balance' },
+        { status: 500 }
+      );
     }
 
-    // Calculate trade details
-    const usdInrRate = 83.25; // In production, fetch from real API
-    const quantity = trade_type === 'buy' ? amount / market.price_inr : amount;
-    const totalInr = trade_type === 'buy' ? amount : amount * market.price_inr;
-    const brokerageFee = Math.max(10, Math.min(1000, totalInr * 0.001));
-    const netAmount = trade_type === 'buy' ? totalInr + brokerageFee : totalInr - brokerageFee;
+    // Check if user has sufficient balance for buy orders
+    if (tradeType === 'buy' && totalINR > wallet.balance) {
+      return NextResponse.json(
+        { error: 'Insufficient balance' },
+        { status: 400 }
+      );
+    }
 
-    // Check user balances
-    if (trade_type === 'buy') {
-      // Check INR balance
-      const { data: inrWallet } = await supabase
-        .from('user_inr_wallet')
-        .select('balance')
-        .eq('user_id', user.id)
-        .single();
+    // Get current holding if exists
+    const { data: currentHolding } = await supabase
+      .from('portfolio_holdings')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('symbol', symbol)
+      .eq('asset_type', 'crypto')
+      .single();
 
-      if (!inrWallet || inrWallet.balance < netAmount) {
-        return NextResponse.json({ error: 'Insufficient INR balance' }, { status: 400 });
+    // For sell orders, check if user has enough crypto
+    if (tradeType === 'sell') {
+      if (!currentHolding || quantity > currentHolding.quantity) {
+        return NextResponse.json(
+          { error: 'Insufficient crypto balance' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Calculate new holding values
+    let newQuantity: number;
+    let newTotalInvested: number;
+    let newAverageBuyPrice: number;
+
+    if (currentHolding) {
+      if (tradeType === 'buy') {
+        newQuantity = currentHolding.quantity + quantity;
+        newTotalInvested = currentHolding.total_invested + totalINR;
+        newAverageBuyPrice = newTotalInvested / newQuantity;
+      } else {
+        newQuantity = Math.max(0, currentHolding.quantity - quantity);
+        if (newQuantity > 0) {
+          newAverageBuyPrice = currentHolding.average_buy_price;
+          newTotalInvested = newQuantity * newAverageBuyPrice;
+        } else {
+          newAverageBuyPrice = 0;
+          newTotalInvested = 0;
+        }
       }
     } else {
-      // Check crypto balance
-      const { data: cryptoBalance } = await supabase
-        .from('user_crypto_balances')
-        .select('balance')
-        .eq('user_id', user.id)
-        .eq('symbol', symbol)
-        .single();
-
-      if (!cryptoBalance || cryptoBalance.balance < quantity) {
-        return NextResponse.json({ error: 'Insufficient crypto balance' }, { status: 400 });
-      }
+      // New holding (only for buy orders)
+      newQuantity = quantity;
+      newTotalInvested = totalINR;
+      newAverageBuyPrice = priceINR;
     }
 
-    // Create trade record
-    const { data: trade, error: tradeError } = await supabase
-      .from('crypto_trades')
-      .insert({
-        user_id: user.id,
-        wallet_address,
-        symbol,
-        trade_type,
-        quantity,
-        price_usd: market.price_usd,
-        price_inr: market.price_inr,
-        total_usd: quantity * market.price_usd,
-        total_inr: totalInr,
-        brokerage_fee: brokerageFee,
-        net_amount: netAmount,
-        usd_inr_rate: usdInrRate,
-        status: 'completed',
-        executed_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+    const newCurrentValue = newQuantity * priceINR;
+    const newProfitLoss = newCurrentValue - newTotalInvested;
+    const newProfitLossPercentage = newTotalInvested > 0 ? (newProfitLoss / newTotalInvested) * 100 : 0;
 
-    if (tradeError) throw tradeError;
+    // Execute trade using the database function
+    const { error: transactionError } = await supabase.rpc('handle_crypto_trade', {
+      p_user_id: user.id,
+      p_symbol: symbol,
+      p_trade_type: tradeType,
+      p_quantity: quantity,
+      p_price_inr: priceINR,
+      p_total_inr: totalINR,
+      p_new_quantity: newQuantity,
+      p_new_total_invested: newTotalInvested,
+      p_new_average_buy_price: newAverageBuyPrice,
+      p_new_current_value: newCurrentValue,
+      p_new_profit_loss: newProfitLoss,
+      p_new_profit_loss_percentage: newProfitLossPercentage,
+      p_asset_name: getCryptoName(symbol)
+    });
+
+    if (transactionError) {
+      console.error('Transaction error:', transactionError);
+      return NextResponse.json(
+        { error: 'Failed to execute trade: ' + transactionError.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      trade,
-      message: `${trade_type === 'buy' ? 'Buy' : 'Sell'} order executed successfully`
+      message: `Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity.toFixed(6)} ${symbol}`,
+      data: {
+        symbol,
+        tradeType,
+        quantity,
+        priceINR,
+        totalINR,
+        newQuantity,
+        newCurrentValue,
+        newProfitLoss,
+        newProfitLossPercentage
+      }
     });
 
-  } catch (error: any) {
-    console.error('Trade execution error:', error);
+  } catch (error) {
+    console.error('Trade API error:', error);
     return NextResponse.json(
-      { error: 'Failed to execute trade', details: error.message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
+}
+
+// Helper function to get crypto names
+function getCryptoName(symbol: string): string {
+  const names: { [key: string]: string } = {
+    'BTC': 'Bitcoin',
+    'ETH': 'Ethereum',
+    'LTC': 'Litecoin',
+    'BCH': 'Bitcoin Cash',
+    'SOL': 'Solana',
+    'MATIC': 'Polygon',
+    'LINK': 'Chainlink',
+    'AVAX': 'Avalanche',
+    'DOT': 'Polkadot',
+    'ADA': 'Cardano',
+    'UNI': 'Uniswap',
+    'AAVE': 'Aave'
+  };
+  return names[symbol] || symbol;
 }

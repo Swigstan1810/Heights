@@ -66,7 +66,7 @@ export function AssistantButton() {
           damping: 20 
         }}
         className={cn(
-          "fixed z-40 transition-all duration-300",
+          "fixed z-[99] transition-all duration-300",
           isMobile 
             ? "right-4 bottom-4" 
             : "right-6 bottom-6"

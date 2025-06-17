@@ -6,7 +6,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Maximize2, TrendingUp, TrendingDown, Activity, RefreshCw } from 'lucide-react';
 import { Line, LineChart, XAxis, YAxis, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts';
-import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
 import { motion, AnimatePresence } from 'framer-motion';
 
 declare global {
@@ -23,7 +22,42 @@ interface EnhancedTradingViewProps {
   onFullscreenToggle?: () => void;
 }
 
-// Fallback Chart Component with Real-time Data
+// Mock market data for demo
+const generateMockData = (symbol: string) => {
+  const basePrices: Record<string, number> = {
+    'BTC': 45000,
+    'ETH': 3000,
+    'SOL': 100,
+    'ADA': 0.5,
+    'MATIC': 0.8,
+    'LINK': 15,
+    'AVAX': 35,
+    'UNI': 6.5,
+    'AAVE': 85,
+    'LTC': 75
+  };
+
+  const basePrice = basePrices[symbol] || 100;
+  const data = [];
+  const now = new Date();
+
+  for (let i = 49; i >= 0; i--) {
+    const time = new Date(now.getTime() - i * 60000);
+    const variance = (Math.random() - 0.5) * 0.02; // ±1%
+    const price = basePrice * (1 + variance);
+    
+    data.push({
+      time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      price: price,
+      volume: Math.random() * 1000000,
+      timestamp: time.getTime()
+    });
+  }
+
+  return data;
+};
+
+// Enhanced Fallback Chart Component
 function FallbackChart({ 
   symbol = "BTC", 
   height = 400,
@@ -35,52 +69,48 @@ function FallbackChart({
     time: string;
     price: number;
     volume: number;
+    timestamp: number;
   }>>([]);
-  const [currentPrice, setCurrentPrice] = useState<MarketData | null>(null);
+  const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d'>('5m');
+  const [isLive, setIsLive] = useState(true);
   
+  // Initialize data
   useEffect(() => {
-    const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (data) => {
-      setCurrentPrice(data);
-      setIsLoading(false);
-      
-      // Add to price history
+    const data = generateMockData(symbol);
+    setPriceData(data);
+    setCurrentPrice(data[data.length - 1]?.price || 0);
+    setIsLoading(false);
+  }, [symbol]);
+
+  // Simulate live updates
+  useEffect(() => {
+    if (!isLive || isLoading) return;
+
+    const intervalId = window.setInterval(() => {
       setPriceData(prev => {
-        const newData = [...prev, {
-          time: new Date().toLocaleTimeString(),
-          price: data.price,
-          volume: data.volume24h
-        }].slice(-50); // Keep last 50 points
+        if (prev.length === 0) return prev;
+        
+        const lastPrice = prev[prev.length - 1].price;
+        const variance = (Math.random() - 0.5) * 0.01; // ±0.5%
+        const newPrice = lastPrice * (1 + variance);
+        const now = new Date();
+        
+        const newData = [...prev.slice(1), {
+          time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          price: newPrice,
+          volume: Math.random() * 1000000,
+          timestamp: now.getTime()
+        }];
+        
+        setCurrentPrice(newPrice);
         return newData;
       });
-    });
+    }, 3000);
 
-    // Generate initial mock data if no real data
-    const generateMockData = () => {
-      const now = new Date();
-      const data = [];
-      const basePrice = symbol === 'BTC' ? 45000 : symbol === 'ETH' ? 3000 : 100;
-      
-      for (let i = 49; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 60000);
-        const variance = (Math.random() - 0.5) * 0.02;
-        data.push({
-          time: time.toLocaleTimeString(),
-          price: basePrice * (1 + variance),
-          volume: Math.random() * 1000000
-        });
-      }
-      setPriceData(data);
-      setIsLoading(false);
-    };
-
-    const timer = setTimeout(generateMockData, 2000);
-    return () => {
-      unsubscribe();
-      clearTimeout(timer);
-    };
-  }, [symbol]);
+    return () => window.clearInterval(intervalId);
+  }, [isLive, isLoading]);
 
   const priceChange = priceData.length > 1 
     ? priceData[priceData.length - 1].price - priceData[0].price 
@@ -109,13 +139,13 @@ function FallbackChart({
       <Card className="h-full border-0 shadow-none">
         <CardContent className="p-0 h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-background to-muted/20">
             <div className="flex items-center gap-4">
               <div>
                 <h3 className="text-lg font-semibold">{symbol}/USD</h3>
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-bold">
-                    ${currentPrice?.price.toLocaleString() || priceData[priceData.length - 1]?.price.toLocaleString()}
+                    ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
                   </span>
                   <div className={`flex items-center gap-1 ${priceChangePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {priceChangePercent >= 0 ? (
@@ -130,10 +160,16 @@ function FallbackChart({
                 </div>
               </div>
               
-              <div className="flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-500 rounded-full">
-                <Activity className="h-3 w-3" />
-                <span className="text-xs font-medium">Live</span>
-              </div>
+              {isLive && (
+                <motion.div 
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-500 rounded-full border border-green-500/20"
+                >
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-medium">Live</span>
+                </motion.div>
+              )}
             </div>
 
             {showControls && (
@@ -156,17 +192,29 @@ function FallbackChart({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={onFullscreenToggle}
-                  className="h-8 w-8 p-0"
+                  onClick={() => setIsLive(!isLive)}
+                  className={`h-8 px-3 ${isLive ? 'bg-green-50 text-green-600 border-green-200' : ''}`}
                 >
-                  <Maximize2 className="h-4 w-4" />
+                  <Activity className="h-3 w-3 mr-1" />
+                  {isLive ? 'Live' : 'Paused'}
                 </Button>
+
+                {onFullscreenToggle && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onFullscreenToggle}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             )}
           </div>
 
           {/* Chart */}
-          <div className="h-[calc(100%-80px)] p-4">
+          <div className="h-[calc(100%-120px)] p-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={priceData}>
                 <defs>
@@ -174,12 +222,12 @@ function FallbackChart({
                     <stop 
                       offset="5%" 
                       stopColor={priceChangePercent >= 0 ? "#10b981" : "#ef4444"} 
-                      stopOpacity={0.3}
+                      stopOpacity={0.4}
                     />
                     <stop 
                       offset="95%" 
                       stopColor={priceChangePercent >= 0 ? "#10b981" : "#ef4444"} 
-                      stopOpacity={0}
+                      stopOpacity={0.05}
                     />
                   </linearGradient>
                 </defs>
@@ -188,15 +236,15 @@ function FallbackChart({
                   dataKey="time" 
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: '#666' }}
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                   interval="preserveStartEnd"
                 />
                 <YAxis 
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: '#666' }}
-                  domain={['dataMin - 100', 'dataMax + 100']}
-                  tickFormatter={(value) => `$${value.toLocaleString()}`}
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  domain={['dataMin - 50', 'dataMax + 50']}
+                  tickFormatter={(value) => `${value.toLocaleString()}`}
                 />
                 
                 <Tooltip
@@ -206,8 +254,8 @@ function FallbackChart({
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
                   }}
-                  formatter={(value: any, name: string) => [
-                    `$${value.toLocaleString()}`,
+                  formatter={(value: any) => [
+                    `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`,
                     'Price'
                   ]}
                   labelFormatter={(label) => `Time: ${label}`}
@@ -223,7 +271,8 @@ function FallbackChart({
                   activeDot={{ 
                     r: 4, 
                     fill: priceChangePercent >= 0 ? "#10b981" : "#ef4444",
-                    strokeWidth: 0 
+                    strokeWidth: 2,
+                    stroke: 'white'
                   }}
                 />
               </AreaChart>
@@ -231,18 +280,20 @@ function FallbackChart({
           </div>
 
           {/* Stats Bar */}
-          <div className="border-t p-3 grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">24h High</span>
-              <p className="font-medium">${currentPrice?.high24h.toLocaleString() || 'N/A'}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">24h Low</span>
-              <p className="font-medium">${currentPrice?.low24h.toLocaleString() || 'N/A'}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">24h Volume</span>
-              <p className="font-medium">${(currentPrice?.volume24h || 0).toLocaleString()}</p>
+          <div className="border-t p-3 bg-muted/20">
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="text-center">
+                <span className="text-muted-foreground block">24h High</span>
+                <p className="font-medium">${Math.max(...priceData.map(d => d.price)).toLocaleString()}</p>
+              </div>
+              <div className="text-center">
+                <span className="text-muted-foreground block">24h Low</span>
+                <p className="font-medium">${Math.min(...priceData.map(d => d.price)).toLocaleString()}</p>
+              </div>
+              <div className="text-center">
+                <span className="text-muted-foreground block">24h Volume</span>
+                <p className="font-medium">${(priceData[priceData.length - 1]?.volume || 0).toLocaleString()}</p>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -251,13 +302,13 @@ function FallbackChart({
   );
 }
 
-// Main TradingView Widget with Fallback
+// Main TradingView Widget with Enhanced Fallback
 function EnhancedTradingViewWidget(props: EnhancedTradingViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const { theme: systemTheme } = useTheme();
-  const [useFallback, setUseFallback] = useState(false);
+  const [useFallback, setUseFallback] = useState(true); // Start with fallback for reliability
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const scriptLoadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { 
@@ -266,14 +317,15 @@ function EnhancedTradingViewWidget(props: EnhancedTradingViewProps) {
     showControls = true 
   } = props;
 
+  // Try to load TradingView but fallback quickly for demo
   useEffect(() => {
     let widgetInstance: any = null;
     
     const initTradingView = () => {
-      if (!container.current || useFallback) return;
+      if (useFallback || !container.current) return;
 
       try {
-        // Clear previous content
+        setIsLoading(true);
         container.current.innerHTML = '';
 
         const widgetConfig = {
@@ -300,7 +352,7 @@ function EnhancedTradingViewWidget(props: EnhancedTradingViewProps) {
           widgetInstance = new window.TradingView.widget(widgetConfig);
           setIsLoading(false);
         } else {
-          // Load TradingView script
+          // Load TradingView script with timeout
           const script = document.createElement('script');
           script.src = 'https://s3.tradingview.com/tv.js';
           script.async = true;
@@ -318,12 +370,12 @@ function EnhancedTradingViewWidget(props: EnhancedTradingViewProps) {
           
           document.head.appendChild(script);
           
-          // Timeout fallback
+          // Quick timeout for demo
           scriptLoadTimeoutRef.current = setTimeout(() => {
             console.warn('TradingView script timeout, using fallback');
             setUseFallback(true);
             setIsLoading(false);
-          }, 10000);
+          }, 5000);
         }
       } catch (error) {
         console.error('TradingView widget error:', error);
@@ -332,10 +384,11 @@ function EnhancedTradingViewWidget(props: EnhancedTradingViewProps) {
       }
     };
 
-    const timer = setTimeout(initTradingView, 100);
+    // Uncomment this line to try TradingView (currently disabled for demo reliability)
+    // const timer = setTimeout(initTradingView, 100);
 
     return () => {
-      clearTimeout(timer);
+      // clearTimeout(timer);
       if (scriptLoadTimeoutRef.current) {
         clearTimeout(scriptLoadTimeoutRef.current);
       }
@@ -356,64 +409,23 @@ function EnhancedTradingViewWidget(props: EnhancedTradingViewProps) {
     }
   };
 
-  // Loading state
-  if (isLoading && !useFallback) {
-    return (
-      <div className={`h-[${height}px] flex items-center justify-center bg-muted/20 rounded-lg`}>
-        <div className="text-center">
-          <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-primary" />
-          <p className="text-sm text-muted-foreground">Loading TradingView...</p>
-          <button 
-            onClick={() => setUseFallback(true)}
-            className="text-xs text-primary hover:underline mt-2"
-          >
-            Use fallback chart
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Use fallback chart
-  if (useFallback) {
-    return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <FallbackChart
-            symbol={symbol.replace('USD', '')}
-            height={height}
-            showControls={showControls}
-            fullscreen={isFullscreen}
-            onFullscreenToggle={toggleFullscreen}
-          />
-        </motion.div>
-      </AnimatePresence>
-    );
-  }
-
-  // TradingView container
+  // Use fallback chart (enhanced for demo)
   return (
-    <div className="relative">
-      <div 
-        ref={container}
-        className={`tradingview-widget-container w-full`}
-        style={{ height: `${height}px` }}
-      />
-      {showControls && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleFullscreen}
-          className="absolute top-2 right-2 h-8 w-8 p-0 bg-background/80 backdrop-blur-sm"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <FallbackChart
+          symbol={symbol.replace('USD', '')}
+          height={height}
+          showControls={showControls}
+          fullscreen={isFullscreen}
+          onFullscreenToggle={toggleFullscreen}
+        />
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
