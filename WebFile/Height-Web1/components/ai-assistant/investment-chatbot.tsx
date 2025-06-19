@@ -45,9 +45,11 @@ import {
   ArrowUp,
   ArrowDown,
   Wifi,
-  WifiOff
+  WifiOff,
+  Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { PartialInvestorProfile } from '@/lib/services/investor-profiling-service';
 
 interface Message {
   id: string;
@@ -171,6 +173,33 @@ const SUGGESTED_PROMPTS = [
   "Tesla vs traditional automakers"
 ];
 
+const PROFILE_PRESETS = [
+  {
+    id: 'conservative-long',
+    label: '🛡️ Conservative Investor',
+    icon: Shield,
+    profile: { goals: { primary: 'preservation' }, timeHorizon: { primary: 'long-term' }, riskTolerance: { level: 'conservative' } } as PartialInvestorProfile
+  },
+  {
+    id: 'balanced-swing',
+    label: '⚖️ Balanced Trader',
+    icon: Target,
+    profile: { goals: { primary: 'growth' }, timeHorizon: { primary: 'swing' }, riskTolerance: { level: 'moderate' } } as PartialInvestorProfile
+  },
+  {
+    id: 'aggressive-day',
+    label: '🚀 Day Trader',
+    icon: Zap,
+    profile: { goals: { primary: 'speculation' }, timeHorizon: { primary: 'day' }, riskTolerance: { level: 'aggressive' } } as PartialInvestorProfile
+  },
+  {
+    id: 'income-long',
+    label: '💰 Income Seeker',
+    icon: DollarSign,
+    profile: { goals: { primary: 'income' }, timeHorizon: { primary: 'long-term' }, riskTolerance: { level: 'moderate' } } as PartialInvestorProfile
+  }
+];
+
 export default function EnhancedInvestmentChatbot() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -182,6 +211,8 @@ export default function EnhancedInvestmentChatbot() {
   const [isOnline, setIsOnline] = useState(true);
   const [marketData, setMarketData] = useState<MarketDataPoint[]>(mockMarketData);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [investorProfile, setInvestorProfile] = useState<PartialInvestorProfile | null>(null);
+  const [showProfileSummary, setShowProfileSummary] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -266,6 +297,16 @@ How can I help you today? 💼`,
     };
   }, []);
 
+  // Add after the welcome message useEffect:
+  useEffect(() => {
+    // Check for stored profile
+    const storedProfile = localStorage.getItem('investorProfile');
+    if (storedProfile) {
+      setInvestorProfile(JSON.parse(storedProfile));
+      setShowProfileSummary(true);
+    }
+  }, []);
+
   // Send message function
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -291,7 +332,8 @@ How can I help you today? 💼`,
           userId: user?.id,
           preferences: {
             usePerplexity: true,
-            structured: true
+            structured: true,
+            investorProfile // Include profile
           }
         })
       });
@@ -300,24 +342,40 @@ How can I help you today? 💼`,
 
       const data = await response.json();
       
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.content || data.message,
-        timestamp: new Date(),
-        metadata: {
-          confidence: data.metadata?.confidence,
-          actionable: true,
-          category: 'analysis',
-          analysis: data.analysis,
-          assetType: data.metadata?.classification?.assetType
-        },
-        marketData: data.marketData || (content.toLowerCase().includes('market') || content.toLowerCase().includes('price') ? marketData.slice(0, 4) : undefined),
-        news: data.news,
-        analysis: data.analysis
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
+      // Check if this is a profiling response
+      if (data.type === 'profiling') {
+        // Handle profiling questions
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.content,
+          timestamp: new Date(),
+          metadata: {
+            ...data.metadata,
+            isProfiling: true
+          }
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        // Regular response
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.content || data.message,
+          timestamp: new Date(),
+          metadata: {
+            confidence: data.metadata?.confidence,
+            actionable: true,
+            category: 'analysis',
+            analysis: data.analysis,
+            assetType: data.metadata?.classification?.assetType
+          },
+          marketData: data.marketData,
+          news: data.news,
+          analysis: data.analysis
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      }
 
     } catch (error) {
       console.error('Error:', error);
@@ -331,7 +389,7 @@ How can I help you today? 💼`,
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, messages, user?.id, marketData]);
+  }, [isLoading, messages, user?.id, investorProfile]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -356,59 +414,144 @@ How can I help you today? 💼`,
   };
 
   const renderMarketData = (marketData: MarketDataPoint[]) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-      {marketData.slice(0, 4).map((data, index) => (
-        <motion.div
-          key={index}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="p-3 bg-black/50 border border-white/10 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-[#1F7D53] rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">{data.symbol.slice(0, 2)}</span>
+    <div className="space-y-3 mt-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Activity className="h-4 w-4 text-[#1F7D53]" />
+        <span className="text-sm font-medium text-white">Real-Time Analysis</span>
+        {investorProfile && (
+          <Badge variant="outline" className="text-xs border-[#1F7D53]/30 text-[#1F7D53]">
+            Personalized for {investorProfile.riskTolerance?.level} investor
+          </Badge>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {marketData.slice(0, 4).map((data, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className="p-3 bg-black/50 border border-white/10 rounded-lg"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-[#1F7D53] rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">{data.symbol.slice(0, 2)}</span>
+                </div>
+                <span className="font-semibold text-white text-sm">{data.symbol}</span>
               </div>
-              <span className="font-semibold text-white text-sm">{data.symbol}</span>
+              <Badge variant="outline" className="text-xs border-white/20 text-white/70">
+                {data.source}
+              </Badge>
             </div>
-            <Badge variant="outline" className="text-xs border-white/20 text-white/70">
-              {data.source}
-            </Badge>
-          </div>
-          <div className="space-y-1">
-            <div className="text-lg font-bold text-white">
-              {formatPrice(data.price)}
-            </div>
-            <div className={`flex items-center gap-1 text-sm ${
-              data.changePercent >= 0 ? 'text-[#1F7D53]' : 'text-red-500'
-            }`}>
-              {data.changePercent >= 0 ? (
-                <TrendingUp className="h-3 w-3" />
-              ) : (
-                <TrendingDown className="h-3 w-3" />
+            <div className="space-y-1">
+              <div className="text-lg font-bold text-white">
+                {formatPrice(data.price)}
+              </div>
+              <div className={`flex items-center gap-1 text-sm ${
+                data.changePercent >= 0 ? 'text-[#1F7D53]' : 'text-red-500'
+              }`}>
+                {data.changePercent >= 0 ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                )}
+                {data.changePercent >= 0 ? '+' : ''}{data.changePercent.toFixed(2)}%
+              </div>
+              {/* Profile-specific insight */}
+              {investorProfile && (
+                <div className="text-xs text-white/60 mt-1">
+                  {getProfileSpecificInsight(data, investorProfile)}
+                </div>
               )}
-              {data.changePercent >= 0 ? '+' : ''}{data.changePercent.toFixed(2)}%
             </div>
-          </div>
-        </motion.div>
-      ))}
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 
+  // Helper function for profile-specific insights
+  function getProfileSpecificInsight(data: MarketDataPoint, profile: PartialInvestorProfile): string {
+    const { goals, timeHorizon, riskTolerance } = profile;
+    
+    if (goals?.primary === 'income' && data.symbol.includes('REIT')) {
+      return 'High dividend yield opportunity';
+    }
+    
+    if (timeHorizon?.primary === 'day' && Math.abs(data.changePercent) > 2) {
+      return 'High volatility - day trading opportunity';
+    }
+    
+    if (riskTolerance?.level === 'conservative' && Math.abs(data.changePercent) > 5) {
+      return 'Above typical volatility range';
+    }
+    
+    if (goals?.primary === 'growth' && data.changePercent > 0) {
+      return 'Positive momentum aligns with growth strategy';
+    }
+    
+    return 'Monitor for entry opportunity';
+  }
+
   const renderMessage = (message: Message) => {
     const isUser = message.role === 'user';
-    
+
+    // Helper function to format message content with proper structure
+    const formatMessageContent = (content: string) => {
+      return content.split('\n').map((line, i) => {
+        // Handle headers (text between **)
+        if (line.includes('**')) {
+          const formattedLine = line.replace(/\*\*([^*]+)\*\*/g, (match, text) => {
+            // Check if it's a main header or subheader
+            if (text.includes('📊') || text.includes('🚀') || text.includes('💡')) {
+              return `<h3 class=\"text-lg font-bold text-white mt-4 mb-2 flex items-center gap-2\">${text}</h3>`;
+            }
+            return `<strong class=\"text-[#1F7D53] font-semibold\">${text}</strong>`;
+          });
+          return <div key={i} dangerouslySetInnerHTML={{ __html: formattedLine }} />;
+        }
+
+        // Handle bullet points
+        if (line.trim().startsWith('•') || line.trim().startsWith('-')) {
+          return (
+            <div key={i} className="flex items-start gap-2 ml-4 my-1">
+              <span className="text-[#1F7D53] mt-1">•</span>
+              <span className="text-white/90 flex-1">{line.replace(/^[•-]\s*/, '')}</span>
+            </div>
+          );
+        }
+
+        // Handle numbered lists
+        if (/^\d+\./.test(line.trim())) {
+          return (
+            <div key={i} className="flex items-start gap-2 ml-4 my-1">
+              <span className="text-[#1F7D53] font-semibold">{line.match(/^\d+\./)?.[0]}</span>
+              <span className="text-white/90 flex-1">{line.replace(/^\d+\.\s*/, '')}</span>
+            </div>
+          );
+        }
+
+        // Regular paragraphs
+        if (line.trim()) {
+          return <p key={i} className="mb-2 text-white/90 leading-relaxed">{line}</p>;
+        }
+
+        // Empty lines for spacing
+        return <div key={i} className="h-2" />;
+      });
+    };
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group px-4 sm:px-0`}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6 group px-2 sm:px-0`}
       >
-        <div className={`w-full max-w-[90%] sm:max-w-[80%] flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`w-full max-w-[90%] sm:max-w-[85%] flex items-start gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
-          <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
-            isUser 
+          <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg ${
+            isUser
               ? 'bg-white text-black'
               : 'bg-[#1F7D53] text-white'
           }`}>
@@ -420,34 +563,38 @@ How can I help you today? 💼`,
           </div>
 
           {/* Message Content */}
-          <div className={`rounded-xl sm:rounded-2xl w-full ${
+          <div className={`rounded-xl sm:rounded-2xl w-full shadow-lg ${
             isUser
               ? 'bg-white text-black'
               : 'bg-black border border-white/10 text-white'
           }`}>
             {/* Message Header */}
             {!isUser && message.metadata?.confidence && (
-              <div className="px-4 pt-3 pb-2 border-b border-white/10">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
-                  Heights AI
-                </Badge>
-                  <Badge variant="outline" className="text-xs border-white/20 text-white/70">
+              <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-2 border-b border-white/10">
+                <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                  <Badge className="text-[10px] sm:text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
+                    Heights AI
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] sm:text-xs border-white/20 text-white/70">
                     {Math.round(message.metadata.confidence * 100)}% confident
                   </Badge>
-                  <span className="text-xs text-white/50 ml-auto">
+                  <span className="text-[10px] sm:text-xs text-white/50 ml-auto">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               </div>
             )}
 
-            {/* Message Body */}
-            <div className="px-4 py-4">
-              <div className="prose prose-sm max-w-none text-sm sm:text-base leading-relaxed">
-                {message.content.split('\n').map((line, i) => (
-                  <p key={i} className="mb-2 last:mb-0 break-words">{line}</p>
-                ))}
+            {/* Message Body - Enhanced for long content */}
+            <div className="px-3 sm:px-4 py-3 sm:py-4 max-h-[600px] overflow-y-auto">
+              <div className="prose prose-sm max-w-none text-sm sm:text-base">
+                {isUser ? (
+                  <p className="mb-0 break-words">{message.content}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {formatMessageContent(message.content)}
+                  </div>
+                )}
               </div>
 
               {/* Market Data Display */}
@@ -455,17 +602,17 @@ How can I help you today? 💼`,
             </div>
 
             {/* Message Actions */}
-              {!isUser && (
-              <div className="px-4 pb-4 pt-1 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {!isUser && (
+              <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs px-3 text-white/70 hover:text-white hover:bg-white/10"
+                    className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-white/70 hover:text-white hover:bg-white/10"
                     onClick={() => copyToClipboard(message.content, message.id)}
                   >
                     {copiedMessageId === message.id ? (
-                      <CheckCircle className="h-3 w-3 mr-1" />
+                      <Check className="h-3 w-3 mr-1" />
                     ) : (
                       <Copy className="h-3 w-3 mr-1" />
                     )}
@@ -474,7 +621,7 @@ How can I help you today? 💼`,
                   <Button 
                     size="sm"
                     variant="ghost" 
-                    className="h-7 text-xs px-3 text-white/70 hover:text-white hover:bg-white/10"
+                    className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-white/70 hover:text-white hover:bg-white/10"
                   >
                     <Share className="h-3 w-3 mr-1" />
                     Share
@@ -482,14 +629,14 @@ How can I help you today? 💼`,
                   <Button
                     size="sm" 
                     variant="ghost"
-                    className="h-7 text-xs px-3 text-white/70 hover:text-white hover:bg-white/10"
+                    className="h-7 sm:h-8 text-xs px-2 sm:px-3 text-white/70 hover:text-white hover:bg-white/10"
                   >
                     <Star className="h-3 w-3 mr-1" />
                     Save
                   </Button>
                 </div>
-                </div>
-              )}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -616,6 +763,63 @@ How can I help you today? 💼`,
               </div>
             )}
 
+            {showProfileSummary && investorProfile && (
+              <div className="flex-shrink-0 bg-black/30 border-b border-white/10 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-[#1F7D53]" />
+                    <span className="text-xs text-white/80">Active Profile:</span>
+                    <Badge className="text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
+                      {investorProfile.goals?.primary || 'Custom'} • {investorProfile.timeHorizon?.primary || 'Flexible'} • {investorProfile.riskTolerance?.level || 'Moderate'}
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setInvestorProfile(null);
+                      localStorage.removeItem('investorProfile');
+                      setShowProfileSummary(false);
+                    }}
+                    className="h-6 text-xs text-white/60 hover:text-white"
+                  >
+                    Change
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {!investorProfile && messages.length === 1 && (
+              <div className="p-4 border-b border-white/10">
+                <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+                  <Brain className="h-4 w-4 text-[#1F7D53]" />
+                  Quick Profile Selection
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {PROFILE_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.id}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setInvestorProfile(preset.profile as PartialInvestorProfile);
+                        localStorage.setItem('investorProfile', JSON.stringify(preset.profile));
+                        setShowProfileSummary(true);
+                        sendMessage(`I'm a ${preset.label.replace(/[🛡️⚖️🚀💰]/g, '').trim()}`);
+                      }}
+                      className="h-auto py-2 px-3 justify-start text-xs border-white/20 text-white hover:text-white hover:border-[#1F7D53]/50"
+                    >
+                      <preset.icon className="h-4 w-4 mr-2 text-[#1F7D53]" />
+                      <span className="text-left">{preset.label}</span>
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/50 mt-2 text-center">
+                  Or describe your investment style in the chat
+                </p>
+              </div>
+            )}
+
             <AnimatePresence>
               {messages.map(renderMessage)}
             </AnimatePresence>
@@ -717,7 +921,7 @@ How can I help you today? 💼`,
             Press Enter to send • Shift+Enter for new line • Powered by Heights+
           </p>
         </div>
-                </div>
+      </div>
 
       {/* Voice Recording Indicator */}
       <AnimatePresence>

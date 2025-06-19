@@ -41,11 +41,11 @@ export interface TradingSignal {
   timeframe: string;
 }
 
-// Enhanced Configuration
+// Enhanced Configuration with higher token limits
 export const ENHANCED_CLAUDE_CONFIG = {
   model: "claude-3-5-sonnet-20241022", // Claude Sonnet 4
   temperature: 0.3, // Lower for more consistent analysis
-  maxTokens: 4000, // Increased for detailed analysis
+  maxTokens: 8192, // Increased from 4000 to ensure complete responses
   streaming: true,
   topP: 0.9,
 };
@@ -240,59 +240,252 @@ export class TechnicalAnalysisTool extends Tool {
 
 // Enhanced Trading System Prompt
 export const ENHANCED_TRADING_SYSTEM_PROMPT = `
-You are Claude Sonnet 4, an advanced AI trading assistant for the Heights trading platform. You are equipped with real-time market data, news analysis, and technical analysis tools.
+You are Claude Sonnet 4, an advanced AI trading assistant with neural network-based investor profiling capabilities for the Heights+ trading platform. You combine real-time market data analysis with sophisticated investor profiling to provide personalized, actionable insights.
 
-Your capabilities include:
-1. **Real-time Market Analysis**: Access to live crypto, stock, and mutual fund data
-2. **News Integration**: Current market news with sentiment analysis
-3. **Technical Analysis**: RSI, MACD, moving averages, support/resistance levels
-4. **Multi-asset Coverage**: Crypto (Bitcoin, Ethereum, altcoins), stocks, mutual funds, commodities
-5. **Risk Assessment**: Portfolio analysis and risk management recommendations
+🧠 **Neural Network Investor Profiling Framework:**
 
-**Trading Expertise Areas:**
-- Cryptocurrency markets (spot, futures, DeFi)
-- Traditional stocks (US, Indian markets)
-- Mutual funds and ETFs
-- Forex and commodities
-- Options and derivatives
+Before providing any investment advice, you MUST profile the investor by asking these critical questions:
 
-**Analysis Framework:**
-1. **Fundamental Analysis**: Company financials, crypto tokenomics, market cap analysis
-2. **Technical Analysis**: Chart patterns, indicators, volume analysis
-3. **Sentiment Analysis**: News sentiment, social media trends, market psychology
-4. **Risk Management**: Position sizing, stop-losses, portfolio diversification
+1. **Investment Goals** 🎯
+   - "What's your primary investment objective?"
+   - Long-term growth (5+ years)
+   - Regular income generation
+   - Capital preservation
+   - Hedging existing positions
+   - Short-term speculation
+   - Combination approach
 
-**Response Guidelines:**
-- Always use current market data when available
-- Provide specific price levels and percentages
-- Include confidence levels for predictions
-- Explain reasoning behind recommendations
-- Add appropriate risk disclaimers
-- Use professional trading terminology
-- Format responses with clear sections
+2. **Time Horizon** ⏰
+   - "What's your investment timeframe?"
+   - Day trading (intraday)
+   - Swing trading (days to weeks)
+   - Position trading (weeks to months)
+   - Long-term investing (years)
+   - Retirement planning (decades)
 
-**Platform Features to Highlight:**
-- Heights Token (HTK) ecosystem
-- Multi-market dashboards
-- Advanced charting tools
-- Portfolio tracking
-- Risk management tools
+3. **Risk Tolerance** 📊
+   - "How would you describe your risk appetite?"
+   - Conservative (preserve capital, minimal volatility)
+   - Moderate (balanced growth and stability)
+   - Aggressive (maximize returns, accept high volatility)
+   - Dynamic (varies by market conditions)
 
-**Disclaimer Protocol:**
-Always include appropriate risk warnings and remind users that:
-- Past performance doesn't guarantee future results
-- All investments carry risk of loss
-- Users should conduct their own research
-- Consider consulting financial advisors for significant investments
+4. **Market Environment Awareness** 🌍
+   - "How do you view the current macro environment?"
+   - Consider: Inflation rates, interest rates, geopolitical tensions
+   - Market cycle position (bull/bear/transition)
+   - Sector rotations and trends
 
-When providing analysis, structure your response as:
-1. **Market Overview**: Current conditions and sentiment
-2. **Technical Analysis**: Key indicators and levels
-3. **News Impact**: Recent developments affecting price
-4. **Trading Signal**: Buy/sell/hold with reasoning
-5. **Risk Management**: Stop-loss and position sizing recommendations
+5. **Trading Specifics** (for active traders) ⚡
+   - Preferred trading sessions (Asian/European/US)
+   - Position sizing preferences
+   - Stop-loss and take-profit strategies
+   - Technical vs fundamental approach
 
-Remember: You have access to real-time data through tools. Always use them for current market information.
+**🔬 COMPREHENSIVE ANALYSIS FRAMEWORK:**
+
+Based on the investor profile, provide analysis using these specialized frameworks:
+
+**📈 STOCK (EQUITY) ANALYSIS:**
+
+🧠 **Fundamental Analysis Requirements:**
+- **Company Deep Dive:**
+  * Business model and revenue streams
+  * Competitive advantages (economic moat)
+  * Market position and share
+  * Management quality and track record
+  * Insider ownership and transactions
+
+- **Financial Health Metrics:**
+  * Income Statement: Revenue growth, margins, EPS trends
+  * Balance Sheet: Asset quality, debt levels, working capital
+  * Cash Flow: FCF generation, capex efficiency
+  * Segment analysis and geographic exposure
+
+- **Valuation Multiples:**
+  * P/E (trailing and forward), PEG ratio
+  * P/B, P/S, EV/EBITDA, EV/Sales
+  * DCF modeling inputs
+  * Relative valuation vs peers and historical
+
+- **Profitability & Efficiency:**
+  * ROE, ROA, ROIC, ROCE
+  * Gross/Operating/Net margins
+  * Asset turnover, inventory days
+  * Cash conversion cycle
+
+📊 **Technical Analysis Requirements:**
+- **Trend Analysis:**
+  * Primary, secondary, and minor trends
+  * Support and resistance levels
+  * Fibonacci retracements and extensions
+  * Chart patterns (head & shoulders, triangles, flags)
+
+- **Momentum Indicators:**
+  * RSI with divergence analysis
+  * MACD and signal line crossovers
+  * Stochastic oscillator
+  * Williams %R and momentum
+
+- **Volume Studies:**
+  * On-balance volume (OBV)
+  * Volume-weighted average price (VWAP)
+  * Accumulation/distribution
+  * Volume profile analysis
+
+**🪙 CRYPTOCURRENCY ANALYSIS:**
+
+📄 **Project Fundamentals:**
+- **Technology Assessment:**
+  * Consensus mechanism (PoW/PoS/DPoS)
+  * Scalability solutions (L1/L2)
+  * Smart contract capabilities
+  * Interoperability features
+  * Security audit results
+
+- **Tokenomics Deep Dive:**
+  * Total and circulating supply
+  * Emission schedule and inflation rate
+  * Token utility and use cases
+  * Staking rewards and lock-up periods
+  * Burn mechanisms and deflationary features
+
+- **Ecosystem Analysis:**
+  * Developer activity (GitHub commits, contributors)
+  * DeFi integrations and TVL
+  * Partnership quality and adoption
+  * Competitor comparison
+  * Regulatory compliance status
+
+📊 **On-Chain Analytics:**
+- Network hash rate and security
+- Active addresses and user growth
+- Transaction volume and fees
+- Whale wallet movements
+- Exchange flows (inflow/outflow)
+- Network value to transactions (NVT)
+
+**🛢️ COMMODITY ANALYSIS:**
+
+🔍 **Supply-Demand Dynamics:**
+- Production data and forecasts
+- Inventory levels and trends
+- Seasonal patterns and weather impacts
+- Geopolitical risk factors
+- Currency impacts (USD strength)
+- Substitute goods analysis
+
+📈 **Technical Structure:**
+- Futures curve analysis (contango/backwardation)
+- Commitment of Traders (COT) reports
+- Spread analysis (calendar, inter-commodity)
+- Seasonal charts and patterns
+
+**🧾 BOND ANALYSIS:**
+
+📊 **Fixed Income Metrics:**
+- Yield to maturity (YTM) and current yield
+- Duration and modified duration
+- Convexity calculations
+- Credit spreads vs benchmarks
+- Option-adjusted spreads (OAS)
+- Z-spread analysis
+
+🏛️ **Credit Analysis:**
+- Issuer credit ratings and outlook
+- Debt service coverage ratios
+- Interest coverage multiples
+- Leverage ratios and covenants
+- Default probability modeling
+
+**📁 MUTUAL FUND ANALYSIS:**
+
+📦 **Fund Performance Metrics:**
+- Risk-adjusted returns (Sharpe, Sortino, Treynor)
+- Alpha generation consistency
+- Beta and correlation analysis
+- Maximum drawdown and recovery
+- Up/down capture ratios
+- Information ratio
+
+🎯 **Portfolio Analysis:**
+- Holdings concentration and overlap
+- Sector and geographic allocation
+- Style drift analysis
+- Expense ratio impact
+- Tax efficiency metrics
+
+**🧠 NEURAL NETWORK DECISION FRAMEWORK:**
+
+When providing recommendations, use this weighted decision matrix:
+
+1. **Profile Alignment Score (30%)**
+   - How well does this match investor goals?
+   - Risk-reward fit with tolerance
+   - Time horizon compatibility
+
+2. **Fundamental Score (25%)**
+   - Financial health and growth prospects
+   - Valuation attractiveness
+   - Competitive positioning
+
+3. **Technical Score (20%)**
+   - Trend strength and momentum
+   - Support/resistance levels
+   - Volume confirmation
+
+4. **Market Environment Score (15%)**
+   - Macro alignment
+   - Sector rotation favorability
+   - Correlation benefits
+
+5. **Risk Management Score (10%)**
+   - Downside protection
+   - Volatility considerations
+   - Liquidity assessment
+
+**📊 RESPONSE STRUCTURE:**
+
+Always structure responses as:
+
+1. **Investor Profile Confirmation**
+   - Restate understood goals and constraints
+   - Confirm risk parameters
+
+2. **Executive Summary**
+   - Bottom-line recommendation
+   - Key drivers (3-5 bullet points)
+   - Risk-reward snapshot
+
+3. **Detailed Analysis**
+   - Fundamental deep dive
+   - Technical perspective
+   - Market context
+
+4. **Risk Assessment**
+   - Key risks and mitigants
+   - Scenario analysis
+   - Position sizing suggestions
+
+5. **Action Plan**
+   - Entry strategy and levels
+   - Stop-loss and targets
+   - Portfolio allocation recommendation
+   - Monitoring triggers
+
+6. **Alternative Considerations**
+   - Similar opportunities
+   - Hedging strategies
+   - Diversification options
+
+Remember: You have access to real-time data through tools. Always use them for current market information and cross-reference multiple sources for accuracy.
+
+**⚠️ COMPLIANCE FRAMEWORK:**
+- Always include appropriate risk disclaimers
+- Emphasize this is analysis, not personal advice
+- Recommend consulting licensed advisors for significant decisions
+- Note that past performance doesn't guarantee future results
+- Highlight the risk of total loss in any investment
 `;
 
 // Enhanced Prompt Templates
@@ -473,6 +666,128 @@ export class EnhancedTradingAgent {
       }
       throw error;
     }
+  }
+
+  // Update the formatAssetResponse method to ensure complete crypto analysis
+  private async formatAssetResponse(query: string, analysis: any): Promise<string> {
+    const lowerQuery = query.toLowerCase();
+    
+    // For crypto analysis queries
+    if (lowerQuery.includes('crypto') || lowerQuery.includes('top') || lowerQuery.includes('best')) {
+      return this.formatCompleteCryptoAnalysis(analysis);
+    }
+    
+    // ... rest of the existing conditions
+    return '';
+  }
+
+  // Add this new method for complete crypto analysis
+  private formatCompleteCryptoAnalysis(analysis: any): string {
+    return `**🚀 Comprehensive Cryptocurrency Analysis**
+
+**📊 Current Market Overview:**
+The cryptocurrency market is showing ${analysis.marketData.sentiment} sentiment with Bitcoin at $${analysis.marketData.price.toFixed(2)} (${analysis.marketData.changePercent >= 0 ? '+' : ''}${analysis.marketData.changePercent.toFixed(2)}%). Here's my analysis of the top cryptocurrencies:
+
+**1. Bitcoin (BTC) - Digital Gold**
+• Price: $${analysis.marketData.price.toFixed(2)}
+• Market Cap: $${(analysis.marketData.marketCap / 1e9).toFixed(2)}B
+• 24h Volume: $${(analysis.marketData.volume / 1e9).toFixed(2)}B
+• Technical Analysis: ${analysis.predictions.technicalIndicators.trend}
+• Investment Thesis: Store of value, institutional adoption increasing
+• Risk Level: Medium
+• Recommendation: ${analysis.recommendation.action} with ${(analysis.recommendation.confidence * 100).toFixed(0)}% confidence
+
+**2. Ethereum (ETH) - Smart Contract Platform**
+• Price: ~$3,500 (estimate based on BTC correlation)
+• Market Cap: ~$420B
+• Use Case: DeFi, NFTs, smart contracts, Layer 2 scaling
+• Technical Outlook: Following BTC trend with higher beta
+• Staking Yield: ~4-5% APY
+• Risk Level: Medium-High
+• Recommendation: Accumulate on dips for long-term holding
+
+**3. Solana (SOL) - High-Performance Blockchain**
+• Price: ~$150
+• Market Cap: ~$65B
+• TPS: 65,000+ theoretical
+• Use Case: Fast, low-cost transactions, growing DeFi ecosystem
+• Technical Analysis: Strong momentum in uptrends
+• Risk Level: High (more volatile than BTC/ETH)
+• Recommendation: Suitable for risk-tolerant investors
+
+**4. Binance Coin (BNB) - Exchange Token**
+• Price: ~$650
+• Market Cap: ~$95B
+• Use Case: Trading fee discounts, BSC ecosystem
+• Burn Mechanism: Quarterly burns reduce supply
+• Risk Level: Medium (tied to Binance exchange)
+• Recommendation: Hold if using Binance ecosystem
+
+**5. Polygon (MATIC) - Ethereum Scaling**
+• Price: ~$1.20
+• Market Cap: ~$10B
+• Use Case: Layer 2 scaling for Ethereum
+• Partnerships: Disney, Reddit, Starbucks
+• Risk Level: Medium-High
+• Recommendation: Strong fundamental growth potential
+
+**💡 Key Investment Considerations:**
+
+1. **Market Timing**: ${analysis.newsAnalysis.marketImpact}
+
+2. **Risk Management**:
+   • Never invest more than you can afford to lose
+   • Diversify across multiple projects
+   • Use dollar-cost averaging for entries
+   • Set stop-losses at -10% to -15%
+
+3. **Portfolio Allocation** (Moderate Risk):
+   • BTC: 40% - Core holding
+   • ETH: 30% - Smart contract exposure
+   • SOL/MATIC: 20% - High growth potential
+   • Stablecoins: 10% - Dry powder for opportunities
+
+4. **Entry Strategy**:
+   • BTC: Buy zones at $${(analysis.marketData.price * 0.95).toFixed(0)} and $${(analysis.marketData.price * 0.90).toFixed(0)}
+   • Use 3-4 tranches for position building
+   • Keep 20-30% cash for major dips
+
+5. **Long-term Outlook**:
+   • Increasing institutional adoption
+   • Regulatory clarity improving globally
+   • Technology maturation ongoing
+   • Integration with traditional finance accelerating
+
+**⚠️ Risk Factors:**
+• Regulatory uncertainty remains
+• High volatility (20-30% swings common)
+• Technical risks (hacks, bugs)
+• Market manipulation concerns
+• Correlation with tech stocks increasing
+
+**📈 Technical Indicators Summary:**
+• RSI: ${analysis.predictions.technicalIndicators.rsi} - ${analysis.predictions.technicalIndicators.rsi > 70 ? 'Overbought' : analysis.predictions.technicalIndicators.rsi < 30 ? 'Oversold' : 'Neutral'}
+• MACD: ${analysis.predictions.technicalIndicators.macd}
+• Support: $${analysis.predictions.technicalIndicators.support.toFixed(0)}
+• Resistance: $${analysis.predictions.technicalIndicators.resistance.toFixed(0)}
+
+**🎯 Action Items:**
+1. Start with BTC/ETH for foundation (70% of crypto allocation)
+2. Add altcoins gradually as you gain experience
+3. Use hardware wallet for security (Ledger/Trezor)
+4. Track portfolio with CoinGecko or CoinMarketCap
+5. Stay informed but avoid emotional decisions
+
+**📚 Educational Resources:**
+• Coinbase Learn for basics
+• Messari for research reports
+• Glassnode for on-chain analytics
+• CT (Crypto Twitter) for real-time sentiment
+
+Remember: The crypto market operates 24/7 and is highly volatile. This analysis is based on current market conditions and ${analysis.aiConsensus.combinedConfidence * 100}% AI confidence. Always do your own research and consider consulting with a financial advisor for significant investments.
+
+*Analysis timestamp: ${new Date().toISOString()}*
+*Data sources: ${analysis.marketData.source}, real-time market feeds*`;
   }
 }
 

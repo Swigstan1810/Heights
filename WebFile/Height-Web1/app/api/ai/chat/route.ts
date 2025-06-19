@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { SimplifiedAIOrchestrator, aiOrchestrator } from '@/lib/services/enhanced-ai-orchestrator';
 import { ChatContext } from '@/types/ai-types';
+import { investorProfilingService } from '@/lib/services/investor-profiling-service';
 
 // Environment variables (API keys, URLs, etc.) can be set in .env, .env.local, or .env.production
 
@@ -129,10 +130,66 @@ export async function POST(request: NextRequest) {
       activeAnalyses: {}
     };
 
-    // Process with simplified orchestrator
-    const response = await aiOrchestrator.processQuery(message, context, {
-      usePerplexity: preferences.usePerplexity !== false, // Default true
-      structured: preferences.structured !== false // Default true
+    // --- INVESTOR PROFILING LOGIC ---
+    const content = message;
+    const detectedProfile = investorProfilingService.analyzeQueryForProfile(content) as import('@/lib/services/investor-profiling-service').PartialInvestorProfile;
+    const storedProfile = context?.preferences?.investorProfile as import('@/lib/services/investor-profiling-service').PartialInvestorProfile | undefined;
+    // Merge detected profile info into stored profile
+    const mergedProfile = investorProfilingService.mergeProfiles(storedProfile, detectedProfile);
+    // Check if profile is complete
+    const isComplete = investorProfilingService.isProfileComplete(mergedProfile);
+    // If not complete and not skipping, prompt for only missing fields
+    if (!isComplete && !content.toLowerCase().includes('skip profiling')) {
+      const profilingQuestions = investorProfilingService.generateProfilingQuestions(mergedProfile);
+      if (profilingQuestions.length > 0) {
+        return NextResponse.json({
+          content: `🧠 **Heights+ Neural Network Investor Profiling**\n\nBefore I provide personalized investment analysis, I need to understand your investment profile. This helps me tailor recommendations to your specific needs.\n\n${profilingQuestions.join('\n')}\n\n💡 *You can answer these questions naturally in your next message, or type \"skip profiling\" to proceed with general analysis.*`,
+          type: 'profiling',
+          metadata: {
+            requiresProfiling: true,
+            detectedProfile: mergedProfile,
+            confidence: 0.95,
+            sources: ['neural-profiling'],
+            classification: {
+              intent: 'profiling',
+              assetType: 'multiple',
+              confidence: 1.0,
+              suggestedServices: ['claude', 'perplexity'],
+              parameters: { needsProfiling: true }
+            }
+          },
+          suggestions: [
+            "I'm a conservative long-term investor",
+            "Looking for aggressive growth opportunities",
+            "Day trader seeking quick profits",
+            "Balanced approach with moderate risk"
+          ],
+          timestamp: new Date().toISOString()
+        }, {
+          headers: {
+            'X-RateLimit-Limit': String(RATE_LIMITS[userTier].requests),
+            'X-RateLimit-Remaining': String(remaining),
+            'X-RateLimit-Reset': String(Math.ceil(resetTime / 1000)),
+            'Cache-Control': 'private, no-cache',
+            'X-Response-Time': String(Date.now() - startTime)
+          }
+        });
+      }
+    }
+
+    const enhancedContext: ChatContext = {
+      ...context,
+      preferences: {
+        ...context.preferences,
+        investorProfile: mergedProfile,
+        preferredSources: ['claude', 'perplexity']
+      }
+    };
+
+    // When processing with aiOrchestrator, pass the enhanced context
+    const response = await aiOrchestrator.processQuery(content, enhancedContext, {
+      usePerplexity: preferences.usePerplexity !== false,
+      structured: preferences.structured !== false
     });
 
     // Log conversation
