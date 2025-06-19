@@ -1,4 +1,4 @@
-// hooks/use-watchlist-data.ts
+// hooks/use-watchlist-data.ts - FIXED VERSION
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -17,8 +17,8 @@ export interface MarketDataItem {
   change_24h_percent: number;
   volume_24h: number;
   market_cap: number;
-  high_24h: number;
-  low_24h: number;
+  high_24h?: number;
+  low_24h?: number;
   exchange: string;
   sector: string;
   dividend_yield?: number;
@@ -140,6 +140,8 @@ export function useWatchlistData(): UseWatchlistDataReturn {
   const fetchMarketData = useCallback(async () => {
     try {
       setLoadingMarketData(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('market_data')
         .select('*')
@@ -148,7 +150,22 @@ export function useWatchlistData(): UseWatchlistDataReturn {
 
       if (error) throw error;
 
-      setMarketData(data || []);
+      // Transform the data to ensure proper types
+      const transformedData = (data || []).map(item => ({
+        ...item,
+        price: parseFloat(item.price) || 0,
+        price_inr: parseFloat(item.price_inr) || parseFloat(item.price) || 0,
+        change_24h: parseFloat(item.change_24h) || 0,
+        change_24h_percent: parseFloat(item.change_24h_percent) || 0,
+        volume_24h: parseFloat(item.volume_24h) || 0,
+        market_cap: parseFloat(item.market_cap) || 0,
+        high_24h: item.high_24h ? parseFloat(item.high_24h) : undefined,
+        low_24h: item.low_24h ? parseFloat(item.low_24h) : undefined,
+        dividend_yield: item.dividend_yield ? parseFloat(item.dividend_yield) : undefined,
+        expense_ratio: item.expense_ratio ? parseFloat(item.expense_ratio) : undefined,
+      }));
+
+      setMarketData(transformedData);
     } catch (err) {
       console.error('Error fetching market data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch market data');
@@ -159,10 +176,16 @@ export function useWatchlistData(): UseWatchlistDataReturn {
 
   // Fetch watchlist
   const fetchWatchlist = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setWatchlistItems([]);
+      setLoadingWatchlist(false);
+      return;
+    }
 
     try {
       setLoadingWatchlist(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('watchlist_items')
         .select('*')
@@ -171,56 +194,74 @@ export function useWatchlistData(): UseWatchlistDataReturn {
 
       if (error) throw error;
 
-      // Enrich with market data
-      const enrichedWatchlist = (data || []).map(item => {
-        const marketDataItem = marketData.find(
-          md => md.symbol === item.symbol && md.asset_type === item.asset_type
-        );
-        return {
-          ...item,
-          market_data: marketDataItem
-        };
-      });
+      // Transform the data to ensure proper types
+      const transformedWatchlist = (data || []).map(item => ({
+        ...item,
+        market_cap: parseFloat(item.market_cap) || 0,
+      }));
 
-      setWatchlistItems(enrichedWatchlist);
+      setWatchlistItems(transformedWatchlist);
     } catch (err) {
       console.error('Error fetching watchlist:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch watchlist');
     } finally {
       setLoadingWatchlist(false);
     }
-  }, [user, supabase, marketData]);
+  }, [user, supabase]);
 
   // Fetch demo portfolio and wallet
   const fetchDemoData = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setDemoPortfolio([]);
+      setDemoWalletBalance(null);
+      setLoadingDemoData(false);
+      return;
+    }
 
     try {
       setLoadingDemoData(true);
+      setError(null);
       
-      const [portfolioResult, walletResult] = await Promise.all([
-        supabase
-          .from('demo_portfolio')
-          .select('*')
-          .eq('user_id', user.id)
-          .gt('quantity', 0)
-          .order('current_value', { ascending: false }),
-        supabase
-          .from('demo_wallet_balance')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('currency', 'INR')
-          .single()
-      ]);
+      // Fetch portfolio
+      const { data: portfolioData, error: portfolioError } = await supabase
+        .from('demo_portfolio')
+        .select('*')
+        .eq('user_id', user.id)
+        .gt('quantity', 0)
+        .order('current_value', { ascending: false });
 
-      if (portfolioResult.error && portfolioResult.error.code !== 'PGRST116') {
-        throw portfolioResult.error;
+      if (portfolioError && portfolioError.code !== 'PGRST116') {
+        throw portfolioError;
       }
 
-      setDemoPortfolio(portfolioResult.data || []);
+      // Transform portfolio data
+      const transformedPortfolio = (portfolioData || []).map(item => ({
+        ...item,
+        quantity: parseFloat(item.quantity) || 0,
+        average_buy_price: parseFloat(item.average_buy_price) || 0,
+        current_price: parseFloat(item.current_price) || 0,
+        total_invested: parseFloat(item.total_invested) || 0,
+        current_value: parseFloat(item.current_value) || 0,
+        profit_loss: parseFloat(item.profit_loss) || 0,
+        profit_loss_percentage: parseFloat(item.profit_loss_percentage) || 0,
+      }));
 
-      // Create wallet if doesn't exist
-      if (walletResult.error && walletResult.error.code === 'PGRST116') {
+      setDemoPortfolio(transformedPortfolio);
+
+      // Fetch wallet balance
+      const { data: walletData, error: walletError } = await supabase
+        .from('demo_wallet_balance')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('currency', 'INR')
+        .maybeSingle();
+
+      if (walletError && walletError.code !== 'PGRST116') {
+        throw walletError;
+      }
+
+      if (!walletData) {
+        // Create default wallet balance
         const { data: newWallet, error: createError } = await supabase
           .from('demo_wallet_balance')
           .insert({
@@ -232,9 +273,16 @@ export function useWatchlistData(): UseWatchlistDataReturn {
           .single();
 
         if (createError) throw createError;
-        setDemoWalletBalance(newWallet);
-      } else if (!walletResult.error) {
-        setDemoWalletBalance(walletResult.data);
+        
+        setDemoWalletBalance({
+          ...newWallet,
+          balance: parseFloat(newWallet.balance) || 1000000,
+        });
+      } else {
+        setDemoWalletBalance({
+          ...walletData,
+          balance: parseFloat(walletData.balance) || 0,
+        });
       }
 
     } catch (err) {
@@ -336,32 +384,27 @@ export function useWatchlistData(): UseWatchlistDataReturn {
         return false;
       }
 
-      // Execute trade using API route
-      const response = await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'execute_trade',
-          symbol,
-          asset_type,
-          trade_type,
-          quantity,
-          price
-        })
-      });
+      // Call the stored procedure
+      const { data: result, error: tradeError } = await supabase
+        .rpc('execute_demo_trade', {
+          p_user_id: user.id,
+          p_symbol: symbol,
+          p_asset_type: asset_type,
+          p_trade_type: trade_type,
+          p_quantity: quantity,
+          p_price: price,
+          p_total_amount: totalAmount,
+          p_fees: fees
+        });
 
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Trade execution failed');
-      }
+      if (tradeError) throw tradeError;
 
       toast.success(
         `Demo ${trade_type} order executed: ${quantity} ${symbol} at ₹${price.toFixed(2)}`
       );
 
       // Refresh data
-      await Promise.all([fetchDemoData()]);
+      await fetchDemoData();
       return true;
 
     } catch (err) {
@@ -369,7 +412,7 @@ export function useWatchlistData(): UseWatchlistDataReturn {
       toast.error(err instanceof Error ? err.message : 'Failed to execute trade');
       return false;
     }
-  }, [user, demoWalletBalance, demoPortfolio, fetchDemoData]);
+  }, [user, demoWalletBalance, demoPortfolio, fetchDemoData, supabase]);
 
   // Refresh all data
   const refreshData = useCallback(async () => {
@@ -397,7 +440,7 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     }
 
     // Sector filter
-    if (selectedSectors.length > 0 && !selectedSectors.includes(item.sector)) {
+    if (selectedSectors.length > 0 && item.sector && !selectedSectors.includes(item.sector)) {
       return false;
     }
 
@@ -463,6 +506,12 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     if (user) {
       fetchWatchlist();
       fetchDemoData();
+    } else {
+      setWatchlistItems([]);
+      setDemoPortfolio([]);
+      setDemoWalletBalance(null);
+      setLoadingWatchlist(false);
+      setLoadingDemoData(false);
     }
   }, [user, fetchWatchlist, fetchDemoData]);
 

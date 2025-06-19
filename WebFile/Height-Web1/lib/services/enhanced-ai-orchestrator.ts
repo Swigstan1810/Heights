@@ -8,14 +8,7 @@ import {
   ChatContext,
   MarketDataPoint,
   NewsItem,
-  AnalysisResult,
-} from '@/types/ai-types';
-import { confidenceScoringService } from './confidence-scoring-service';
-import {
-  EnhancedAnalysis,
-  TimeframeAnalysis,
-  TradeSetup,
-  ComprehensiveAnalysisResult
+  AnalysisResult
 } from '@/types/ai-types';
 
 export class SimplifiedAIOrchestrator {
@@ -61,26 +54,13 @@ export class SimplifiedAIOrchestrator {
       // Detect if query is about a specific asset
       const assetMatch = this.detectAsset(query);
       
-      let response: AIResponse;
-      
       if (assetMatch && structured) {
         // Use the ultimate analyst for asset-specific queries
-        response = await this.processAssetQuery(query, assetMatch);
+        return await this.processAssetQuery(query, assetMatch);
       } else {
         // Use combined AI approach for general queries
-        response = await this.processGeneralQuery(query, context, usePerplexity);
+        return await this.processGeneralQuery(query, context, usePerplexity);
       }
-      
-      // Ensure complete response
-      if (response.type === 'text' || response.type === 'analysis') {
-        response.content = await this.ensureCompleteResponse(
-          response.content,
-          query,
-          context
-        );
-      }
-      
-      return response;
     } catch (error) {
       console.error('Query processing error:', error);
       return this.createErrorResponse(query, error);
@@ -206,7 +186,7 @@ export class SimplifiedAIOrchestrator {
     if (usePerplexity) {
       try {
         const perplexityResult = await this.perplexity.invoke([
-          new SystemMessage("You are a helpful financial assistant. Provide current, factual information with complete analysis."),
+          new SystemMessage("You are a helpful financial assistant. Provide current, factual information."),
           new HumanMessage(query)
         ]);
         perplexityResponse = perplexityResult.content as string;
@@ -215,30 +195,20 @@ export class SimplifiedAIOrchestrator {
       }
     }
 
-    // Get analysis from Claude with explicit completion instruction
+    // Get analysis from Claude
     const claudePrompt = perplexityResponse 
-      ? `Based on this current information:\n${perplexityResponse}\n\nUser query: ${query}\n\nProvide a comprehensive response. IMPORTANT: Complete your entire analysis without truncation.`
-      : `${query}\n\nProvide a comprehensive response. IMPORTANT: Complete your entire analysis without truncation.`;
+      ? `Based on this current information:\n${perplexityResponse}\n\nUser query: ${query}\n\nProvide a comprehensive response.`
+      : query;
 
     const claudeResult = await this.claude.invoke([
-      new SystemMessage(`You are an expert financial analyst. Provide clear, actionable insights. \nCRITICAL: Always complete your full response. Do not truncate or cut off mid-sentence.\nIf discussing multiple points, ensure all points are fully explained.`),
+      new SystemMessage("You are an expert financial analyst. Provide clear, actionable insights."),
       new HumanMessage(claudePrompt)
     ]);
     claudeResponse = claudeResult.content as string;
 
-    // Ensure we have the complete response
-    if (claudeResponse.endsWith('...') || claudeResponse.endsWith('so...')) {
-      // Response was truncated, request completion
-      const completionResult = await this.claude.invoke([
-        new SystemMessage("Continue and complete the previous analysis."),
-        new HumanMessage(`Continue from: \"${claudeResponse.slice(-100)}\"\n\nComplete the analysis without repeating what was already said.`)
-      ]);
-      claudeResponse += ' ' + completionResult.content;
-    }
-
     // Combine responses if both are available
     const finalResponse = perplexityResponse && usePerplexity
-      ? this.combineResponses(claudeResponse, perplexityResponse)
+      ? `${claudeResponse}\n\n**Current Market Context:**\n${this.summarizePerplexity(perplexityResponse)}`
       : claudeResponse;
 
     return {
@@ -266,39 +236,6 @@ export class SimplifiedAIOrchestrator {
       ],
       timestamp: new Date().toISOString()
     };
-  }
-
-  // Add this helper method to properly combine responses
-  private combineResponses(claudeResponse: string, perplexityResponse: string): string {
-    // Check if Claude's response is complete
-    const isComplete = !claudeResponse.endsWith('...') && 
-                      !claudeResponse.endsWith('so...') &&
-                      (claudeResponse.includes('conclusion') || 
-                       claudeResponse.includes('summary') ||
-                       claudeResponse.split('\n').length > 10);
-
-    if (isComplete) {
-      // Add Perplexity's real-time data as a supplement
-      return `${claudeResponse}\n\n**📊 Current Market Context:**\n${this.summarizePerplexity(perplexityResponse, true)}`;
-    } else {
-      // Claude's response was incomplete, use Perplexity to complete
-      return `${claudeResponse}\n\n**📊 Additional Analysis:**\n${perplexityResponse}`;
-    }
-  }
-
-  // Update the summarizePerplexity method to handle full responses
-  private summarizePerplexity(response: string, fullContext: boolean = false): string {
-    const lines = response.split('\n').filter(line => line.trim());
-    
-    if (fullContext) {
-      // Return more complete context
-      const keyPoints = lines.slice(0, 10).join('\n');
-      return keyPoints;
-    }
-    
-    // Original summary behavior
-    const keyPoints = lines.slice(0, 3).join('\n');
-    return keyPoints.length > 200 ? keyPoints.substring(0, 200) + '...' : keyPoints;
   }
 
   private detectAsset(query: string): string | null {
@@ -347,27 +284,10 @@ export class SimplifiedAIOrchestrator {
 
   private async formatAssetResponse(query: string, analysis: any): Promise<string> {
     const lowerQuery = query.toLowerCase();
-    // Add confidence score to all responses
-    const confidenceIntro = `\n💯 **Confidence Score: ${(analysis.aiConsensus?.combinedConfidence ? analysis.aiConsensus.combinedConfidence * 100 : analysis.enhancedAnalysis?.confidenceScore || 0).toFixed(0)}%**\n`;
-    // Add this new section for enhanced metrics
-    const enhancedMetrics = `
-📊 **Enhanced Analysis Metrics:**
-• Technical Alignment: ${analysis.enhancedAnalysis?.confidenceFactors.technicalAlignment ?? 'N/A'}%
-• Fundamental Strength: ${analysis.enhancedAnalysis?.confidenceFactors.fundamentalStrength ?? 'N/A'}%
-• Market Conditions: ${analysis.enhancedAnalysis?.confidenceFactors.marketConditions ?? 'N/A'}%
-• News Sentiment: ${analysis.enhancedAnalysis?.confidenceFactors.newssentiment ?? 'N/A'}%
-
-🎯 **Optimal Trade Setup:**
-• Entry: $${analysis.tradeSetup?.entry?.toFixed(2) ?? 'N/A'}
-• Stop Loss: $${analysis.tradeSetup?.stopLoss?.toFixed(2) ?? 'N/A'}
-• Risk/Reward: ${analysis.tradeSetup?.riskRewardRatio?.toFixed(2) ?? 'N/A'}:1
-• Position Size: ${analysis.tradeSetup?.portfolioPercentage?.toFixed(1) ?? 'N/A'}% of portfolio
-• Max Loss: $${analysis.tradeSetup?.maxLoss?.toFixed(2) ?? 'N/A'}
-• Expected Return: $${analysis.tradeSetup?.expectedReturn?.toFixed(2) ?? 'N/A'}
-`;
+    
     // Price query
     if (lowerQuery.includes('price') || lowerQuery.includes('cost') || lowerQuery.includes('worth')) {
-      return confidenceIntro + enhancedMetrics + `**${analysis.asset} Current Price: $${analysis.marketData.price.toFixed(2)}**
+      return `**${analysis.asset} Current Price: $${analysis.marketData.price.toFixed(2)}**
 
 📊 **Market Data:**
 • 24h Change: ${analysis.marketData.changePercent >= 0 ? '+' : ''}${analysis.marketData.changePercent.toFixed(2)}%
@@ -382,7 +302,7 @@ export class SimplifiedAIOrchestrator {
     
     // Prediction query
     if (lowerQuery.includes('predict') || lowerQuery.includes('future') || lowerQuery.includes('forecast')) {
-      return confidenceIntro + enhancedMetrics + `**${analysis.asset} Price Predictions:**
+      return `**${analysis.asset} Price Predictions:**
 
 📈 **Short-term (1-7 days):**
 • Direction: ${analysis.predictions.shortTerm.direction.toUpperCase()}
@@ -404,7 +324,7 @@ ${analysis.aiConsensus.claudeView}`;
     // News query
     if (lowerQuery.includes('news') || lowerQuery.includes('latest') || lowerQuery.includes('happening')) {
       const newsItems = analysis.newsAnalysis.headlines.slice(0, 5);
-      return confidenceIntro + enhancedMetrics + `**Latest ${analysis.asset} News:**
+      return `**Latest ${analysis.asset} News:**
 
 ${newsItems.map((item: any, i: number) => 
   `${i + 1}. ${item.title}\n   • Sentiment: ${item.sentiment} | Impact: ${item.impact}`
@@ -419,7 +339,7 @@ ${analysis.newsAnalysis.tradingSignals.length > 0
     }
     
     // Default comprehensive analysis
-    return confidenceIntro + enhancedMetrics + `**${analysis.asset} Comprehensive Analysis**
+    return `**${analysis.asset} Comprehensive Analysis**
 
 💰 **Current Market Status:**
 • Price: $${analysis.marketData.price.toFixed(2)} (${analysis.marketData.changePercent >= 0 ? '+' : ''}${analysis.marketData.changePercent.toFixed(2)}%)
@@ -446,6 +366,13 @@ ${analysis.newsAnalysis.tradingSignals.length > 0
 ⚠️ **Risk Assessment:** ${analysis.predictions.riskMetrics.riskLevel}
 
 *Analysis powered by Claude AI + Perplexity real-time data*`;
+  }
+
+  private summarizePerplexity(response: string): string {
+    // Extract key points from Perplexity response
+    const lines = response.split('\n').filter(line => line.trim());
+    const keyPoints = lines.slice(0, 3).join('\n');
+    return keyPoints.length > 200 ? keyPoints.substring(0, 200) + '...' : keyPoints;
   }
 
   private generateSuggestions(asset: string, analysis: any): string[] {
@@ -538,160 +465,6 @@ You can try:
     } catch (error) {
       yield this.createErrorResponse(query, error);
     }
-  }
-
-  // --- Ensure Complete Response Logic ---
-  async ensureCompleteResponse(
-    partialResponse: string,
-    originalQuery: string,
-    context?: ChatContext
-  ): Promise<string> {
-    // Check if response appears truncated
-    const truncationIndicators = [
-      '...',
-      'so...',
-      'Here are so',
-      'including:',
-      'such as:',
-      'follows:'
-    ];
-    
-    const lastLine = partialResponse.split('\n').pop() || '';
-    const isTruncated = truncationIndicators.some(indicator => 
-      partialResponse.endsWith(indicator) || lastLine.endsWith(indicator)
-    );
-    
-    if (!isTruncated) {
-      return partialResponse;
-    }
-    
-    console.log('Response appears truncated, requesting continuation...');
-    
-    // Request continuation
-    const continuationPrompt = `
-The previous response was cut off. Please continue from where it ended:
-"${partialResponse.slice(-200)}"
-
-Continue with the complete analysis without repeating what was already said. Include all remaining points and ensure the response is complete.
-`;
-
-    try {
-      const continuation = await this.claude.invoke([
-        new SystemMessage("Continue the previous analysis to completion."),
-        new HumanMessage(continuationPrompt)
-      ]);
-      
-      // Combine responses, removing any repeated content
-      const fullResponse = this.mergeResponses(partialResponse, continuation.content as string);
-      
-      // Recursively check if we need another continuation
-      if (fullResponse.length < partialResponse.length + 100) {
-        // Continuation was too short, might still be truncated
-        return this.ensureCompleteResponse(fullResponse, originalQuery, context);
-      }
-      
-      return fullResponse;
-    } catch (error) {
-      console.error('Error getting continuation:', error);
-      return partialResponse + '\n\n[Response continuation failed]';
-    }
-  }
-
-  private mergeResponses(original: string, continuation: string): string {
-    // Remove potential overlap between responses
-    const originalWords = original.split(' ');
-    const continuationWords = continuation.split(' ');
-    
-    // Find overlap point (last 10 words of original in continuation)
-    let overlapIndex = -1;
-    for (let i = Math.max(0, originalWords.length - 20); i < originalWords.length; i++) {
-      const phrase = originalWords.slice(i, i + 5).join(' ');
-      if (continuation.includes(phrase)) {
-        overlapIndex = i;
-        break;
-      }
-    }
-    
-    if (overlapIndex > 0) {
-      // Found overlap, merge without duplication
-      const trimmedOriginal = originalWords.slice(0, overlapIndex).join(' ');
-      return trimmedOriginal + ' ' + continuation;
-    }
-    
-    // No overlap found, just concatenate
-    return original + ' ' + continuation;
-  }
-
-  // --- Add enhanceAnalysisWithConfidence method ---
-  private async enhanceAnalysisWithConfidence(
-    basicAnalysis: any,
-    marketData: any
-  ): Promise<ComprehensiveAnalysisResult> {
-    // Calculate confidence scores
-    const confidenceFactors = confidenceScoringService.calculateConfidenceScore(
-      basicAnalysis.technicalIndicators,
-      basicAnalysis.fundamentals,
-      marketData,
-      basicAnalysis.news
-    );
-
-    const overallConfidence = (
-      confidenceFactors.technicalAlignment * 0.3 +
-      confidenceFactors.fundamentalStrength * 0.3 +
-      confidenceFactors.marketConditions * 0.2 +
-      confidenceFactors.newssentiment * 0.2
-    );
-
-    // Multi-timeframe analysis
-    const timeframeAnalysis = confidenceScoringService.analyzeTimeframes({
-      currentPrice: marketData.price,
-      priceHistory: marketData.priceHistory || []
-    });
-
-    // Trade setup calculation
-    const tradeSetup = confidenceScoringService.calculateTradeSetup(
-      basicAnalysis.symbol,
-      marketData.price,
-      {
-        ...basicAnalysis,
-        confidence: overallConfidence,
-        trend: timeframeAnalysis.summary.primaryTrend,
-        volatility: marketData.volatility || 0.02,
-        resistance: basicAnalysis.technicalIndicators?.resistance,
-        stopLoss: basicAnalysis.technicalIndicators?.support * 0.98
-      },
-      100000 // Default portfolio size, should come from user profile
-    );
-
-    // Generate AI prediction
-    const prediction = confidenceScoringService.generatePrediction(
-      {
-        ...basicAnalysis,
-        currentPrice: marketData.price,
-        expectedReturn: (basicAnalysis.priceTargets.short - marketData.price) / marketData.price,
-        confidence: overallConfidence,
-        volatility: marketData.volatility || 0.02
-      },
-      '24h'
-    );
-
-    const enhancedAnalysis: EnhancedAnalysis = {
-      ...basicAnalysis,
-      confidenceScore: overallConfidence,
-      confidenceFactors,
-      confidenceBreakdown: `Technical: ${confidenceFactors.technicalAlignment}%, ` +
-                          `Fundamental: ${confidenceFactors.fundamentalStrength}%, ` +
-                          `Market: ${confidenceFactors.marketConditions}%, ` +
-                          `News: ${confidenceFactors.newssentiment}%`
-    };
-
-    return {
-      ...basicAnalysis,
-      enhancedAnalysis,
-      timeframeAnalysis,
-      tradeSetup,
-      prediction
-    };
   }
 }
 

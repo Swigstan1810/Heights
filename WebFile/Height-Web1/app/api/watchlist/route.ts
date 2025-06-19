@@ -1,4 +1,4 @@
-// app/api/watchlist/route.ts
+// app/api/watchlist/route.ts - FIXED VERSION
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -55,13 +55,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, data: portfolio || [] });
 
       case 'balance':
-        // Get demo wallet balance
+        // Get demo wallet balance - FIXED QUERY
         const { data: balance, error: balanceError } = await supabase
           .from('demo_wallet_balance')
           .select('*')
           .eq('user_id', user.id)
           .eq('currency', 'INR')
-          .single();
+          .maybeSingle(); // Use maybeSingle instead of single to avoid 406 errors
 
         if (balanceError && balanceError.code !== 'PGRST116') {
           throw balanceError;
@@ -115,6 +115,26 @@ export async function POST(request: NextRequest) {
       case 'add_to_watchlist':
         const { symbol, name, asset_type, exchange, sector, market_cap } = data;
         
+        // Check if already exists first to avoid 409 errors
+        const { data: existing, error: checkError } = await supabase
+          .from('watchlist_items')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .eq('asset_type', asset_type)
+          .maybeSingle();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          throw checkError;
+        }
+
+        if (existing) {
+          return NextResponse.json(
+            { error: 'Item already in watchlist' },
+            { status: 400 }
+          );
+        }
+
         const { error: insertError } = await supabase
           .from('watchlist_items')
           .insert({
@@ -124,18 +144,10 @@ export async function POST(request: NextRequest) {
             asset_type,
             exchange,
             sector,
-            market_cap
+            market_cap: market_cap || 0
           });
 
-        if (insertError) {
-          if (insertError.code === '23505') {
-            return NextResponse.json(
-              { error: 'Item already in watchlist' },
-              { status: 400 }
-            );
-          }
-          throw insertError;
-        }
+        if (insertError) throw insertError;
 
         return NextResponse.json({ 
           success: true, 
@@ -171,6 +183,60 @@ export async function POST(request: NextRequest) {
         const totalAmount = quantity * price;
         const fees = Math.max(10, totalAmount * 0.001);
 
+        // Validate numbers
+        if (isNaN(quantity) || isNaN(price) || quantity <= 0 || price <= 0) {
+          return NextResponse.json(
+            { error: 'Invalid quantity or price' },
+            { status: 400 }
+          );
+        }
+
+        // Check wallet balance for buy orders
+        if (trade_type === 'buy') {
+          const { data: walletBalance, error: walletError } = await supabase
+            .from('demo_wallet_balance')
+            .select('balance')
+            .eq('user_id', user.id)
+            .eq('currency', 'INR')
+            .maybeSingle();
+
+          if (walletError && walletError.code !== 'PGRST116') {
+            throw walletError;
+          }
+
+          const balance = walletBalance?.balance || 0;
+          if ((totalAmount + fees) > balance) {
+            return NextResponse.json(
+              { error: 'Insufficient balance' },
+              { status: 400 }
+            );
+          }
+        }
+
+        // Check holdings for sell orders
+        if (trade_type === 'sell') {
+          const { data: holding, error: holdingError } = await supabase
+            .from('demo_portfolio')
+            .select('quantity')
+            .eq('user_id', user.id)
+            .eq('symbol', tradeSymbol)
+            .eq('asset_type', tradeAssetType)
+            .maybeSingle();
+
+          if (holdingError && holdingError.code !== 'PGRST116') {
+            throw holdingError;
+          }
+
+          const availableQuantity = holding?.quantity || 0;
+          if (quantity > availableQuantity) {
+            return NextResponse.json(
+              { error: 'Insufficient holdings' },
+              { status: 400 }
+            );
+          }
+        }
+
+        // Execute the trade using stored procedure
         const { data: result, error: tradeError } = await supabase
           .rpc('execute_demo_trade', {
             p_user_id: user.id,
@@ -183,7 +249,10 @@ export async function POST(request: NextRequest) {
             p_fees: fees
           });
 
-        if (tradeError) throw tradeError;
+        if (tradeError) {
+          console.error('Trade execution error:', tradeError);
+          throw new Error(tradeError.message || 'Trade execution failed');
+        }
 
         return NextResponse.json({ 
           success: true, 

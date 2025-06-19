@@ -137,6 +137,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Robust Watchlist Sync Logic ---
+    // Check if asset is in watchlist
+    const { data: watchlistItem } = await supabase
+      .from('watchlist_items')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('symbol', symbol)
+      .eq('asset_type', 'crypto')
+      .maybeSingle();
+
+    if (tradeType === 'buy' && newQuantity > 0 && !watchlistItem) {
+      // Fetch asset details from market_data for name, exchange, sector, market_cap
+      const { data: marketData } = await supabase
+        .from('market_data')
+        .select('name, exchange, sector, market_cap')
+        .eq('symbol', symbol)
+        .eq('asset_type', 'crypto')
+        .maybeSingle();
+      await supabase.from('watchlist_items').insert({
+        user_id: user.id,
+        symbol,
+        name: marketData?.name || getCryptoName(symbol),
+        asset_type: 'crypto',
+        exchange: marketData?.exchange || 'crypto',
+        sector: marketData?.sector || '',
+        market_cap: marketData?.market_cap || 0
+      });
+    }
+    if (tradeType === 'sell' && newQuantity === 0 && watchlistItem) {
+      await supabase.from('watchlist_items')
+        .delete()
+        .eq('id', watchlistItem.id);
+    }
+    // --- End Watchlist Sync Logic ---
+
     return NextResponse.json({
       success: true,
       message: `Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity.toFixed(6)} ${symbol}`,

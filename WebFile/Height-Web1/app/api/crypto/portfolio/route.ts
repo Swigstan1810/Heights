@@ -286,6 +286,35 @@ async function updateHoldingsAfterBuy(
         profit_loss_percentage: 0
       });
   }
+
+  // --- Robust Watchlist Sync Logic (All Asset Types) ---
+  // Check if asset is in watchlist
+  const { data: watchlistItem } = await supabase
+    .from('watchlist_items')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('symbol', symbol)
+    .eq('asset_type', assetType)
+    .maybeSingle();
+  if (!watchlistItem) {
+    // Fetch asset details from market_data for exchange, sector, market_cap
+    const { data: marketData } = await supabase
+      .from('market_data')
+      .select('exchange, sector, market_cap')
+      .eq('symbol', symbol)
+      .eq('asset_type', assetType)
+      .maybeSingle();
+    await supabase.from('watchlist_items').insert({
+      user_id: userId,
+      symbol,
+      name,
+      asset_type: assetType,
+      exchange: marketData?.exchange || assetType,
+      sector: marketData?.sector || '',
+      market_cap: marketData?.market_cap || 0
+    });
+  }
+  // --- End Watchlist Sync Logic ---
 }
 
 // Helper function to update holdings after sell order
@@ -303,6 +332,7 @@ async function updateHoldingsAfterSell(
     .eq('symbol', symbol)
     .single();
 
+  let deleted = false;
   if (existingHolding) {
     const newQuantity = Number(existingHolding.quantity) - quantity;
     
@@ -312,6 +342,7 @@ async function updateHoldingsAfterSell(
         .from('portfolio_holdings')
         .delete()
         .eq('id', existingHolding.id);
+      deleted = true;
     } else {
       // Update holding
       const newTotalInvested = newQuantity * Number(existingHolding.average_buy_price);
@@ -333,4 +364,22 @@ async function updateHoldingsAfterSell(
         .eq('id', existingHolding.id);
     }
   }
+
+  // --- Robust Watchlist Sync Logic (All Asset Types) ---
+  if (deleted) {
+    // Remove from watchlist if present (match both symbol and asset_type)
+    const { data: watchlistItem } = await supabase
+      .from('watchlist_items')
+      .select('id', 'asset_type')
+      .eq('user_id', userId)
+      .eq('symbol', symbol)
+      .eq('asset_type', existingHolding?.asset_type)
+      .maybeSingle();
+    if (watchlistItem) {
+      await supabase.from('watchlist_items')
+        .delete()
+        .eq('id', watchlistItem.id);
+    }
+  }
+  // --- End Watchlist Sync Logic ---
 }

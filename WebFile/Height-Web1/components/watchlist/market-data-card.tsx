@@ -1,4 +1,4 @@
-// components/watchlist/market-data-card.tsx
+// components/watchlist/market-data-card.tsx - FIXED VERSION
 "use client";
 
 import { useState } from 'react';
@@ -114,6 +114,13 @@ export function MarketDataCard({
     return `₹${marketCap.toFixed(0)}`;
   };
 
+  // Safe price calculation with fallbacks
+  const safePrice = item.price_inr || item.price || 0;
+  const safeChange24h = item.change_24h || 0;
+  const safeChange24hPercent = item.change_24h_percent || 0;
+  const safeVolume24h = item.volume_24h || 0;
+  const safeMarketCap = item.market_cap || 0;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -137,7 +144,7 @@ export function MarketDataCard({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-1">
                       {item.name}
                     </h3>
                     <Badge variant="outline" className="text-xs">
@@ -177,7 +184,7 @@ export function MarketDataCard({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {formatCurrency(item.price_inr || item.price)}
+                    {formatCurrency(safePrice)}
                   </div>
                   {item.price_inr && item.price !== item.price_inr && (
                     <div className="text-sm text-gray-500">
@@ -186,18 +193,18 @@ export function MarketDataCard({
                   )}
                 </div>
                 <div className="text-right">
-                  <div className={`flex items-center gap-1 text-sm font-semibold ${getPriceChangeColor(item.change_24h_percent)}`}>
-                    {getPerformanceIcon(item.change_24h_percent)}
-                    {formatPercentage(item.change_24h_percent)}
+                  <div className={`flex items-center gap-1 text-sm font-semibold ${getPriceChangeColor(safeChange24hPercent)}`}>
+                    {getPerformanceIcon(safeChange24hPercent)}
+                    {formatPercentage(safeChange24hPercent)}
                   </div>
-                  <div className={`text-xs ${getPriceChangeColor(item.change_24h)}`}>
-                    {item.change_24h >= 0 ? '+' : ''}{formatCurrency(item.change_24h)}
+                  <div className={`text-xs ${getPriceChangeColor(safeChange24h)}`}>
+                    {safeChange24h >= 0 ? '+' : ''}{formatCurrency(safeChange24h)}
                   </div>
                 </div>
               </div>
 
-              {/* Price Range */}
-              {item.high_24h && item.low_24h && (
+              {/* Price Range - Only show if both high and low are available */}
+              {item.high_24h && item.low_24h && item.high_24h > item.low_24h && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>24h Low: {formatCurrency(item.low_24h)}</span>
@@ -207,7 +214,7 @@ export function MarketDataCard({
                     <div 
                       className="h-full bg-gradient-to-r from-red-400 via-yellow-400 to-green-400"
                       style={{
-                        width: `${((item.price - item.low_24h) / (item.high_24h - item.low_24h)) * 100}%`
+                        width: `${Math.min(100, Math.max(0, ((safePrice - item.low_24h) / (item.high_24h - item.low_24h)) * 100))}%`
                       }}
                     />
                   </div>
@@ -237,19 +244,19 @@ export function MarketDataCard({
 
             {/* Market Stats */}
             <div className="grid grid-cols-2 gap-4 text-xs">
-              {item.volume_24h > 0 && (
+              {safeVolume24h > 0 && (
                 <div>
                   <span className="text-gray-500">24h Volume</span>
                   <div className="font-semibold text-gray-900">
-                    {formatVolume(item.volume_24h)}
+                    {formatVolume(safeVolume24h)}
                   </div>
                 </div>
               )}
-              {item.market_cap > 0 && (
+              {safeMarketCap > 0 && (
                 <div>
                   <span className="text-gray-500">Market Cap</span>
                   <div className="font-semibold text-gray-900">
-                    {formatMarketCap(item.market_cap)}
+                    {formatMarketCap(safeMarketCap)}
                   </div>
                 </div>
               )}
