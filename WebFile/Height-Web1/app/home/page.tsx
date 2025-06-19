@@ -308,7 +308,8 @@ const PortfolioSummary = () => {
     totalPnLPercentage: 0,
     holdingsCount: 0,
     todayChange: 0,
-    todayChangePercent: 0
+    todayChangePercent: 0,
+    walletBalance: 0
   });
   const [loading, setLoading] = useState(true);
   const supabase = createClientComponentClient<Database>();
@@ -327,6 +328,16 @@ const PortfolioSummary = () => {
           return;
         }
 
+        // Get wallet balance
+        const { data: walletData, error: walletError } = await supabase
+          .from('wallet_balance')
+          .select('balance')
+          .eq('user_id', user.id)
+          .eq('currency', 'INR')
+          .single();
+
+        const walletBalance = walletData?.balance || 500000;
+
         if (summary && summary.length > 0) {
           const data = summary[0];
           setPortfolioData({
@@ -336,7 +347,8 @@ const PortfolioSummary = () => {
             totalPnLPercentage: Number(data.total_pnl_percentage) || 0,
             holdingsCount: Number(data.holdings_count) || 0,
             todayChange: Number(data.total_pnl) * 0.02, // Simulate today's change
-            todayChangePercent: 2.32 // Simulate today's change percentage
+            todayChangePercent: 2.32, // Simulate today's change percentage
+            walletBalance: walletBalance
           });
         }
       } catch (error) {
@@ -347,6 +359,26 @@ const PortfolioSummary = () => {
     };
 
     fetchPortfolioData();
+
+    // Set up real-time subscription for portfolio updates
+    const subscription = supabase
+      .channel('portfolio-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'portfolio_holdings',
+          filter: `user_id=eq.${user?.id}`
+        }, 
+        () => {
+          fetchPortfolioData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [user, supabase]);
 
   const formatCurrency = (value: number) => {

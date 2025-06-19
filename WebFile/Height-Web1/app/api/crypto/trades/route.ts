@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 // app/api/crypto/trades/route.ts - Get recent crypto trades
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 // app/api/portfolio/route.ts - Fixed version with proper error handling
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';

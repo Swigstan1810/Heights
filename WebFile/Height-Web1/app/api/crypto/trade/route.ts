@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 // app/api/crypto/trade/route.ts - Fixed Portfolio Integration API
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';

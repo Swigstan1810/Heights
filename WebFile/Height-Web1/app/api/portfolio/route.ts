@@ -1,8 +1,10 @@
-// app/api/portfolio/route.ts - Complete portfolio API with all endpoints
+// app/api/portfolio/route.ts - Fixed version
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/types/supabase';
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,6 +27,7 @@ export async function GET(request: NextRequest) {
           .from('portfolio_holdings')
           .select('*')
           .eq('user_id', user.id)
+          .gt('quantity', 0) // Only get holdings with positive quantity
           .order('current_value', { ascending: false });
 
         if (holdingsError) {
@@ -32,45 +35,76 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ holdings: [] });
         }
 
-        return NextResponse.json({ holdings: holdings || [] });
+        // Calculate current values based on latest prices
+        const holdingsWithUpdatedValues = holdings?.map(holding => ({
+          ...holding,
+          current_value: holding.quantity * holding.current_price,
+          profit_loss: (holding.quantity * holding.current_price) - holding.total_invested,
+          profit_loss_percentage: holding.total_invested > 0 
+            ? (((holding.quantity * holding.current_price) - holding.total_invested) / holding.total_invested) * 100
+            : 0
+        })) || [];
 
-      case 'orders':
-        // Get portfolio orders
-        const { data: orders, error: ordersError } = await supabase
-          .from('portfolio_orders')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (ordersError) {
-          console.error('Orders fetch error:', ordersError);
-          return NextResponse.json({ orders: [] });
-        }
-
-        return NextResponse.json({ orders: orders || [] });
+        return NextResponse.json({ holdings: holdingsWithUpdatedValues });
 
       case 'summary':
-        // Get portfolio summary using the database function
+        // Try multiple approaches to get summary
         try {
-          const { data: summary, error: summaryError } = await supabase
-            .rpc('get_portfolio_summary', { p_user_id: user.id });
+          // First try the view
+          const { data: viewData, error: viewError } = await supabase
+            .from('portfolio_summary_view')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
 
-          if (summaryError) {
-            console.error('Summary RPC error:', summaryError);
+          if (!viewError && viewData) {
             return NextResponse.json({ 
               summary: {
-                total_value: 0,
-                total_invested: 0,
-                total_pnl: 0,
-                total_pnl_percentage: 0,
-                holdings_count: 0
+                total_value: Number(viewData.total_value) || 0,
+                total_invested: Number(viewData.total_invested) || 0,
+                total_pnl: Number(viewData.total_pnl) || 0,
+                total_pnl_percentage: Number(viewData.total_pnl_percentage) || 0,
+                holdings_count: Number(viewData.holdings_count) || 0
               }
             });
           }
 
+          // Fallback to manual calculation
+          const { data: holdings, error: holdingsError } = await supabase
+            .from('portfolio_holdings')
+            .select('current_value, total_invested, quantity, current_price')
+            .eq('user_id', user.id)
+            .gt('quantity', 0);
+
+          if (!holdingsError && holdings) {
+            const summary = holdings.reduce((acc, holding) => {
+              const currentValue = holding.quantity * holding.current_price;
+              return {
+                total_value: acc.total_value + currentValue,
+                total_invested: acc.total_invested + holding.total_invested,
+                holdings_count: acc.holdings_count + 1
+              };
+            }, { total_value: 0, total_invested: 0, holdings_count: 0 });
+
+            const total_pnl = summary.total_value - summary.total_invested;
+            const total_pnl_percentage = summary.total_invested > 0 
+              ? (total_pnl / summary.total_invested) * 100 
+              : 0;
+
+            return NextResponse.json({ 
+              summary: {
+                total_value: summary.total_value,
+                total_invested: summary.total_invested,
+                total_pnl: total_pnl,
+                total_pnl_percentage: total_pnl_percentage,
+                holdings_count: summary.holdings_count
+              }
+            });
+          }
+
+          // Return empty summary if no data
           return NextResponse.json({ 
-            summary: summary?.[0] || {
+            summary: {
               total_value: 0,
               total_invested: 0,
               total_pnl: 0,
@@ -78,8 +112,9 @@ export async function GET(request: NextRequest) {
               holdings_count: 0
             }
           });
+
         } catch (error) {
-          console.error('Summary error:', error);
+          console.error('Summary calculation error:', error);
           return NextResponse.json({ 
             summary: {
               total_value: 0,
@@ -91,115 +126,9 @@ export async function GET(request: NextRequest) {
           });
         }
 
-      default:
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-    }
-
-  } catch (error) {
-    console.error('Portfolio API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
-    
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { action } = body;
-
-    switch (action) {
-      case 'place_order':
-        const { symbol, name, asset_type, order_type, quantity, price } = body;
-
-        // Validate required fields
-        if (!symbol || !name || !asset_type || !order_type || !quantity || !price) {
-          return NextResponse.json(
-            { error: 'Missing required fields' },
-            { status: 400 }
-          );
-        }
-
-        const totalAmount = Number(quantity) * Number(price);
-
-        // For demo purposes, we'll auto-complete the order
-        // In a real app, you'd integrate with a broker API
-        const { data: order, error: orderError } = await supabase
-          .from('portfolio_orders')
-          .insert({
-            user_id: user.id,
-            symbol,
-            name,
-            asset_type,
-            order_type,
-            quantity: Number(quantity),
-            price: Number(price),
-            total_amount: totalAmount,
-            status: 'completed', // Auto-complete for demo
-            fees: totalAmount * 0.001, // 0.1% fee
-            completed_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (orderError) {
-          console.error('Order creation error:', orderError);
-          return NextResponse.json(
-            { error: 'Failed to create order' },
-            { status: 500 }
-          );
-        }
-
-        // Update holdings after successful order
-        if (order_type === 'buy') {
-          await updateHoldingsAfterBuy(supabase, user.id, symbol, name, asset_type, Number(quantity), Number(price));
-        } else if (order_type === 'sell') {
-          await updateHoldingsAfterSell(supabase, user.id, symbol, Number(quantity), Number(price));
-        }
-
-        return NextResponse.json({ 
-          message: 'Order placed successfully',
-          order 
-        });
-
-      case 'update_prices':
-        // Update portfolio holding prices (for demo/testing)
-        const { updates } = body;
-        
-        if (!Array.isArray(updates)) {
-          return NextResponse.json(
-            { error: 'Updates must be an array' },
-            { status: 400 }
-          );
-        }
-
-        for (const update of updates) {
-          const { symbol, price } = update;
-          if (symbol && price) {
-            await supabase
-              .from('portfolio_holdings')
-              .update({ 
-                current_price: Number(price),
-                updated_at: new Date().toISOString()
-              })
-              .eq('user_id', user.id)
-              .eq('symbol', symbol);
-          }
-        }
-
-        return NextResponse.json({ 
-          message: 'Prices updated successfully' 
-        });
+      case 'balance':
+        // Redirect to dedicated balance endpoint
+        return NextResponse.redirect(new URL('/api/portfolio/balance', request.url));
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -211,97 +140,5 @@ export async function POST(request: NextRequest) {
       { error: 'Internal server error' },
       { status: 500 }
     );
-  }
-}
-
-// Helper function to update holdings after buy order
-async function updateHoldingsAfterBuy(
-  supabase: any,
-  userId: string,
-  symbol: string,
-  name: string,
-  assetType: string,
-  quantity: number,
-  price: number
-) {
-  // Check if holding exists
-  const { data: existingHolding } = await supabase
-    .from('portfolio_holdings')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('symbol', symbol)
-    .single();
-
-  if (existingHolding) {
-    // Update existing holding
-    const newQuantity = Number(existingHolding.quantity) + quantity;
-    const newTotalInvested = Number(existingHolding.total_invested) + (quantity * price);
-    const newAvgBuyPrice = newTotalInvested / newQuantity;
-
-    await supabase
-      .from('portfolio_holdings')
-      .update({
-        quantity: newQuantity,
-        average_buy_price: newAvgBuyPrice,
-        total_invested: newTotalInvested,
-        current_price: price,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existingHolding.id);
-  } else {
-    // Create new holding
-    await supabase
-      .from('portfolio_holdings')
-      .insert({
-        user_id: userId,
-        symbol,
-        name,
-        asset_type: assetType,
-        quantity,
-        average_buy_price: price,
-        current_price: price,
-        total_invested: quantity * price
-      });
-  }
-}
-
-// Helper function to update holdings after sell order
-async function updateHoldingsAfterSell(
-  supabase: any,
-  userId: string,
-  symbol: string,
-  quantity: number,
-  price: number
-) {
-  const { data: existingHolding } = await supabase
-    .from('portfolio_holdings')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('symbol', symbol)
-    .single();
-
-  if (existingHolding) {
-    const newQuantity = Number(existingHolding.quantity) - quantity;
-    
-    if (newQuantity <= 0) {
-      // Delete holding if quantity is 0
-      await supabase
-        .from('portfolio_holdings')
-        .delete()
-        .eq('id', existingHolding.id);
-    } else {
-      // Update holding
-      const newTotalInvested = newQuantity * Number(existingHolding.average_buy_price);
-      
-      await supabase
-        .from('portfolio_holdings')
-        .update({
-          quantity: newQuantity,
-          total_invested: newTotalInvested,
-          current_price: price,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingHolding.id);
-    }
   }
 }

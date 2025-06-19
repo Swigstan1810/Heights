@@ -210,35 +210,39 @@ export default function ConnectedPortfolioPage() {
     try {
       setRefreshing(true);
       
-      const [holdingsRes, summaryRes, tradesRes] = await Promise.all([
+      const [holdingsRes, summaryRes, tradesRes, balanceRes] = await Promise.all([
         fetch('/api/portfolio?action=holdings'),
         fetch('/api/portfolio?action=summary'),
-        fetch('/api/crypto/trades?limit=10')
+        fetch('/api/crypto/trades?limit=10'),
+        fetch('/api/portfolio/balance')
       ]);
 
-      const [holdingsData, summaryData, tradesData] = await Promise.all([
+      const [holdingsData, summaryData, tradesData, balanceData] = await Promise.all([
         holdingsRes.json(),
         summaryRes.json(),
-        tradesRes.json()
+        tradesRes.json(),
+        balanceRes.json()
       ]);
 
       // Process holdings
       if (holdingsData.holdings) {
-        const holdings = holdingsData.holdings;
-        setPortfolioHoldings(holdings);
-        setCryptoHoldings(holdings.filter((h: PortfolioHolding) => h.asset_type === 'crypto'));
-        setStockHoldings(demoStockHoldings); // Use demo data for stocks
-        setMfHoldings(demoMFHoldings); // Use demo data for MFs
+        const cryptoHoldings = holdingsData.holdings.filter((h: PortfolioHolding) => h.asset_type === 'crypto');
+        setCryptoHoldings(cryptoHoldings);
+        setPortfolioHoldings(holdingsData.holdings);
+        
+        // Keep demo stocks and MFs for now
+        setStockHoldings(demoStockHoldings);
+        setMfHoldings(demoMFHoldings);
       }
 
-      // Process summary
+      // Process summary with all asset types
       if (summaryData.summary) {
         const cryptoSummary = summaryData.summary;
         const stockValue = demoStockHoldings.reduce((sum, h) => sum + h.current_value, 0);
         const mfValue = demoMFHoldings.reduce((sum, h) => sum + h.current_value, 0);
         
-        const totalValue = cryptoSummary.total_value * 83 + stockValue + mfValue; // Convert crypto to INR
-        const totalInvested = cryptoSummary.total_invested * 83 + 
+        const totalValue = (cryptoSummary.total_value || 0) + stockValue + mfValue;
+        const totalInvested = (cryptoSummary.total_invested || 0) + 
           demoStockHoldings.reduce((sum, h) => sum + h.total_invested, 0) +
           demoMFHoldings.reduce((sum, h) => sum + h.total_invested, 0);
         
@@ -247,8 +251,13 @@ export default function ConnectedPortfolioPage() {
           total_invested: totalInvested,
           total_pnl: totalValue - totalInvested,
           total_pnl_percentage: totalInvested > 0 ? ((totalValue - totalInvested) / totalInvested) * 100 : 0,
-          holdings_count: cryptoSummary.holdings_count + demoStockHoldings.length + demoMFHoldings.length
+          holdings_count: (cryptoSummary.holdings_count || 0) + demoStockHoldings.length + demoMFHoldings.length
         });
+      }
+
+      // Update wallet balance
+      if (balanceData.balance) {
+        setWalletBalance(Number(balanceData.balance.balance) || 500000);
       }
 
       // Process recent trades
@@ -312,7 +321,7 @@ export default function ConnectedPortfolioPage() {
   const pieChartData = [
     { 
       name: 'Crypto', 
-      value: cryptoHoldings.reduce((sum, h) => sum + h.current_value, 0) * 83, 
+      value: cryptoHoldings.reduce((sum, h) => sum + h.current_value, 0), 
       color: CHART_COLORS[0] 
     },
     { 
@@ -801,7 +810,7 @@ export default function ConnectedPortfolioPage() {
                       <div>
                         <p className="text-sm text-muted-foreground">Total Crypto Value</p>
                         <p className="text-2xl font-bold text-emerald-600">
-                          {formatINR(cryptoHoldings.reduce((sum, h) => sum + h.current_value, 0) * 83)}
+                          {formatINR(cryptoHoldings.reduce((sum, h) => sum + h.current_value, 0))}
                         </p>
                       </div>
                       <div>

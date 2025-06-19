@@ -83,6 +83,8 @@ interface WalletBalance {
   currency: string;
 }
 
+export const dynamic = "force-dynamic";
+
 export default function IntegratedCryptoPage() {
   const { user, isAuthenticated, isInitialized } = useAuth();
   const { address, isConnected } = useAccount();
@@ -163,16 +165,26 @@ export default function IntegratedCryptoPage() {
     if (!user) return;
     
     try {
-      const [holdingsRes, summaryRes, balanceRes] = await Promise.all([
+      // Fetch holdings and summary
+      const [holdingsRes, summaryRes] = await Promise.all([
         fetch('/api/portfolio?action=holdings'),
-        fetch('/api/portfolio?action=summary'),
-        fetch('/api/portfolio?action=balance')
+        fetch('/api/portfolio?action=summary')
       ]);
 
-      const [holdingsData, summaryData, balanceData] = await Promise.all([
+      // Fetch balance separately with error handling
+      let balanceData = { balance: { balance: 500000, currency: 'INR' } };
+      try {
+        const balanceRes = await fetch('/api/portfolio?action=balance');
+        if (balanceRes.ok) {
+          balanceData = await balanceRes.json();
+        }
+      } catch (balanceError) {
+        console.log('Using default balance');
+      }
+
+      const [holdingsData, summaryData] = await Promise.all([
         holdingsRes.json(),
-        summaryRes.json(),
-        balanceRes.json()
+        summaryRes.json()
       ]);
 
       if (holdingsData.holdings) {
@@ -184,10 +196,14 @@ export default function IntegratedCryptoPage() {
       }
 
       if (balanceData.balance) {
-        setWalletBalance(balanceData.balance);
+        setWalletBalance({
+          balance: Number(balanceData.balance.balance) || 500000,
+          currency: balanceData.balance.currency || 'INR'
+        });
       }
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
+      toast.error('Failed to load portfolio data');
     }
   }, [user]);
 
@@ -271,23 +287,24 @@ export default function IntegratedCryptoPage() {
       let totalINR: number;
 
       if (tradeType === 'buy') {
-        // Amount is in USD for buying
-        quantity = amount / priceUSD;
-        totalINR = amount * 83; // Convert USD to INR
+        // For buying: amount is in INR
+        totalINR = amount;
+        quantity = totalINR / priceINR;
         
         if (totalINR > walletBalance.balance) {
-          toast.error('Insufficient balance');
+          toast.error(`Insufficient balance. Available: ${formatINR(walletBalance.balance)}`);
+          setIsTrading(false);
           return;
         }
       } else {
-        // Amount is in crypto quantity for selling
+        // For selling: amount is quantity
         quantity = amount;
         totalINR = quantity * priceINR;
         
-        // Check if user has enough crypto
         const userHolding = portfolioHoldings.find(h => h.symbol === selectedCrypto.symbol);
         if (!userHolding || quantity > userHolding.quantity) {
-          toast.error('Insufficient crypto balance');
+          toast.error(`Insufficient ${selectedCrypto.symbol}. Available: ${userHolding?.quantity.toFixed(6) || '0'}`);
+          setIsTrading(false);
           return;
         }
       }
@@ -309,27 +326,45 @@ export default function IntegratedCryptoPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success(result.message);
+        // Update local state immediately for better UX
+        if (tradeType === 'buy') {
+          setWalletBalance(prev => ({
+            ...prev,
+            balance: prev.balance - totalINR
+          }));
+        } else {
+          setWalletBalance(prev => ({
+            ...prev,
+            balance: prev.balance + totalINR
+          }));
+        }
         
-        // Refresh portfolio and balance
-        await fetchPortfolioData();
+        // Refresh all data
+        await Promise.all([
+          fetchPortfolioData(),
+          fetchCryptoData()
+        ]);
         
-        // Show success animation
-        setTimeout(() => {
-          toast.success(`Trade completed! ${quantity.toFixed(6)} ${selectedCrypto.symbol} ${tradeType === 'buy' ? 'purchased' : 'sold'}`);
-        }, 500);
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            <span>
+              {tradeType === 'buy' ? 'Bought' : 'Sold'} {quantity.toFixed(6)} {selectedCrypto.symbol} for {formatINR(totalINR)}
+            </span>
+          </div>
+        );
         
         setTradeAmount('');
       } else {
         throw new Error(result.error || 'Trade execution failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Trade error:', error);
-      toast.error('Failed to execute trade');
+      toast.error(error.message || 'Failed to execute trade');
     } finally {
       setIsTrading(false);
     }
-  }, [selectedCrypto, user, tradeAmount, tradeType, walletBalance.balance, portfolioHoldings, fetchPortfolioData]);
+  }, [selectedCrypto, user, tradeAmount, tradeType, walletBalance.balance, portfolioHoldings, fetchPortfolioData, fetchCryptoData]);
 
   // Search and filter
   useEffect(() => {
@@ -870,11 +905,12 @@ export default function IntegratedCryptoPage() {
                                   value={tradeAmount}
                                   onChange={(e) => setTradeAmount(e.target.value)}
                                   className="text-lg h-12"
+                                  step="0.000001"
                                 />
-                                {tradeAmount && selectedCrypto.price_usd > 0 && (
+                                {tradeAmount !== '' && !isNaN(Number(tradeAmount)) && selectedCrypto.price_inr > 0 && (
                                   <div className="text-sm text-muted-foreground space-y-1">
-                                    <p>≈ {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.price_usd)}</p>
-                                    <p>Total: {formatINR(parseFloat(tradeAmount) * selectedCrypto.price_inr)}</p>
+                                    <p>≈ {formatINR(parseFloat(tradeAmount) * selectedCrypto.price_inr)}</p>
+                                    <p>Price: {formatINR(selectedCrypto.price_inr)} per {selectedCrypto.symbol}</p>
                                   </div>
                                 )}
                               </div>
