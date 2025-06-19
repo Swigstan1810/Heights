@@ -1,4 +1,4 @@
-// app/api/watchlist/route.ts - FIXED VERSION
+// app/api/watchlist/route.ts - Watchlist-only version
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -34,56 +34,14 @@ export async function GET(request: NextRequest) {
       case 'watchlist':
         // Get user's watchlist
         const { data: watchlist, error: watchlistError } = await supabase
-          .from('watchlist_items')
+          .from('unified_watchlist')
           .select('*')
           .eq('user_id', user.id)
+          .order('sort_order', { ascending: false })
           .order('created_at', { ascending: false });
 
         if (watchlistError) throw watchlistError;
         return NextResponse.json({ success: true, data: watchlist || [] });
-
-      case 'portfolio':
-        // Get demo portfolio
-        const { data: portfolio, error: portfolioError } = await supabase
-          .from('demo_portfolio')
-          .select('*')
-          .eq('user_id', user.id)
-          .gt('quantity', 0)
-          .order('current_value', { ascending: false });
-
-        if (portfolioError) throw portfolioError;
-        return NextResponse.json({ success: true, data: portfolio || [] });
-
-      case 'balance':
-        // Get demo wallet balance - FIXED QUERY
-        const { data: balance, error: balanceError } = await supabase
-          .from('demo_wallet_balance')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('currency', 'INR')
-          .maybeSingle(); // Use maybeSingle instead of single to avoid 406 errors
-
-        if (balanceError && balanceError.code !== 'PGRST116') {
-          throw balanceError;
-        }
-
-        if (!balance) {
-          // Create default balance
-          const { data: newBalance, error: createError } = await supabase
-            .from('demo_wallet_balance')
-            .insert({
-              user_id: user.id,
-              balance: 1000000,
-              currency: 'INR'
-            })
-            .select()
-            .single();
-
-          if (createError) throw createError;
-          return NextResponse.json({ success: true, data: newBalance });
-        }
-
-        return NextResponse.json({ success: true, data: balance });
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -113,11 +71,11 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'add_to_watchlist':
-        const { symbol, name, asset_type, exchange, sector, market_cap } = data;
+        const { symbol, name, asset_type, exchange, sector, market_cap, notes, tags } = data;
         
-        // Check if already exists first to avoid 409 errors
+        // Check if already exists first to avoid conflicts
         const { data: existing, error: checkError } = await supabase
-          .from('watchlist_items')
+          .from('unified_watchlist')
           .select('id')
           .eq('user_id', user.id)
           .eq('symbol', symbol)
@@ -136,7 +94,7 @@ export async function POST(request: NextRequest) {
         }
 
         const { error: insertError } = await supabase
-          .from('watchlist_items')
+          .from('unified_watchlist')
           .insert({
             user_id: user.id,
             symbol,
@@ -144,7 +102,9 @@ export async function POST(request: NextRequest) {
             asset_type,
             exchange,
             sector,
-            market_cap: market_cap || 0
+            market_cap: market_cap || 0,
+            notes: notes || null,
+            tags: tags || []
           });
 
         if (insertError) throw insertError;
@@ -158,7 +118,7 @@ export async function POST(request: NextRequest) {
         const { symbol: removeSymbol, asset_type: removeAssetType } = data;
         
         const { error: deleteError } = await supabase
-          .from('watchlist_items')
+          .from('unified_watchlist')
           .delete()
           .eq('user_id', user.id)
           .eq('symbol', removeSymbol)
@@ -171,93 +131,30 @@ export async function POST(request: NextRequest) {
           message: 'Removed from watchlist successfully' 
         });
 
-      case 'execute_trade':
+      case 'update_watchlist_item':
         const { 
-          symbol: tradeSymbol, 
-          asset_type: tradeAssetType, 
-          trade_type, 
-          quantity, 
-          price 
+          id: itemId, 
+          notes: updateNotes, 
+          tags: updateTags, 
+          sort_order: updateSortOrder 
         } = data;
+        
+        const updateData: any = {};
+        if (updateNotes !== undefined) updateData.notes = updateNotes;
+        if (updateTags !== undefined) updateData.tags = updateTags;
+        if (updateSortOrder !== undefined) updateData.sort_order = updateSortOrder;
 
-        const totalAmount = quantity * price;
-        const fees = Math.max(10, totalAmount * 0.001);
+        const { error: updateError } = await supabase
+          .from('unified_watchlist')
+          .update(updateData)
+          .eq('user_id', user.id)
+          .eq('id', itemId);
 
-        // Validate numbers
-        if (isNaN(quantity) || isNaN(price) || quantity <= 0 || price <= 0) {
-          return NextResponse.json(
-            { error: 'Invalid quantity or price' },
-            { status: 400 }
-          );
-        }
-
-        // Check wallet balance for buy orders
-        if (trade_type === 'buy') {
-          const { data: walletBalance, error: walletError } = await supabase
-            .from('demo_wallet_balance')
-            .select('balance')
-            .eq('user_id', user.id)
-            .eq('currency', 'INR')
-            .maybeSingle();
-
-          if (walletError && walletError.code !== 'PGRST116') {
-            throw walletError;
-          }
-
-          const balance = walletBalance?.balance || 0;
-          if ((totalAmount + fees) > balance) {
-            return NextResponse.json(
-              { error: 'Insufficient balance' },
-              { status: 400 }
-            );
-          }
-        }
-
-        // Check holdings for sell orders
-        if (trade_type === 'sell') {
-          const { data: holding, error: holdingError } = await supabase
-            .from('demo_portfolio')
-            .select('quantity')
-            .eq('user_id', user.id)
-            .eq('symbol', tradeSymbol)
-            .eq('asset_type', tradeAssetType)
-            .maybeSingle();
-
-          if (holdingError && holdingError.code !== 'PGRST116') {
-            throw holdingError;
-          }
-
-          const availableQuantity = holding?.quantity || 0;
-          if (quantity > availableQuantity) {
-            return NextResponse.json(
-              { error: 'Insufficient holdings' },
-              { status: 400 }
-            );
-          }
-        }
-
-        // Execute the trade using stored procedure
-        const { data: result, error: tradeError } = await supabase
-          .rpc('execute_demo_trade', {
-            p_user_id: user.id,
-            p_symbol: tradeSymbol,
-            p_asset_type: tradeAssetType,
-            p_trade_type: trade_type,
-            p_quantity: quantity,
-            p_price: price,
-            p_total_amount: totalAmount,
-            p_fees: fees
-          });
-
-        if (tradeError) {
-          console.error('Trade execution error:', tradeError);
-          throw new Error(tradeError.message || 'Trade execution failed');
-        }
+        if (updateError) throw updateError;
 
         return NextResponse.json({ 
           success: true, 
-          message: `${trade_type.charAt(0).toUpperCase() + trade_type.slice(1)} order executed successfully`,
-          data: result
+          message: 'Watchlist item updated successfully' 
         });
 
       default:

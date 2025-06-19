@@ -370,8 +370,8 @@ export default function IntegratedCryptoPage() {
         // Real-time state updates
         const brokerageFee = Math.max(10, Math.min(1000, totalINR * 0.001));
         
-        setWalletBalance(prev => ({
-          ...prev,
+          setWalletBalance(prev => ({
+            ...prev,
           balance: tradeType === 'buy' 
             ? prev.balance - totalINR - brokerageFee
             : prev.balance + totalINR - brokerageFee
@@ -390,7 +390,7 @@ export default function IntegratedCryptoPage() {
                 profit_loss_percentage: result.data.newProfitLossPercentage,
                 current_price: priceINR
               };
-            } else {
+        } else {
               updated.splice(existingIndex, 1);
             }
             return updated;
@@ -408,7 +408,7 @@ export default function IntegratedCryptoPage() {
               profit_loss: 0,
               profit_loss_percentage: 0
             }];
-          }
+        }
           return prev;
         });
         

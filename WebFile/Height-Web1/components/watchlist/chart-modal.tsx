@@ -154,7 +154,6 @@ export function ChartModal({
               width="100%"
               theme="light"
               interval="1D"
-              showControls={true}
               allow_symbol_change={false}
               studies={['MASimple@tv-basicstudies', 'RSI@tv-basicstudies']}
               className="rounded-lg overflow-hidden"

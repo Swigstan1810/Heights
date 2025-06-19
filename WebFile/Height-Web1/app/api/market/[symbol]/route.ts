@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
 import { coinbaseRealtimeService } from '@/lib/services/coinbase-realtime-service';
 

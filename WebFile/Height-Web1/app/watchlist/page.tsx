@@ -1,4 +1,4 @@
-// app/watchlist/page.tsx - FIXED VERSION
+// app/watchlist/page.tsx - Modern watchlist-only version
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -30,41 +30,40 @@ import {
   TrendingDown,
   Star,
   BarChart3,
-  Wallet,
   Eye,
-  EyeOff,
   Sparkles,
-  DollarSign,
   Activity,
-  PieChart,
   AlertCircle,
-  Loader2
+  Loader2,
+  BookmarkPlus,
+  Grid3X3,
+  List,
+  SortAsc,
+  SortDesc
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useWatchlistData, MarketDataItem } from '@/hooks/use-watchlist-data';
-import { MarketDataCard } from '@/components/watchlist/market-data-card';
-import { TradingModal } from '@/components/watchlist/trading-modal';
-import { ChartModal } from '@/components/watchlist/chart-modal';
+import { WatchlistCard } from '@/components/watchlist/watchlist-card';
+import { ModernChartModal } from '@/components/watchlist/modern-chart-modal';
+import { useTheme } from 'next-themes';
 
 export default function WatchlistPage() {
   const { user, isAuthenticated, isInitialized } = useAuth();
   const router = useRouter();
+  const { theme: systemTheme } = useTheme();
+  const chartTheme = systemTheme === 'dark' ? 'dark' : 'light';
   
   const {
     // Data
     filteredMarketData,
     watchlistItems,
-    demoPortfolio,
-    demoWalletBalance,
     loadingMarketData,
     loadingWatchlist,
-    loadingDemoData,
     
     // Actions
     addToWatchlist,
     removeFromWatchlist,
-    executeDemoTrade,
     refreshData,
     
     // Filters
@@ -79,18 +78,16 @@ export default function WatchlistPage() {
     
     // Utils
     error,
-    getMarketDataBySymbol,
-    getPortfolioItem,
     formatCurrency,
-    formatPercentage
+    formatPercentage,
+    isInWatchlist
   } = useWatchlistData();
 
   const [activeTab, setActiveTab] = useState('all');
-  const [showBalances, setShowBalances] = useState(true);
   const [selectedItem, setSelectedItem] = useState<MarketDataItem | null>(null);
-  const [tradingModalOpen, setTradingModalOpen] = useState(false);
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -106,9 +103,6 @@ export default function WatchlistPage() {
     if (activeTab === 'watchlist') {
       const watchlistSymbols = new Set(watchlistItems.map(w => `${w.symbol}_${w.asset_type}`));
       data = data.filter(item => watchlistSymbols.has(`${item.symbol}_${item.asset_type}`));
-    } else if (activeTab === 'portfolio') {
-      const portfolioSymbols = new Set(demoPortfolio.map(p => `${p.symbol}_${p.asset_type}`));
-      data = data.filter(item => portfolioSymbols.has(`${item.symbol}_${item.asset_type}`));
     } else if (activeTab !== 'all') {
       data = data.filter(item => item.asset_type === activeTab);
     }
@@ -125,18 +119,7 @@ export default function WatchlistPage() {
     mutual_fund: filteredMarketData.filter(item => item.asset_type === 'mutual_fund').length,
     commodity: filteredMarketData.filter(item => item.asset_type === 'commodity').length,
     bond: filteredMarketData.filter(item => item.asset_type === 'bond').length,
-    watchlist: watchlistItems.length,
-    portfolio: demoPortfolio.length
-  };
-
-  // Portfolio summary
-  const portfolioSummary = {
-    totalValue: demoPortfolio.reduce((sum, item) => sum + item.current_value, 0),
-    totalInvested: demoPortfolio.reduce((sum, item) => sum + item.total_invested, 0),
-    totalPnL: demoPortfolio.reduce((sum, item) => sum + item.profit_loss, 0),
-    totalPnLPercentage: demoPortfolio.length > 0 
-      ? (demoPortfolio.reduce((sum, item) => sum + item.profit_loss_percentage, 0) / demoPortfolio.length)
-      : 0
+    watchlist: watchlistItems.length
   };
 
   // Get unique sectors for filter
@@ -162,10 +145,11 @@ export default function WatchlistPage() {
       asset_type: item.asset_type,
       exchange: item.exchange,
       sector: item.sector,
-      market_cap: item.market_cap
+      market_cap: item.market_cap,
+      notes: '',
+      tags: []
     });
     if (success) {
-      // Refresh watchlist tab count
       setActiveTab(prev => prev);
     }
   };
@@ -174,18 +158,9 @@ export default function WatchlistPage() {
     await removeFromWatchlist(item.symbol, item.asset_type);
   };
 
-  const handleTrade = (item: MarketDataItem) => {
-    setSelectedItem(item);
-    setTradingModalOpen(true);
-  };
-
   const handleViewChart = (item: MarketDataItem) => {
     setSelectedItem(item);
     setChartModalOpen(true);
-  };
-
-  const isInWatchlist = (item: MarketDataItem) => {
-    return watchlistItems.some(w => w.symbol === item.symbol && w.asset_type === item.asset_type);
   };
 
   // Loading state
@@ -196,11 +171,12 @@ export default function WatchlistPage() {
         <div className="container mx-auto px-4 pt-20 pb-16">
           <div className="animate-pulse space-y-6">
             <div className="h-8 bg-muted rounded w-48"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-64 bg-muted rounded-lg"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 bg-muted rounded-lg"></div>
               ))}
             </div>
+            <div className="h-64 bg-muted rounded-lg"></div>
           </div>
         </div>
       </div>
@@ -218,56 +194,24 @@ export default function WatchlistPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50/50 via-purple-50/50 to-pink-50/50 border border-border/50 p-6 md:p-8">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 via-blue-50/10 to-indigo-500/10 border border-border/50 p-6 md:p-8">
             <div className="relative z-10">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl shadow-lg">
-                      <Star className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
-                        Investment Watchlist
-                      </h1>
-                      <p className="text-muted-foreground flex items-center gap-2 mt-1">
-                        <Sparkles className="h-4 w-4" />
-                        Track and trade stocks, crypto, mutual funds, commodities & bonds
-                      </p>
-                    </div>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-2xl">
+                    <BookmarkPlus className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                      Investment Watchlist
+                    </h1>
+                    <p className="text-muted-foreground flex items-center gap-2 mt-2 text-lg">
+                      <Sparkles className="h-5 w-5 text-blue-500" />
+                      Track and analyze financial instruments with advanced charts
+                    </p>
                   </div>
                 </div>
-                
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Portfolio Summary */}
-                  <div className="flex items-center gap-2 px-4 py-2 bg-background/50 backdrop-blur-sm rounded-xl border border-border/50">
-                    <PieChart className="h-4 w-4 text-purple-500" />
-                    <div className="text-sm">
-                      <div className="font-medium">
-                        {showBalances ? formatCurrency(portfolioSummary.totalValue) : '••••••'}
-                      </div>
-                      <div className={`text-xs ${portfolioSummary.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {showBalances ? `${portfolioSummary.totalPnL >= 0 ? '+' : ''}${portfolioSummary.totalPnLPercentage.toFixed(2)}%` : '••••'}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Demo Balance */}
-                  <div className="flex items-center gap-2 px-4 py-2 bg-background/50 backdrop-blur-sm rounded-xl border border-border/50">
-                    <Wallet className="h-4 w-4 text-emerald-500" />
-                    <span className="font-medium text-sm">
-                      {showBalances ? formatCurrency(demoWalletBalance?.balance || 0) : '••••••'}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowBalances(!showBalances)}
-                      className="h-6 w-6 p-0"
-                    >
-                      {showBalances ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                    </Button>
-                  </div>
-                  
+                <div className="flex items-center gap-3">
                   <Button
                     variant="outline"
                     size="sm"
@@ -276,43 +220,64 @@ export default function WatchlistPage() {
                     className="gap-2"
                   >
                     <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline">Refresh</span>
+                    Refresh
                   </Button>
+                  <div className="flex items-center gap-1 bg-background/60 backdrop-blur-sm rounded-lg p-1 border border-border/20">
+                    <Button
+                      variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('grid')}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === 'list' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('list')}
+                      className="h-8 w-8 p-0"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-
               {/* Error Alert */}
               {error && (
-                <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700"
+                >
                   <AlertCircle className="h-4 w-4" />
                   <span className="text-sm">{error}</span>
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
         </motion.div>
 
-        {/* Filters */}
-        <Card className="mb-6 shadow-sm border-0 bg-card/50 backdrop-blur-sm">
-          <CardContent className="p-4">
+        {/* Advanced Filters */}
+        <Card className="mb-6 border-0 bg-white/60 backdrop-blur-sm shadow-lg">
+          <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row gap-4">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search stocks, crypto, mutual funds..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-background/50"
+                  className="pl-10 bg-white/50 border-gray-200 focus:border-blue-400 focus:ring-blue-400/20"
                 />
               </div>
 
-              {/* Asset Type Filter - FIXED */}
+              {/* Asset Type Filter */}
               <Select 
                 value={selectedAssetTypes.length === 1 ? selectedAssetTypes[0] : 'all'} 
                 onValueChange={(value) => setSelectedAssetTypes(value === 'all' ? [] : [value])}
               >
-                <SelectTrigger className="w-full lg:w-48 bg-background/50">
+                <SelectTrigger className="w-full lg:w-48 bg-white/50 border-gray-200">
                   <SelectValue placeholder="Asset Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -324,12 +289,12 @@ export default function WatchlistPage() {
                 </SelectContent>
               </Select>
 
-              {/* Sector Filter - FIXED */}
+              {/* Sector Filter */}
               <Select 
                 value={selectedSectors.length === 1 ? selectedSectors[0] : 'all'} 
                 onValueChange={(value) => setSelectedSectors(value === 'all' ? [] : [value])}
               >
-                <SelectTrigger className="w-full lg:w-48 bg-background/50">
+                <SelectTrigger className="w-full lg:w-48 bg-white/50 border-gray-200">
                   <SelectValue placeholder="Sector" />
                 </SelectTrigger>
                 <SelectContent>
@@ -342,7 +307,7 @@ export default function WatchlistPage() {
 
               {/* Sort */}
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full lg:w-48 bg-background/50">
+                <SelectTrigger className="w-full lg:w-48 bg-white/50 border-gray-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -360,57 +325,50 @@ export default function WatchlistPage() {
           </CardContent>
         </Card>
 
-        {/* Tabs */}
+        {/* Modern Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 bg-muted/50 h-14 min-w-fit">
-              <TabsTrigger value="all" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600">
+          <div className="overflow-x-auto pb-2">
+            <TabsList className="inline-flex w-auto bg-muted/50 h-14 rounded-xl border-0 shadow-lg p-1 gap-1 min-w-max">
+              <TabsTrigger value="all" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg transition-all px-4 whitespace-nowrap">
                 <BarChart3 className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">All</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                <span>All</span>
+                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-white/20 text-current">
                   {assetTypeCounts.all}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="stock" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600">
+              <TabsTrigger value="stock" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg px-4 whitespace-nowrap">
                 <Building2 className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Stocks</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                <span>Stocks</span>
+                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-white/20 text-current">
                   {assetTypeCounts.stock}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="mutual_fund" className="data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600">
+              <TabsTrigger value="mutual_fund" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg px-4 whitespace-nowrap">
                 <Banknote className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">MFs</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                <span>Mutual Funds</span>
+                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-white/20 text-current">
                   {assetTypeCounts.mutual_fund}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="commodity" className="data-[state=active]:bg-yellow-50 data-[state=active]:text-yellow-600">
+              <TabsTrigger value="commodity" className="data-[state=active]:bg-yellow-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg px-4 whitespace-nowrap">
                 <Gem className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Commodities</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                <span>Commodities</span>
+                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-white/20 text-current">
                   {assetTypeCounts.commodity}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="bond" className="data-[state=active]:bg-green-50 data-[state=active]:text-green-600">
+              <TabsTrigger value="bond" className="data-[state=active]:bg-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg px-4 whitespace-nowrap">
                 <Shield className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Bonds</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                <span>Bonds</span>
+                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-white/20 text-current">
                   {assetTypeCounts.bond}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="watchlist" className="data-[state=active]:bg-pink-50 data-[state=active]:text-pink-600">
+              <TabsTrigger value="watchlist" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg px-4 whitespace-nowrap">
                 <Star className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Watchlist</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                <span>Watchlist</span>
+                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-white/20 text-current">
                   {assetTypeCounts.watchlist}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="portfolio" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-600">
-                <PieChart className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Portfolio</span>
-                <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                  {assetTypeCounts.portfolio}
                 </Badge>
               </TabsTrigger>
             </TabsList>
@@ -419,39 +377,41 @@ export default function WatchlistPage() {
           {/* Content */}
           <TabsContent value={activeTab} className="space-y-6">
             {displayData.length === 0 ? (
-              <Card className="border-2 border-dashed">
-                <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400 text-2xl font-bold mx-auto mb-4">
-                    <Search className="h-8 w-8" />
+              <Card className="border-2 border-dashed border-muted-foreground/30 bg-background/50">
+                <CardContent className="p-16 text-center">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400 text-2xl font-bold mx-auto mb-6">
+                    <BarChart3 className="h-10 w-10" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">No Assets Found</h3>
-                  <p className="text-muted-foreground mb-4">
+                  <h3 className="text-xl font-semibold mb-3 text-foreground">No Assets Found</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                     {activeTab === 'watchlist' 
-                      ? 'Your watchlist is empty. Add assets to track them here.'
-                      : activeTab === 'portfolio'
-                      ? 'Your portfolio is empty. Start trading to see your holdings.'
+                      ? 'Your watchlist is empty. Start adding assets to track them here.'
                       : 'No assets match your search criteria. Try adjusting your filters.'
                     }
                   </p>
-                  {(activeTab === 'watchlist' || activeTab === 'portfolio') && (
-                    <Button onClick={() => setActiveTab('all')}>
+                  {activeTab === 'watchlist' && (
+                    <Button 
+                      onClick={() => setActiveTab('all')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
                       Browse All Assets
                     </Button>
                   )}
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className={`grid gap-6 ${
+                viewMode === 'grid' 
+                  ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                  : 'grid-cols-1'
+              }`}>
                 {displayData.map((item, index) => (
-                  <MarketDataCard
+                  <WatchlistCard
                     key={`${item.symbol}_${item.asset_type}`}
                     item={item}
-                    portfolioItem={getPortfolioItem(item.symbol, item.asset_type)}
-                    isInWatchlist={isInWatchlist(item)}
+                    isInWatchlist={isInWatchlist(item.symbol, item.asset_type)}
                     onAddToWatchlist={() => handleAddToWatchlist(item)}
                     onRemoveFromWatchlist={() => handleRemoveFromWatchlist(item)}
-                    onBuy={() => handleTrade(item)}
-                    onSell={() => handleTrade(item)}
                     onViewChart={() => handleViewChart(item)}
                     formatCurrency={formatCurrency}
                     formatPercentage={formatPercentage}
@@ -464,24 +424,14 @@ export default function WatchlistPage() {
         </Tabs>
       </div>
 
-      {/* Trading Modal */}
-      <TradingModal
-        isOpen={tradingModalOpen}
-        onClose={() => setTradingModalOpen(false)}
-        item={selectedItem}
-        portfolioItem={selectedItem ? getPortfolioItem(selectedItem.symbol, selectedItem.asset_type) : null}
-        walletBalance={demoWalletBalance}
-        onTrade={executeDemoTrade}
-        formatCurrency={formatCurrency}
-      />
-
       {/* Chart Modal */}
-      <ChartModal
+      <ModernChartModal
         isOpen={chartModalOpen}
         onClose={() => setChartModalOpen(false)}
         item={selectedItem}
         formatCurrency={formatCurrency}
         formatPercentage={formatPercentage}
+        theme={chartTheme}
       />
     </main>
   );

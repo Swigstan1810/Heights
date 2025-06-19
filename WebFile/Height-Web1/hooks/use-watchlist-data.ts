@@ -1,4 +1,4 @@
-// hooks/use-watchlist-data.ts - FIXED VERSION
+// hooks/use-watchlist-data.ts - Watchlist-only version
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -26,7 +26,6 @@ export interface MarketDataItem {
   maturity_date?: string;
   last_updated: string;
   is_active: boolean;
-  isFavorite?: boolean;
 }
 
 export interface WatchlistItem {
@@ -38,32 +37,9 @@ export interface WatchlistItem {
   exchange: string;
   sector: string;
   market_cap: number;
-  created_at: string;
-  updated_at: string;
-  market_data?: MarketDataItem;
-}
-
-export interface DemoPortfolioItem {
-  id: string;
-  user_id: string;
-  symbol: string;
-  name: string;
-  asset_type: string;
-  quantity: number;
-  average_buy_price: number;
-  current_price: number;
-  total_invested: number;
-  current_value: number;
-  profit_loss: number;
-  profit_loss_percentage: number;
-  updated_at: string;
-}
-
-export interface DemoWalletBalance {
-  id: string;
-  user_id: string;
-  balance: number;
-  currency: string;
+  notes?: string;
+  tags: string[];
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -78,21 +54,10 @@ interface UseWatchlistDataReturn {
   watchlistItems: WatchlistItem[];
   loadingWatchlist: boolean;
   
-  // Demo Portfolio
-  demoPortfolio: DemoPortfolioItem[];
-  demoWalletBalance: DemoWalletBalance | null;
-  loadingDemoData: boolean;
-  
   // Actions
-  addToWatchlist: (item: Omit<WatchlistItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<boolean>;
+  addToWatchlist: (item: Omit<WatchlistItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'sort_order'>) => Promise<boolean>;
   removeFromWatchlist: (symbol: string, assetType: string) => Promise<boolean>;
-  executeDemoTrade: (trade: {
-    symbol: string;
-    asset_type: string;
-    trade_type: 'buy' | 'sell';
-    quantity: number;
-    price: number;
-  }) => Promise<boolean>;
+  updateWatchlistItem: (id: string, updates: { notes?: string; tags?: string[]; sort_order?: number }) => Promise<boolean>;
   refreshData: () => Promise<void>;
   
   // Filters
@@ -108,9 +73,9 @@ interface UseWatchlistDataReturn {
   // Utils
   error: string | null;
   getMarketDataBySymbol: (symbol: string, assetType: string) => MarketDataItem | null;
-  getPortfolioItem: (symbol: string, assetType: string) => DemoPortfolioItem | null;
   formatCurrency: (value: number, currency?: string) => string;
   formatPercentage: (value: number) => string;
+  isInWatchlist: (symbol: string, assetType: string) => boolean;
 }
 
 export function useWatchlistData(): UseWatchlistDataReturn {
@@ -120,13 +85,10 @@ export function useWatchlistData(): UseWatchlistDataReturn {
   // State
   const [marketData, setMarketData] = useState<MarketDataItem[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
-  const [demoPortfolio, setDemoPortfolio] = useState<DemoPortfolioItem[]>([]);
-  const [demoWalletBalance, setDemoWalletBalance] = useState<DemoWalletBalance | null>(null);
   
   // Loading states
   const [loadingMarketData, setLoadingMarketData] = useState(true);
   const [loadingWatchlist, setLoadingWatchlist] = useState(true);
-  const [loadingDemoData, setLoadingDemoData] = useState(true);
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -142,16 +104,15 @@ export function useWatchlistData(): UseWatchlistDataReturn {
       setLoadingMarketData(true);
       setError(null);
       
-      const { data, error } = await supabase
-        .from('market_data')
-        .select('*')
-        .eq('is_active', true)
-        .order('volume_24h', { ascending: false });
+      const response = await fetch('/api/watchlist?action=market_data');
+      const result = await response.json();
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch market data');
+      }
 
       // Transform the data to ensure proper types
-      const transformedData = (data || []).map(item => ({
+      const transformedData = (result.data || []).map((item: any) => ({
         ...item,
         price: parseFloat(item.price) || 0,
         price_inr: parseFloat(item.price_inr) || parseFloat(item.price) || 0,
@@ -172,7 +133,7 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     } finally {
       setLoadingMarketData(false);
     }
-  }, [supabase]);
+  }, []);
 
   // Fetch watchlist
   const fetchWatchlist = useCallback(async () => {
@@ -186,18 +147,19 @@ export function useWatchlistData(): UseWatchlistDataReturn {
       setLoadingWatchlist(true);
       setError(null);
       
-      const { data, error } = await supabase
-        .from('watchlist_items')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const response = await fetch('/api/watchlist?action=watchlist');
+      const result = await response.json();
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch watchlist');
+      }
 
       // Transform the data to ensure proper types
-      const transformedWatchlist = (data || []).map(item => ({
+      const transformedWatchlist = (result.data || []).map((item: any) => ({
         ...item,
         market_cap: parseFloat(item.market_cap) || 0,
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        sort_order: parseInt(item.sort_order) || 0,
       }));
 
       setWatchlistItems(transformedWatchlist);
@@ -207,113 +169,29 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     } finally {
       setLoadingWatchlist(false);
     }
-  }, [user, supabase]);
-
-  // Fetch demo portfolio and wallet
-  const fetchDemoData = useCallback(async () => {
-    if (!user) {
-      setDemoPortfolio([]);
-      setDemoWalletBalance(null);
-      setLoadingDemoData(false);
-      return;
-    }
-
-    try {
-      setLoadingDemoData(true);
-      setError(null);
-      
-      // Fetch portfolio
-      const { data: portfolioData, error: portfolioError } = await supabase
-        .from('demo_portfolio')
-        .select('*')
-        .eq('user_id', user.id)
-        .gt('quantity', 0)
-        .order('current_value', { ascending: false });
-
-      if (portfolioError && portfolioError.code !== 'PGRST116') {
-        throw portfolioError;
-      }
-
-      // Transform portfolio data
-      const transformedPortfolio = (portfolioData || []).map(item => ({
-        ...item,
-        quantity: parseFloat(item.quantity) || 0,
-        average_buy_price: parseFloat(item.average_buy_price) || 0,
-        current_price: parseFloat(item.current_price) || 0,
-        total_invested: parseFloat(item.total_invested) || 0,
-        current_value: parseFloat(item.current_value) || 0,
-        profit_loss: parseFloat(item.profit_loss) || 0,
-        profit_loss_percentage: parseFloat(item.profit_loss_percentage) || 0,
-      }));
-
-      setDemoPortfolio(transformedPortfolio);
-
-      // Fetch wallet balance
-      const { data: walletData, error: walletError } = await supabase
-        .from('demo_wallet_balance')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('currency', 'INR')
-        .maybeSingle();
-
-      if (walletError && walletError.code !== 'PGRST116') {
-        throw walletError;
-      }
-
-      if (!walletData) {
-        // Create default wallet balance
-        const { data: newWallet, error: createError } = await supabase
-          .from('demo_wallet_balance')
-          .insert({
-            user_id: user.id,
-            balance: 1000000, // 10 lakh demo money
-            currency: 'INR'
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        
-        setDemoWalletBalance({
-          ...newWallet,
-          balance: parseFloat(newWallet.balance) || 1000000,
-        });
-      } else {
-        setDemoWalletBalance({
-          ...walletData,
-          balance: parseFloat(walletData.balance) || 0,
-        });
-      }
-
-    } catch (err) {
-      console.error('Error fetching demo data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch demo data');
-    } finally {
-      setLoadingDemoData(false);
-    }
-  }, [user, supabase]);
+  }, [user]);
 
   // Add to watchlist
-  const addToWatchlist = useCallback(async (item: Omit<WatchlistItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<boolean> => {
+  const addToWatchlist = useCallback(async (item: Omit<WatchlistItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'sort_order'>): Promise<boolean> => {
     if (!user) {
       toast.error('Please login to add to watchlist');
       return false;
     }
 
     try {
-      const { error } = await supabase
-        .from('watchlist_items')
-        .insert({
-          ...item,
-          user_id: user.id
-        });
+      const response = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_to_watchlist',
+          ...item
+        })
+      });
 
-      if (error) {
-        if (error.code === '23505') { // Unique constraint violation
-          toast.error('Item already in watchlist');
-          return false;
-        }
-        throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add to watchlist');
       }
 
       toast.success(`${item.name} added to watchlist`);
@@ -321,24 +199,31 @@ export function useWatchlistData(): UseWatchlistDataReturn {
       return true;
     } catch (err) {
       console.error('Error adding to watchlist:', err);
-      toast.error('Failed to add to watchlist');
+      toast.error(err instanceof Error ? err.message : 'Failed to add to watchlist');
       return false;
     }
-  }, [user, supabase, fetchWatchlist]);
+  }, [user, fetchWatchlist]);
 
   // Remove from watchlist
   const removeFromWatchlist = useCallback(async (symbol: string, assetType: string): Promise<boolean> => {
     if (!user) return false;
 
     try {
-      const { error } = await supabase
-        .from('watchlist_items')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('symbol', symbol)
-        .eq('asset_type', assetType);
+      const response = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove_from_watchlist',
+          symbol,
+          asset_type: assetType
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to remove from watchlist');
+      }
 
       toast.success('Removed from watchlist');
       await fetchWatchlist();
@@ -348,80 +233,45 @@ export function useWatchlistData(): UseWatchlistDataReturn {
       toast.error('Failed to remove from watchlist');
       return false;
     }
-  }, [user, supabase, fetchWatchlist]);
+  }, [user, fetchWatchlist]);
 
-  // Execute demo trade
-  const executeDemoTrade = useCallback(async (trade: {
-    symbol: string;
-    asset_type: string;
-    trade_type: 'buy' | 'sell';
-    quantity: number;
-    price: number;
-  }): Promise<boolean> => {
-    if (!user || !demoWalletBalance) {
-      toast.error('Demo wallet not available');
-      return false;
-    }
+  // Update watchlist item
+  const updateWatchlistItem = useCallback(async (id: string, updates: { notes?: string; tags?: string[]; sort_order?: number }): Promise<boolean> => {
+    if (!user) return false;
 
     try {
-      const { symbol, asset_type, trade_type, quantity, price } = trade;
-      const totalAmount = quantity * price;
-      const fees = Math.max(10, totalAmount * 0.001); // 0.1% fee, min ₹10
+      const response = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_watchlist_item',
+          id,
+          ...updates
+        })
+      });
 
-      // Validate trade
-      if (trade_type === 'buy' && (totalAmount + fees) > demoWalletBalance.balance) {
-        toast.error('Insufficient balance');
-        return false;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update watchlist item');
       }
 
-      // Get current holding
-      const existingHolding = demoPortfolio.find(
-        p => p.symbol === symbol && p.asset_type === asset_type
-      );
-
-      if (trade_type === 'sell' && (!existingHolding || quantity > existingHolding.quantity)) {
-        toast.error('Insufficient holdings');
-        return false;
-      }
-
-      // Call the stored procedure
-      const { data: result, error: tradeError } = await supabase
-        .rpc('execute_demo_trade', {
-          p_user_id: user.id,
-          p_symbol: symbol,
-          p_asset_type: asset_type,
-          p_trade_type: trade_type,
-          p_quantity: quantity,
-          p_price: price,
-          p_total_amount: totalAmount,
-          p_fees: fees
-        });
-
-      if (tradeError) throw tradeError;
-
-      toast.success(
-        `Demo ${trade_type} order executed: ${quantity} ${symbol} at ₹${price.toFixed(2)}`
-      );
-
-      // Refresh data
-      await fetchDemoData();
+      await fetchWatchlist();
       return true;
-
     } catch (err) {
-      console.error('Error executing demo trade:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to execute trade');
+      console.error('Error updating watchlist item:', err);
+      toast.error('Failed to update watchlist item');
       return false;
     }
-  }, [user, demoWalletBalance, demoPortfolio, fetchDemoData, supabase]);
+  }, [user, fetchWatchlist]);
 
   // Refresh all data
   const refreshData = useCallback(async () => {
     await Promise.all([
       fetchMarketData(),
-      fetchWatchlist(),
-      fetchDemoData()
+      fetchWatchlist()
     ]);
-  }, [fetchMarketData, fetchWatchlist, fetchDemoData]);
+  }, [fetchMarketData, fetchWatchlist]);
 
   // Filter market data
   const filteredMarketData = marketData.filter(item => {
@@ -472,9 +322,9 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     return marketData.find(item => item.symbol === symbol && item.asset_type === assetType) || null;
   }, [marketData]);
 
-  const getPortfolioItem = useCallback((symbol: string, assetType: string): DemoPortfolioItem | null => {
-    return demoPortfolio.find(item => item.symbol === symbol && item.asset_type === assetType) || null;
-  }, [demoPortfolio]);
+  const isInWatchlist = useCallback((symbol: string, assetType: string): boolean => {
+    return watchlistItems.some(item => item.symbol === symbol && item.asset_type === assetType);
+  }, [watchlistItems]);
 
   const formatCurrency = useCallback((value: number, currency = 'INR'): string => {
     if (currency === 'INR') {
@@ -505,15 +355,11 @@ export function useWatchlistData(): UseWatchlistDataReturn {
   useEffect(() => {
     if (user) {
       fetchWatchlist();
-      fetchDemoData();
     } else {
       setWatchlistItems([]);
-      setDemoPortfolio([]);
-      setDemoWalletBalance(null);
       setLoadingWatchlist(false);
-      setLoadingDemoData(false);
     }
-  }, [user, fetchWatchlist, fetchDemoData]);
+  }, [user, fetchWatchlist]);
 
   // Auto-refresh market data every 30 seconds
   useEffect(() => {
@@ -534,15 +380,10 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     watchlistItems,
     loadingWatchlist,
     
-    // Demo Portfolio
-    demoPortfolio,
-    demoWalletBalance,
-    loadingDemoData,
-    
     // Actions
     addToWatchlist,
     removeFromWatchlist,
-    executeDemoTrade,
+    updateWatchlistItem,
     refreshData,
     
     // Filters
@@ -558,8 +399,8 @@ export function useWatchlistData(): UseWatchlistDataReturn {
     // Utils
     error,
     getMarketDataBySymbol,
-    getPortfolioItem,
     formatCurrency,
-    formatPercentage
+    formatPercentage,
+    isInWatchlist
   };
 }

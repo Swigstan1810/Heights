@@ -4,6 +4,8 @@ import { ultimateAnalyst } from '@/lib/enhanced-ai-system';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = "force-dynamic";
+
 // Environment variables (API keys, URLs, etc.) can be set in .env, .env.local, or .env.production
 
 // Initialize Supabase

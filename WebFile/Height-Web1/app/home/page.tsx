@@ -315,44 +315,44 @@ const PortfolioSummary = () => {
   const supabase = createClientComponentClient<Database>();
 
   const fetchPortfolioData = useCallback(async () => {
-    if (!user) return;
+      if (!user) return;
 
-    try {
-      const { data: summary, error: summaryError } = await supabase
+      try {
+        const { data: summary, error: summaryError } = await supabase
         .from('portfolio_summary_view')
         .select('*')
         .eq('user_id', user.id)
         .single();
 
-      const { data: walletData, error: walletError } = await supabase
-        .from('wallet_balance')
-        .select('balance')
-        .eq('user_id', user.id)
-        .eq('currency', 'INR')
-        .single();
+        const { data: walletData, error: walletError } = await supabase
+          .from('wallet_balance')
+          .select('balance')
+          .eq('user_id', user.id)
+          .eq('currency', 'INR')
+          .single();
 
-      const walletBalance = walletData?.balance || 500000;
+        const walletBalance = walletData?.balance || 500000;
 
       if (summary) {
-        setPortfolioData({
+          setPortfolioData({
           totalValue: Number(summary.total_value) || 0,
           totalInvested: Number(summary.total_invested) || 0,
           totalPnL: Number(summary.total_pnl) || 0,
           totalPnLPercentage: Number(summary.total_pnl_percentage) || 0,
           holdingsCount: Number(summary.holdings_count) || 0,
-          walletBalance: walletBalance
-        });
+            walletBalance: walletBalance
+          });
       } else {
         setPortfolioData(prev => ({
           ...prev,
           walletBalance: walletBalance
         }));
+        }
+      } catch (error) {
+        console.error('Error loading portfolio data:', error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading portfolio data:', error);
-    } finally {
-      setLoading(false);
-    }
   }, [user, supabase]);
 
   useEffect(() => {
@@ -384,7 +384,7 @@ const PortfolioSummary = () => {
           schema: 'public', 
           table: 'wallet_balance',
           filter: `user_id=eq.${user?.id}`
-        },
+        }, 
         () => {
           fetchPortfolioData();
         }
@@ -533,8 +533,8 @@ const RecentNews = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const data = await response.json();
-      
+        const data = await response.json();
+        
       if (data.success && data.data && data.data.length > 0) {
         // Map the API response to match the expected format
         const mappedArticles = data.data.map((article: any, index: number) => ({
@@ -555,11 +555,11 @@ const RecentNews = () => {
         
         setNewsArticles(mappedArticles.slice(0, 5));
         console.log(`✅ News loaded successfully from ${data.source || 'API'}`);
-      } else {
+        } else {
         throw new Error(data.error || 'No news data available');
-      }
-    } catch (err) {
-      console.error('Error fetching news:', err);
+        }
+      } catch (err) {
+        console.error('Error fetching news:', err);
       
       if (retryCount < 2) {
         // Retry with different category
@@ -634,9 +634,9 @@ const RecentNews = () => {
         }
       ];
       setNewsArticles(fallbackNews);
-    } finally {
-      setLoading(false);
-    }
+      } finally {
+        setLoading(false);
+      }
   }, []);
 
   useEffect(() => {
@@ -688,7 +688,7 @@ const RecentNews = () => {
                 <div className="flex gap-2 mt-3">
                   <div className="h-5 bg-muted rounded w-16"></div>
                   <div className="h-5 bg-muted rounded w-20"></div>
-                </div>
+          </div>
               </div>
             </div>
           </motion.div>
@@ -783,7 +783,7 @@ const RecentNews = () => {
                       <Activity className="h-3 w-3 mr-1" />
                     )}
                     {article.sentiment.charAt(0).toUpperCase() + article.sentiment.slice(1)}
-                  </Badge>
+              </Badge>
                 )}
                 
                 {article.impact && (
@@ -824,12 +824,12 @@ const RecentNews = () => {
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    {new Date(article.publishedAt).toLocaleDateString()}
-                  </div>
+                {new Date(article.publishedAt).toLocaleDateString()}
+            </div>
                   <Badge variant="outline" className="text-xs border-border/50">
                     {article.source?.name || 'Unknown Source'}
                   </Badge>
-                </div>
+          </div>
                 
                 {article.url && (
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -899,7 +899,7 @@ const RecentActivity = () => {
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to fetch trading activities');
-      }
+        }
 
       setActivities((data.trades || []).map((trade: any) => ({
         id: trade.id,
@@ -917,9 +917,9 @@ const RecentActivity = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load activities');
       setActivities([]);
-    } finally {
-      setLoading(false);
-    }
+      } finally {
+        setLoading(false);
+      }
   }, []);
 
   useEffect(() => {
@@ -1002,7 +1002,7 @@ const RecentActivity = () => {
               <div className="flex-1 space-y-2">
                 <div className="h-4 bg-muted rounded w-3/4"></div>
                 <div className="h-3 bg-muted rounded w-1/2"></div>
-              </div>
+          </div>
               <div className="text-right space-y-2">
                 <div className="h-4 bg-muted rounded w-20"></div>
                 <div className="h-3 bg-muted rounded w-16"></div>
@@ -1085,19 +1085,19 @@ const RecentActivity = () => {
           }`} />
           
           <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
               {/* Trade Type Icon */}
-              <div className={`p-2 rounded-full ${
+            <div className={`p-2 rounded-full ${
                 activity.type === 'buy' 
                   ? 'bg-green-500/20 text-green-500' 
                   : 'bg-red-500/20 text-red-500'
-              }`}>
+            }`}>
                 {activity.type === 'buy' ? (
                   <TrendingUp className="h-4 w-4" />
                 ) : (
-                  <TrendingDown className="h-4 w-4" />
+                <TrendingDown className="h-4 w-4" />
                 )}
-              </div>
+            </div>
               
               {/* Crypto Icon */}
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center text-white font-bold text-sm">
@@ -1105,11 +1105,11 @@ const RecentActivity = () => {
               </div>
               
               {/* Trade Details */}
-              <div>
-                <p className="font-medium">
-                  {activity.type === 'buy' ? 'Bought' : 'Sold'} {activity.name}
-                </p>
-                <p className="text-sm text-muted-foreground">
+            <div>
+              <p className="font-medium">
+                {activity.type === 'buy' ? 'Bought' : 'Sold'} {activity.name}
+              </p>
+              <p className="text-sm text-muted-foreground">
                   {activity.quantity.toFixed(6)} {activity.symbol} @ {formatINR(activity.price)}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
@@ -1136,20 +1136,20 @@ const RecentActivity = () => {
                       Fee: {formatINR(activity.fees)}
                     </span>
                   )}
-                </div>
-              </div>
+            </div>
+          </div>
             </div>
             
             {/* Amount and Time */}
-            <div className="text-right">
+          <div className="text-right">
               <p className={`font-medium ${
                 activity.type === 'buy' ? 'text-red-500' : 'text-green-500'
               }`}>
                 {activity.type === 'buy' ? '-' : '+'}{formatINR(activity.amount)}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {new Date(activity.createdAt).toLocaleDateString()}
-              </p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(activity.createdAt).toLocaleDateString()}
+            </p>
               <p className="text-xs text-muted-foreground">
                 {new Date(activity.createdAt).toLocaleTimeString()}
               </p>
