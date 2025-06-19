@@ -56,6 +56,8 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Tooltip, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 import Link from 'next/link';
+import { useRealtimeSync } from '@/hooks/use-realtime-sync';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 // Interfaces
 interface PortfolioHolding {
@@ -99,6 +101,8 @@ export default function ConnectedPortfolioPage() {
   const { user, isAuthenticated, isInitialized } = useAuth();
   const { address, isConnected } = useAccount();
   const router = useRouter();
+  const { refreshAllData } = useRealtimeSync();
+  const supabase = createClientComponentClient();
 
   // State management
   const [activeTab, setActiveTab] = useState('overview');
@@ -211,38 +215,28 @@ export default function ConnectedPortfolioPage() {
       setRefreshing(true);
       
       const [holdingsRes, summaryRes, tradesRes, balanceRes] = await Promise.all([
-        fetch('/api/portfolio?action=holdings'),
-        fetch('/api/portfolio?action=summary'),
-        fetch('/api/crypto/trades?limit=10'),
-        fetch('/api/portfolio/balance')
+        supabase.from('portfolio_holdings').select('*').eq('user_id', user.id).gt('quantity', 0),
+        supabase.from('portfolio_summary_view').select('*').eq('user_id', user.id).single(),
+        supabase.from('crypto_trades').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
+        supabase.from('wallet_balance').select('balance, currency').eq('user_id', user.id).eq('currency', 'INR').single()
       ]);
 
-      const [holdingsData, summaryData, tradesData, balanceData] = await Promise.all([
-        holdingsRes.json(),
-        summaryRes.json(),
-        tradesRes.json(),
-        balanceRes.json()
-      ]);
-
-      // Process holdings
-      if (holdingsData.holdings) {
-        const cryptoHoldings = holdingsData.holdings.filter((h: PortfolioHolding) => h.asset_type === 'crypto');
+      if (holdingsRes.data) {
+        const cryptoHoldings = holdingsRes.data.filter((h: any) => h.asset_type === 'crypto');
         setCryptoHoldings(cryptoHoldings);
-        setPortfolioHoldings(holdingsData.holdings);
+        setPortfolioHoldings(holdingsRes.data);
         
-        // Keep demo stocks and MFs for now
         setStockHoldings(demoStockHoldings);
         setMfHoldings(demoMFHoldings);
       }
 
-      // Process summary with all asset types
-      if (summaryData.summary) {
-        const cryptoSummary = summaryData.summary;
+      if (summaryRes.data) {
+        const cryptoSummary = summaryRes.data;
         const stockValue = demoStockHoldings.reduce((sum, h) => sum + h.current_value, 0);
         const mfValue = demoMFHoldings.reduce((sum, h) => sum + h.current_value, 0);
         
-        const totalValue = (cryptoSummary.total_value || 0) + stockValue + mfValue;
-        const totalInvested = (cryptoSummary.total_invested || 0) + 
+        const totalValue = (Number(cryptoSummary.total_value) || 0) + stockValue + mfValue;
+        const totalInvested = (Number(cryptoSummary.total_invested) || 0) + 
           demoStockHoldings.reduce((sum, h) => sum + h.total_invested, 0) +
           demoMFHoldings.reduce((sum, h) => sum + h.total_invested, 0);
         
@@ -251,18 +245,26 @@ export default function ConnectedPortfolioPage() {
           total_invested: totalInvested,
           total_pnl: totalValue - totalInvested,
           total_pnl_percentage: totalInvested > 0 ? ((totalValue - totalInvested) / totalInvested) * 100 : 0,
-          holdings_count: (cryptoSummary.holdings_count || 0) + demoStockHoldings.length + demoMFHoldings.length
+          holdings_count: (Number(cryptoSummary.holdings_count) || 0) + demoStockHoldings.length + demoMFHoldings.length
         });
       }
 
-      // Update wallet balance
-      if (balanceData.balance) {
-        setWalletBalance(Number(balanceData.balance.balance) || 500000);
+      if (balanceRes.data) {
+        setWalletBalance(Number(balanceRes.data.balance) || 500000);
       }
 
-      // Process recent trades
-      if (tradesData.trades) {
-        setRecentTrades(tradesData.trades);
+      if (tradesRes.data) {
+        setRecentTrades(tradesRes.data.map(trade => ({
+          id: trade.id,
+          symbol: trade.symbol,
+          trade_type: trade.trade_type,
+          quantity: trade.quantity,
+          price_inr: trade.price_inr,
+          total_inr: trade.total_inr,
+          brokerage_fee: trade.brokerage_fee,
+          status: trade.status,
+          executed_at: trade.executed_at || trade.created_at
+        })));
       }
 
     } catch (error) {
@@ -272,7 +274,7 @@ export default function ConnectedPortfolioPage() {
       setRefreshing(false);
       setLoading(false);
     }
-  }, [user]);
+  }, [user, supabase]);
 
   // Format currency
   const formatINR = (value: number) => {
@@ -358,6 +360,21 @@ export default function ConnectedPortfolioPage() {
 
     return () => clearInterval(interval);
   }, [refreshing, user, fetchPortfolioData]);
+
+  // Add useEffect for syncAllData and portfolioUpdate
+  useEffect(() => {
+    const handleSyncData = () => {
+      fetchPortfolioData();
+    };
+
+    window.addEventListener('syncAllData', handleSyncData);
+    window.addEventListener('portfolioUpdate', handleSyncData);
+
+    return () => {
+      window.removeEventListener('syncAllData', handleSyncData);
+      window.removeEventListener('portfolioUpdate', handleSyncData);
+    };
+  }, [fetchPortfolioData]);
 
   if (!isInitialized || loading) {
     return (

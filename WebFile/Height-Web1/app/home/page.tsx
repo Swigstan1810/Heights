@@ -49,7 +49,9 @@ import {
   CreditCard,
   PieChart,
   Wifi,
-  WifiOff
+  WifiOff,
+  Flame,
+  CheckCircle2
 } from "lucide-react";
 import Link from 'next/link';
 import TradingViewWidget from '@/components/trading/tradingview-widget';
@@ -300,67 +302,69 @@ const LiveMarketStats = () => {
 
 // Portfolio Summary Component with Real Data
 const PortfolioSummary = () => {
-  const { walletBalance, profile, user } = useAuth();
+  const { user } = useAuth();
   const [portfolioData, setPortfolioData] = useState({
     totalValue: 0,
     totalInvested: 0,
     totalPnL: 0,
     totalPnLPercentage: 0,
     holdingsCount: 0,
-    todayChange: 0,
-    todayChangePercent: 0,
-    walletBalance: 0
+    walletBalance: 500000
   });
   const [loading, setLoading] = useState(true);
   const supabase = createClientComponentClient<Database>();
 
-  useEffect(() => {
-    const fetchPortfolioData = async () => {
-      if (!user) return;
+  const fetchPortfolioData = useCallback(async () => {
+    if (!user) return;
 
-      try {
-        // Get portfolio summary from database
-        const { data: summary, error: summaryError } = await supabase
-          .rpc('get_portfolio_summary', { p_user_id: user.id });
+    try {
+      const { data: summary, error: summaryError } = await supabase
+        .from('portfolio_summary_view')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
 
-        if (summaryError) {
-          console.error('Error fetching portfolio summary:', summaryError);
-          return;
-        }
+      const { data: walletData, error: walletError } = await supabase
+        .from('wallet_balance')
+        .select('balance')
+        .eq('user_id', user.id)
+        .eq('currency', 'INR')
+        .single();
 
-        // Get wallet balance
-        const { data: walletData, error: walletError } = await supabase
-          .from('wallet_balance')
-          .select('balance')
-          .eq('user_id', user.id)
-          .eq('currency', 'INR')
-          .single();
+      const walletBalance = walletData?.balance || 500000;
 
-        const walletBalance = walletData?.balance || 500000;
-
-        if (summary && summary.length > 0) {
-          const data = summary[0];
-          setPortfolioData({
-            totalValue: Number(data.total_value) || 0,
-            totalInvested: Number(data.total_invested) || 0,
-            totalPnL: Number(data.total_pnl) || 0,
-            totalPnLPercentage: Number(data.total_pnl_percentage) || 0,
-            holdingsCount: Number(data.holdings_count) || 0,
-            todayChange: Number(data.total_pnl) * 0.02, // Simulate today's change
-            todayChangePercent: 2.32, // Simulate today's change percentage
-            walletBalance: walletBalance
-          });
-        }
-      } catch (error) {
-        console.error('Error loading portfolio data:', error);
-      } finally {
-        setLoading(false);
+      if (summary) {
+        setPortfolioData({
+          totalValue: Number(summary.total_value) || 0,
+          totalInvested: Number(summary.total_invested) || 0,
+          totalPnL: Number(summary.total_pnl) || 0,
+          totalPnLPercentage: Number(summary.total_pnl_percentage) || 0,
+          holdingsCount: Number(summary.holdings_count) || 0,
+          walletBalance: walletBalance
+        });
+      } else {
+        setPortfolioData(prev => ({
+          ...prev,
+          walletBalance: walletBalance
+        }));
       }
-    };
+    } catch (error) {
+      console.error('Error loading portfolio data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, supabase]);
 
+  useEffect(() => {
     fetchPortfolioData();
 
-    // Set up real-time subscription for portfolio updates
+    const handlePortfolioUpdate = () => {
+      fetchPortfolioData();
+    };
+
+    window.addEventListener('portfolioUpdate', handlePortfolioUpdate);
+    window.addEventListener('syncAllData', handlePortfolioUpdate);
+
     const subscription = supabase
       .channel('portfolio-changes')
       .on('postgres_changes', 
@@ -374,12 +378,25 @@ const PortfolioSummary = () => {
           fetchPortfolioData();
         }
       )
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public', 
+          table: 'wallet_balance',
+          filter: `user_id=eq.${user?.id}`
+        },
+        () => {
+          fetchPortfolioData();
+        }
+      )
       .subscribe();
 
     return () => {
+      window.removeEventListener('portfolioUpdate', handlePortfolioUpdate);
+      window.removeEventListener('syncAllData', handlePortfolioUpdate);
       subscription.unsubscribe();
     };
-  }, [user, supabase]);
+  }, [user, fetchPortfolioData, supabase]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -410,26 +427,26 @@ const PortfolioSummary = () => {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-6"
+        className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-4 sm:p-6"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <PieChart className="h-5 w-5 text-green-500" />
-            <span className="text-sm font-medium text-green-500">Portfolio Value</span>
+            <PieChart className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+            <span className="text-xs sm:text-sm font-medium text-green-500">Portfolio Value</span>
           </div>
-          <TrendingUp className="h-5 w-5 text-green-500" />
+          <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
         </div>
         <div className="space-y-2">
-          <p className="text-3xl font-bold">
-            {formatCurrency(portfolioData.totalValue)}
+          <p className="text-2xl sm:text-3xl font-bold">
+            {formatCurrency(portfolioData.totalValue / 83)}
           </p>
-          <p className="text-sm text-green-500 flex items-center">
+          <p className="text-xs sm:text-sm text-green-500 flex items-center">
             {portfolioData.totalPnL >= 0 ? (
               <ArrowRight className="h-3 w-3 mr-1 rotate-[-45deg]" />
             ) : (
               <ArrowRight className="h-3 w-3 mr-1 rotate-[45deg]" />
             )}
-            {portfolioData.totalPnL >= 0 ? '+' : ''}{formatCurrency(portfolioData.totalPnL)} 
+            {portfolioData.totalPnL >= 0 ? '+' : ''}{formatCurrency(portfolioData.totalPnL / 83)} 
             ({portfolioData.totalPnLPercentage.toFixed(2)}%) all time
           </p>
         </div>
@@ -439,20 +456,20 @@ const PortfolioSummary = () => {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-6"
+        className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-4 sm:p-6"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-blue-500" />
-            <span className="text-sm font-medium text-blue-500">Active Positions</span>
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
+            <span className="text-xs sm:text-sm font-medium text-blue-500">Active Positions</span>
           </div>
-          <Activity className="h-5 w-5 text-blue-500" />
+          <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
         </div>
         <div className="space-y-2">
-          <p className="text-3xl font-bold">
+          <p className="text-2xl sm:text-3xl font-bold">
             <AnimatedCounter value={portfolioData.holdingsCount} />
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {portfolioData.holdingsCount > 0 
               ? `Across crypto & stocks`
               : 'No active positions'
@@ -465,20 +482,20 @@ const PortfolioSummary = () => {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-6"
+        className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4 sm:p-6"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-purple-500" />
-            <span className="text-sm font-medium text-purple-500">Available Balance</span>
+            <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
+            <span className="text-xs sm:text-sm font-medium text-purple-500">Available Balance</span>
           </div>
-          <Eye className="h-5 w-5 text-purple-500" />
+          <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
         </div>
         <div className="space-y-2">
-          <p className="text-3xl font-bold">
-            $<AnimatedCounter value={Number(walletBalance?.balance || 0)} decimals={2} />
+          <p className="text-2xl sm:text-3xl font-bold">
+            ₹<AnimatedCounter value={portfolioData.walletBalance} decimals={0} />
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Ready for trading
           </p>
         </div>
@@ -487,150 +504,540 @@ const PortfolioSummary = () => {
   );
 };
 
-// Recent News Component with Real Data
+// Updated RecentNews Component with improved error handling and data mapping
 const RecentNews = () => {
   const [newsArticles, setNewsArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchNews = async () => {
-      try {
-        const response = await fetch('/api/news?category=business&pageSize=5');
-        const data = await response.json();
-        
-        if (data.success && data.articles) {
-          setNewsArticles(data.articles.slice(0, 5));
-        } else {
-          setError('Failed to load news');
-        }
-      } catch (err) {
-        console.error('Error fetching news:', err);
-        setError('Failed to load news');
-      } finally {
-        setLoading(false);
+  const fetchNews = useCallback(async (retryCount = 0) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Try different categories for variety
+      const categories = ['business', 'all', 'general'];
+      const category = categories[retryCount % categories.length];
+      
+      // Fetch from your API route with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(`/api/news?category=${category}&limit=6`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
-
-    fetchNews();
+      
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.length > 0) {
+        // Map the API response to match the expected format
+        const mappedArticles = data.data.map((article: any, index: number) => ({
+          id: article.id || `article-${Date.now()}-${index}`,
+          title: article.title,
+          description: article.summary || article.description || article.content?.substring(0, 150) + '...',
+          publishedAt: article.timestamp || new Date().toISOString(),
+          source: {
+            name: article.source || 'Unknown Source'
+          },
+          url: article.url,
+          urlToImage: article.image || article.urlToImage,
+          category: article.category || 'general',
+          sentiment: article.sentiment || 'neutral',
+          impact: article.impact || 'medium',
+          tags: article.tags || []
+        }));
+        
+        setNewsArticles(mappedArticles.slice(0, 5));
+        console.log(`✅ News loaded successfully from ${data.source || 'API'}`);
+      } else {
+        throw new Error(data.error || 'No news data available');
+      }
+    } catch (err) {
+      console.error('Error fetching news:', err);
+      
+      if (retryCount < 2) {
+        // Retry with different category
+        console.log(`🔄 Retrying news fetch (attempt ${retryCount + 2}/3)`);
+        setTimeout(() => fetchNews(retryCount + 1), 2000);
+        return;
+      }
+      
+      setError(err instanceof Error ? err.message : 'Failed to load news');
+      
+      // Fallback to comprehensive demo data
+      const fallbackNews = [
+        {
+          id: '1',
+          title: 'Bitcoin Surges Past $45,000 as Institutional Adoption Grows',
+          description: 'Major financial institutions continue to embrace cryptocurrency, driving Bitcoin to new monthly highs amid increased trading volume and regulatory clarity.',
+          publishedAt: new Date().toISOString(),
+          source: { name: 'CryptoNews' },
+          url: '#',
+          category: 'crypto',
+          sentiment: 'positive',
+          impact: 'high',
+          tags: ['Bitcoin', 'Cryptocurrency', 'Institutional']
+        },
+        {
+          id: '2',
+          title: 'Indian Stock Market Reaches Record High on Strong Q3 Earnings',
+          description: 'Nifty 50 and Sensex both hit all-time highs as major companies report better-than-expected quarterly results across IT and pharmaceutical sectors.',
+          publishedAt: new Date(Date.now() - 3600000).toISOString(),
+          source: { name: 'Economic Times' },
+          url: '#',
+          category: 'india',
+          sentiment: 'positive',
+          impact: 'medium',
+          tags: ['Nifty', 'Sensex', 'Earnings']
+        },
+        {
+          id: '3',
+          title: 'Global Tech Stocks Face Pressure Amid Rising Interest Rates',
+          description: 'Technology stocks worldwide decline as central banks signal continued monetary tightening to combat persistent inflation pressures.',
+          publishedAt: new Date(Date.now() - 7200000).toISOString(),
+          source: { name: 'Financial Times' },
+          url: '#',
+          category: 'global',
+          sentiment: 'negative',
+          impact: 'high',
+          tags: ['Technology', 'Interest Rates', 'Global']
+        },
+        {
+          id: '4',
+          title: 'Ethereum 2.0 Staking Rewards Attract Institutional Interest',
+          description: 'Major investment firms explore Ethereum staking opportunities as the network\'s proof-of-stake transition creates new yield generation methods.',
+          publishedAt: new Date(Date.now() - 10800000).toISOString(),
+          source: { name: 'DeFi Pulse' },
+          url: '#',
+          category: 'crypto',
+          sentiment: 'positive',
+          impact: 'medium',
+          tags: ['Ethereum', 'Staking', 'DeFi']
+        },
+        {
+          id: '5',
+          title: 'Federal Reserve Signals Potential Rate Adjustments',
+          description: 'Fed officials indicate readiness to adjust monetary policy based on upcoming economic data and inflation trends in the coming quarters.',
+          publishedAt: new Date(Date.now() - 14400000).toISOString(),
+          source: { name: 'Reuters' },
+          url: '#',
+          category: 'economy',
+          sentiment: 'neutral',
+          impact: 'high',
+          tags: ['Federal Reserve', 'Interest Rates', 'Monetary Policy']
+        }
+      ];
+      setNewsArticles(fallbackNews);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchNews();
+    
+    // Auto-refresh every 15 minutes (reasonable for news)
+    const interval = setInterval(() => fetchNews(), 900000);
+    return () => clearInterval(interval);
+  }, [fetchNews]);
+
+  const getSentimentStyle = (sentiment?: string) => {
+    switch (sentiment) {
+      case 'positive':
+        return 'text-green-500 bg-green-500/10 border-green-500/20';
+      case 'negative':
+        return 'text-red-500 bg-red-500/10 border-red-500/20';
+      default:
+        return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+    }
+  };
+
+  const getImpactStyle = (impact?: string) => {
+    switch (impact) {
+      case 'high':
+        return 'text-red-500 bg-red-500/10 border-red-500/20';
+      case 'medium':
+        return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+      default:
+        return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+    }
+  };
 
   if (loading) {
     return (
       <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="animate-pulse">
-            <div className="h-20 bg-muted rounded" />
-          </div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="animate-pulse"
+          >
+            <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex-1 space-y-2">
+                <div className="h-5 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-full"></div>
+                <div className="h-4 bg-muted rounded w-2/3"></div>
+                <div className="flex gap-2 mt-3">
+                  <div className="h-5 bg-muted rounded w-16"></div>
+                  <div className="h-5 bg-muted rounded w-20"></div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         ))}
       </div>
     );
   }
 
-  if (error || newsArticles.length === 0) {
+  if (error && newsArticles.length === 0) {
     return (
       <div className="text-center py-8">
-        <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-        <p className="text-muted-foreground">Unable to load news at the moment</p>
+        <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <p className="text-muted-foreground mb-2">Unable to load news at the moment</p>
+        <p className="text-xs text-muted-foreground mb-4">{error}</p>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => window.location.reload()}
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Retry
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* Connection Status */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">
+            <Activity className="h-3 w-3 mr-1 animate-pulse" />
+            Live News
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            Last updated: {new Date().toLocaleTimeString()}
+          </span>
+        </div>
+        {error && (
+          <Badge variant="outline" className="text-yellow-500 border-yellow-500/30 bg-yellow-500/10">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Using cached data
+          </Badge>
+        )}
+      </div>
+
       {newsArticles.map((article, index) => (
         <motion.div
           key={article.id || index}
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: index * 0.1 }}
-          className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg hover:bg-muted/70 transition-all cursor-pointer"
-          onClick={() => window.open(article.url, '_blank')}
+          className="group relative overflow-hidden rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-all cursor-pointer p-4"
+          onClick={() => article.url && window.open(article.url, '_blank')}
         >
-          <div className="flex-1">
-            <h4 className="font-medium line-clamp-2 mb-1">{article.title}</h4>
-            <p className="text-sm text-muted-foreground line-clamp-2">{article.description}</p>
-            <div className="flex items-center gap-2 mt-2">
-              <Badge variant="outline" className="text-xs">
-                {article.source?.name || 'News'}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {new Date(article.publishedAt).toLocaleDateString()}
-              </span>
+          {/* Gradient background based on sentiment */}
+          <div className={`absolute inset-0 opacity-5 ${
+            article.sentiment === 'positive' 
+              ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+              : article.sentiment === 'negative'
+              ? 'bg-gradient-to-br from-red-500 to-rose-500'
+              : 'bg-gradient-to-br from-blue-500 to-purple-500'
+          }`} />
+          
+          <div className="relative z-10 flex items-start gap-4">
+            {/* Article Image */}
+            {article.urlToImage && (
+              <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50 flex-shrink-0">
+                <img
+                  src={article.urlToImage}
+                  alt={article.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            
+            <div className="flex-1 min-w-0">
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {article.sentiment && (
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs border ${getSentimentStyle(article.sentiment)}`}
+                  >
+                    {article.sentiment === 'positive' ? (
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                    ) : article.sentiment === 'negative' ? (
+                      <TrendingDown className="h-3 w-3 mr-1" />
+                    ) : (
+                      <Activity className="h-3 w-3 mr-1" />
+                    )}
+                    {article.sentiment.charAt(0).toUpperCase() + article.sentiment.slice(1)}
+                  </Badge>
+                )}
+                
+                {article.impact && (
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs border ${getImpactStyle(article.impact)}`}
+                  >
+                    {article.impact === 'high' ? (
+                      <Flame className="h-3 w-3 mr-1" />
+                    ) : article.impact === 'medium' ? (
+                      <Zap className="h-3 w-3 mr-1" />
+                    ) : (
+                      <Target className="h-3 w-3 mr-1" />
+                    )}
+                    {article.impact.charAt(0).toUpperCase() + article.impact.slice(1)} Impact
+                  </Badge>
+                )}
+                
+                {article.category && (
+                  <Badge variant="secondary" className="text-xs">
+                    {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
+                  </Badge>
+                )}
+              </div>
+              
+              {/* Title */}
+              <h4 className="font-medium line-clamp-2 mb-2 group-hover:text-primary transition-colors">
+                {article.title}
+              </h4>
+              
+              {/* Description */}
+              <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                {article.description}
+              </p>
+              
+              {/* Footer */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {new Date(article.publishedAt).toLocaleDateString()}
+                  </div>
+                  <Badge variant="outline" className="text-xs border-border/50">
+                    {article.source?.name || 'Unknown Source'}
+                  </Badge>
+                </div>
+                
+                {article.url && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              
+              {/* Tags */}
+              {article.tags && article.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-3">
+                  {article.tags.slice(0, 3).map((tag: string, tagIndex: number) => (
+                    <Badge 
+                      key={tagIndex} 
+                      variant="secondary" 
+                      className="text-xs bg-muted/50"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                  {article.tags.length > 3 && (
+                    <Badge variant="secondary" className="text-xs bg-muted/50">
+                      +{article.tags.length - 3}
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-          <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
         </motion.div>
       ))}
+      
+      {/* View All Button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="text-center pt-4"
+      >
+        <Button variant="outline" className="group" asChild>
+          <Link href="/news">
+            <BookOpen className="h-4 w-4 mr-2" />
+            View All Market News
+            <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </Button>
+      </motion.div>
     </div>
   );
 };
 
-// Recent Activity Component with Real Data
+// Updated Recent Activity Component with Real Data from /api/crypto/trades
 const RecentActivity = () => {
   const { user } = useAuth();
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClientComponentClient<Database>();
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchActivities = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch from robust API route
+      const response = await fetch('/api/crypto/trades?limit=6');
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch trading activities');
+      }
+
+      setActivities((data.trades || []).map((trade: any) => ({
+        id: trade.id,
+        type: trade.trade_type,
+        symbol: trade.symbol,
+        name: trade.symbol, // Optionally map to full name
+        amount: trade.total_inr,
+        quantity: trade.quantity,
+        price: trade.price_inr,
+        status: trade.status,
+        createdAt: trade.executed_at,
+        asset_type: 'crypto',
+        fees: trade.brokerage_fee || 0
+      })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load activities');
+      setActivities([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchActivities = async () => {
-      if (!user) return;
+    fetchActivities();
 
-      try {
-        // Fetch recent orders
-        const { data: orders, error } = await supabase
-          .from('portfolio_orders')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
+    // Auto-refresh every 2 minutes for real-time updates
+    const interval = setInterval(fetchActivities, 120000);
+    return () => clearInterval(interval);
+  }, [fetchActivities]);
 
-        if (error) {
-          console.error('Error fetching activities:', error);
-          return;
-        }
-
-        const formattedActivities = orders?.map(order => ({
-          id: order.id,
-          type: order.order_type,
-          symbol: order.symbol,
-          name: order.name,
-          amount: order.total_amount,
-          quantity: order.quantity,
-          price: order.price,
-          status: order.status,
-          createdAt: order.created_at
-        })) || [];
-
-        setActivities(formattedActivities);
-      } catch (error) {
-        console.error('Error loading activities:', error);
-      } finally {
-        setLoading(false);
-      }
+  // Listen for portfolio updates
+  useEffect(() => {
+    const handlePortfolioUpdate = () => {
+      fetchActivities();
     };
 
-    fetchActivities();
-  }, [user, supabase]);
+    window.addEventListener('portfolioUpdate', handlePortfolioUpdate);
+    window.addEventListener('syncAllData', handlePortfolioUpdate);
+
+    return () => {
+      window.removeEventListener('portfolioUpdate', handlePortfolioUpdate);
+      window.removeEventListener('syncAllData', handlePortfolioUpdate);
+    };
+  }, [fetchActivities]);
+
+  // Format currency to INR
+  const formatINR = (value: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // Get crypto icon
+  const getCryptoIcon = (symbol: string) => {
+    const iconMap: { [key: string]: string } = {
+      'BTC': '₿',
+      'ETH': 'Ξ',
+      'LTC': 'Ł',
+      'SOL': '◎',
+      'MATIC': '⬡',
+      'LINK': '🔗',
+      'AVAX': '▲',
+      'ADA': '₳',
+      'UNI': '🦄',
+      'AAVE': 'Ⓐ'
+    };
+    return iconMap[symbol] || symbol.charAt(0);
+  };
+
+  // Get status styling
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500/10 text-green-600 border-green-500/30';
+      case 'pending':
+        return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30';
+      case 'failed':
+        return 'bg-red-500/10 text-red-600 border-red-500/30';
+      default:
+        return 'bg-blue-500/10 text-blue-600 border-blue-500/30';
+    }
+  };
 
   if (loading) {
     return (
       <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="animate-pulse">
-            <div className="h-16 bg-muted rounded" />
-          </div>
+        {[1, 2, 3, 4].map((i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="animate-pulse"
+          >
+            <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="w-10 h-10 bg-muted rounded-full"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+                <div className="h-3 bg-muted rounded w-1/2"></div>
+              </div>
+              <div className="text-right space-y-2">
+                <div className="h-4 bg-muted rounded w-20"></div>
+                <div className="h-3 bg-muted rounded w-16"></div>
+              </div>
+            </div>
+          </motion.div>
         ))}
       </div>
     );
   }
 
-  if (activities.length === 0) {
+  if (error && activities.length === 0) {
     return (
       <div className="text-center py-8">
         <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-        <p className="text-muted-foreground">No recent trading activity</p>
+        <p className="text-muted-foreground mb-2">Unable to load trading activity</p>
+        <p className="text-xs text-muted-foreground mb-4">{error}</p>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => fetchActivities()}
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (activities.length === 0 && !loading) {
+    return (
+      <div className="text-center py-8">
+        <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <p className="text-muted-foreground mb-2">No recent trading activity</p>
+        <p className="text-xs text-muted-foreground mb-4">Start trading to see your transaction history</p>
         <Button variant="outline" className="mt-4" asChild>
           <Link href="/crypto">
             <TrendingUp className="h-4 w-4 mr-2" />
@@ -643,40 +1050,134 @@ const RecentActivity = () => {
 
   return (
     <div className="space-y-4">
-      {activities.map((activity, index) => (
+      {/* Activity Status */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-blue-500 border-blue-500/30 bg-blue-500/10">
+            <Activity className="h-3 w-3 mr-1 animate-pulse" />
+            Live Activity
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            Last updated: {new Date().toLocaleTimeString()}
+          </span>
+        </div>
+        {error && (
+          <Badge variant="outline" className="text-yellow-500 border-yellow-500/30 bg-yellow-500/10">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Error loading data
+          </Badge>
+        )}
+      </div>
+
+      {activities.slice(0, 5).map((activity, index) => (
         <motion.div
           key={activity.id}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: index * 0.1 }}
-          className="flex items-center justify-between p-4 bg-muted/50 rounded-lg"
+          className="group relative overflow-hidden rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-all p-4"
         >
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${
-              activity.type === 'buy' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
-            }`}>
-              {activity.type === 'buy' ? 
-                <TrendingUp className="h-4 w-4" /> : 
-                <TrendingDown className="h-4 w-4" />
-              }
+          {/* Gradient background based on trade type */}
+          <div className={`absolute inset-0 opacity-5 ${
+            activity.type === 'buy'
+              ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+              : 'bg-gradient-to-br from-red-500 to-rose-500'
+          }`} />
+          
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Trade Type Icon */}
+              <div className={`p-2 rounded-full ${
+                activity.type === 'buy' 
+                  ? 'bg-green-500/20 text-green-500' 
+                  : 'bg-red-500/20 text-red-500'
+              }`}>
+                {activity.type === 'buy' ? (
+                  <TrendingUp className="h-4 w-4" />
+                ) : (
+                  <TrendingDown className="h-4 w-4" />
+                )}
+              </div>
+              
+              {/* Crypto Icon */}
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center text-white font-bold text-sm">
+                {getCryptoIcon(activity.symbol)}
+              </div>
+              
+              {/* Trade Details */}
+              <div>
+                <p className="font-medium">
+                  {activity.type === 'buy' ? 'Bought' : 'Sold'} {activity.name}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {activity.quantity.toFixed(6)} {activity.symbol} @ {formatINR(activity.price)}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs ${getStatusStyle(activity.status)}`}
+                  >
+                    {activity.status === 'completed' ? (
+                      <>
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Completed
+                      </>
+                    ) : activity.status === 'pending' ? (
+                      <>
+                        <Clock className="h-3 w-3 mr-1" />
+                        Pending
+                      </>
+                    ) : (
+                      activity.status
+                    )}
+                  </Badge>
+                  {activity.fees > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      Fee: {formatINR(activity.fees)}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">
-                {activity.type === 'buy' ? 'Bought' : 'Sold'} {activity.name}
+            
+            {/* Amount and Time */}
+            <div className="text-right">
+              <p className={`font-medium ${
+                activity.type === 'buy' ? 'text-red-500' : 'text-green-500'
+              }`}>
+                {activity.type === 'buy' ? '-' : '+'}{formatINR(activity.amount)}
               </p>
-              <p className="text-sm text-muted-foreground">
-                {activity.quantity} {activity.symbol} @ ${activity.price}
+              <p className="text-xs text-muted-foreground">
+                {new Date(activity.createdAt).toLocaleDateString()}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(activity.createdAt).toLocaleTimeString()}
               </p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="font-medium">${activity.amount.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">
-              {new Date(activity.createdAt).toLocaleDateString()}
-            </p>
+          
+          {/* Hover Effect */}
+          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </motion.div>
       ))}
+      
+      {/* View All Button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="text-center pt-4"
+      >
+        <Button variant="outline" className="group" asChild>
+          <Link href="/portfolio?tab=activity">
+            <Activity className="h-4 w-4 mr-2" />
+            View All Activity
+            <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </Button>
+      </motion.div>
     </div>
   );
 };

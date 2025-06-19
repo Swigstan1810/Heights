@@ -265,7 +265,51 @@ export default function IntegratedCryptoPage() {
     }
   }, [user, favorites, cryptoData]);
 
-  // Handle trade with real portfolio integration
+  // Formatters
+  const formatCurrency = (value: number) => {
+    if (!value || isNaN(value)) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: value < 1 ? 4 : 2,
+      maximumFractionDigits: value < 1 ? 8 : 2,
+    }).format(value);
+  };
+
+  const formatINR = (value: number) => {
+    if (!value || isNaN(value)) return '₹0';
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatVolume = (value: number) => {
+    if (!value || isNaN(value)) return '$0';
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+    if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
+    return formatCurrency(value);
+  };
+
+  const getCryptoIcon = (symbol: string) => {
+    const iconMap: { [key: string]: string } = {
+      'BTC': '₿',
+      'ETH': 'Ξ',
+      'LTC': 'Ł',
+      'SOL': '◎',
+      'MATIC': '⬡',
+      'LINK': '🔗',
+      'AVAX': '▲',
+      'ADA': '₳',
+      'UNI': '🦄',
+      'AAVE': 'Ⓐ'
+    };
+    return iconMap[symbol] || symbol.charAt(0);
+  };
+
   const handleTrade = useCallback(async () => {
     if (!selectedCrypto || !user) {
       toast.error('Please select a cryptocurrency and ensure you are logged in');
@@ -287,7 +331,6 @@ export default function IntegratedCryptoPage() {
       let totalINR: number;
 
       if (tradeType === 'buy') {
-        // For buying: amount is in INR
         totalINR = amount;
         quantity = totalINR / priceINR;
         
@@ -297,7 +340,6 @@ export default function IntegratedCryptoPage() {
           return;
         }
       } else {
-        // For selling: amount is quantity
         quantity = amount;
         totalINR = quantity * priceINR;
         
@@ -309,7 +351,6 @@ export default function IntegratedCryptoPage() {
         }
       }
       
-      // Execute trade via API
       const response = await fetch('/api/crypto/trade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -326,24 +367,56 @@ export default function IntegratedCryptoPage() {
       const result = await response.json();
 
       if (result.success) {
-        // Update local state immediately for better UX
-        if (tradeType === 'buy') {
-          setWalletBalance(prev => ({
-            ...prev,
-            balance: prev.balance - totalINR
-          }));
-        } else {
-          setWalletBalance(prev => ({
-            ...prev,
-            balance: prev.balance + totalINR
-          }));
-        }
+        // Real-time state updates
+        const brokerageFee = Math.max(10, Math.min(1000, totalINR * 0.001));
         
-        // Refresh all data
-        await Promise.all([
-          fetchPortfolioData(),
-          fetchCryptoData()
-        ]);
+        setWalletBalance(prev => ({
+          ...prev,
+          balance: tradeType === 'buy' 
+            ? prev.balance - totalINR - brokerageFee
+            : prev.balance + totalINR - brokerageFee
+        }));
+        
+        setPortfolioHoldings(prev => {
+          const existingIndex = prev.findIndex(h => h.symbol === selectedCrypto.symbol);
+          if (existingIndex >= 0) {
+            const updated = [...prev];
+            if (result.data.newQuantity > 0) {
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                quantity: result.data.newQuantity,
+                current_value: result.data.newCurrentValue,
+                profit_loss: result.data.newProfitLoss,
+                profit_loss_percentage: result.data.newProfitLossPercentage,
+                current_price: priceINR
+              };
+            } else {
+              updated.splice(existingIndex, 1);
+            }
+            return updated;
+          } else if (tradeType === 'buy') {
+            return [...prev, {
+              id: `temp-${Date.now()}`,
+              symbol: selectedCrypto.symbol,
+              name: selectedCrypto.name,
+              asset_type: 'crypto',
+              quantity: quantity,
+              average_buy_price: priceINR,
+              current_price: priceINR,
+              total_invested: totalINR,
+              current_value: totalINR,
+              profit_loss: 0,
+              profit_loss_percentage: 0
+            }];
+          }
+          return prev;
+        });
+        
+        // Trigger real-time sync across pages
+        const event = new CustomEvent('portfolioUpdate', {
+          detail: { type: tradeType, symbol: selectedCrypto.symbol, quantity, totalINR }
+        });
+        window.dispatchEvent(event);
         
         toast.success(
           <div className="flex items-center gap-2">
@@ -364,7 +437,7 @@ export default function IntegratedCryptoPage() {
     } finally {
       setIsTrading(false);
     }
-  }, [selectedCrypto, user, tradeAmount, tradeType, walletBalance.balance, portfolioHoldings, fetchPortfolioData, fetchCryptoData]);
+  }, [selectedCrypto, user, tradeAmount, tradeType, walletBalance.balance, portfolioHoldings, formatINR]);
 
   // Search and filter
   useEffect(() => {
@@ -425,51 +498,6 @@ export default function IntegratedCryptoPage() {
 
     return () => clearInterval(interval);
   }, [isRefreshing, fetchCryptoData, fetchPortfolioData]);
-
-  // Formatters
-  const formatCurrency = (value: number) => {
-    if (!value || isNaN(value)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: value < 1 ? 4 : 2,
-      maximumFractionDigits: value < 1 ? 8 : 2,
-    }).format(value);
-  };
-
-  const formatINR = (value: number) => {
-    if (!value || isNaN(value)) return '₹0';
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const formatVolume = (value: number) => {
-    if (!value || isNaN(value)) return '$0';
-    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
-    if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
-    return formatCurrency(value);
-  };
-
-  const getCryptoIcon = (symbol: string) => {
-    const iconMap: { [key: string]: string } = {
-      'BTC': '₿',
-      'ETH': 'Ξ',
-      'LTC': 'Ł',
-      'SOL': '◎',
-      'MATIC': '⬡',
-      'LINK': '🔗',
-      'AVAX': '▲',
-      'ADA': '₳',
-      'UNI': '🦄',
-      'AAVE': 'Ⓐ'
-    };
-    return iconMap[symbol] || symbol.charAt(0);
-  };
 
   // Loading skeleton
   if (!isInitialized || loading) {

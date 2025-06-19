@@ -1,5 +1,4 @@
 export const dynamic = "force-dynamic";
-// app/api/crypto/trades/route.ts - Get recent crypto trades
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
@@ -8,7 +7,6 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
     
-    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
@@ -21,7 +19,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    // Get recent trades for the user
     const { data: trades, error: tradesError } = await supabase
       .from('crypto_trades')
       .select('*')
@@ -37,7 +34,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Transform trades to match the expected format in your frontend
     const transformedTrades = (trades || []).map(trade => ({
       id: trade.id,
       symbol: trade.symbol,
