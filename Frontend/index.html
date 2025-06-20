@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heights - AI-Powered Trading Platform | Buildathon </title>
+
+    <!-- Reveal.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/theme/black.min.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+
+    <!-- AOS Animation Library -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+    <style>
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* CSS Variables */
+        :root {
+            --primary-bg: #0a0a0a;
+            --secondary-bg: #111111;
+            --card-bg: rgba(17, 17, 17, 0.95);
+            --text-color: #ffffff;
+            --muted-text: #888888;
+            --accent-green: #00ff88;
+            --accent-blue: #00d4ff;
+            --accent-pink: #ff00d4;
+            --border-color: #333333;
+            --error-red: #ff4444;
+            --warning-yellow: #ffaa00;
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        /* Base Document Styles */
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: var(--font-main);
+            background: transparent;
+        }
+
+        /* Reveal.js Overrides */
+        .reveal {
+            font-family: var(--font-main);
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-color);
+            background: transparent;
+        }
+
+        .reveal .slides {
+            text-align: center;
+            font-family: var(--font-main);
+            background: transparent;
+        }
+
+        .reveal .slides section {
+            padding: 40px;
+            background: radial-gradient(ellipse at center, 
+                rgba(10, 10, 10, 0.95) 0%, 
+                rgba(10, 10, 10, 0.85) 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: var(--font-main);
+        }
+
+        /* Video Background */
+        #videoBackground {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 0;
+            opacity: 0.85;
+            filter: blur(0.5px);
+            pointer-events: none;
+        }
+
+        /* Fallback gradient background */
+        body {
+            /* background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%); */
+            /* background-size: 400% 400%; */
+            /* animation: gradientShift 15s ease infinite; */
+        }
+
+        /* Gradient Overlay */
+        .gradient-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: none;
+            z-index: -99;
+            pointer-events: none;
+        }
+
+        /* Typography */
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+            font-family: var(--font-main);
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+            text-transform: none;
+            word-wrap: break-word;
+            margin: 0 0 20px 0;
+        }
+
+        .reveal h1 {
+            font-size: 3.5em;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .reveal h2 {
+            font-size: 2.5em;
+            color: var(--text-color);
+        }
+
+        .reveal h3 {
+            font-size: 1.8em;
+            color: var(--text-color);
+        }
+
+        .reveal p {
+            font-family: var(--font-main);
+            line-height: 1.6;
+            margin: 0 0 20px 0;
+            font-size: 1.1em;
+        }
+
+        /* Logo Styles */
+        .logo-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 30px;
+        }
+
+        .logo-image {
+            max-width: 180px;
+            width: 100%;
+            height: auto;
+            display: block;
+            filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.5));
+            background: transparent;
+            border-radius: 12px;
+            object-fit: contain;
+            margin: 0 auto;
+        }
+
+        /* Problem Section */
+        .problem-statement {
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.1), transparent);
+            border-left: 4px solid var(--error-red);
+            padding: 30px;
+            border-radius: 12px;
+            font-size: 1.4em;
+            max-width: 800px;
+            margin: 30px auto;
+        }
+
+        /* Solution Section */
+        .solution-statement {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), transparent);
+            border-left: 4px solid var(--accent-green);
+            padding: 30px;
+            border-radius: 12px;
+            font-size: 1.4em;
+            max-width: 800px;
+            margin: 30px auto;
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1000px;
+            margin: 30px auto;
+        }
+
+        .feature-item {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .feature-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+            border-color: var(--accent-green);
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 600px;
+            margin: 30px auto;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: scale(1.05);
+            border-color: var(--accent-green);
+        }
+
+        .metric-value {
+            font-size: 3em;
+            font-weight: 800;
+            color: var(--accent-green);
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .metric-label {
+            color: var(--muted-text);
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Journey Timeline */
+        .journey-timeline {
+            max-width: 1000px;
+            margin: 40px auto;
+        }
+
+        .journey-item {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 40px;
+            align-items: center;
+        }
+
+        .journey-content {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            flex: 1;
+            text-align: left;
+        }
+
+        .journey-day {
+            background: var(--accent-green);
+            color: var(--primary-bg);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 700;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
+        /* Team Grid */
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 700px;
+            margin: 30px auto;
+        }
+
+        .team-member {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease;
+        }
+
+        .team-member:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-green);
+        }
+
+        .member-avatar {
+            width: 80px;
+            height: 80px;
+            background: none;
+            padding: 0;
+        }
+
+        .member-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* CTA Button */
+        .cta-button {
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            color: var(--primary-bg);
+            padding: 15px 40px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            font-family: var(--font-main);
+            margin: 20px auto;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.4);
+        }
+
+        /* Live Indicator */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 0, 0, 0.1);
+            padding: 8px 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff0000;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Utility Classes */
+        .text-green { color: var(--accent-green); }
+        .text-blue { color: var(--accent-blue); }
+        .text-muted { color: var(--muted-text); }
+        .font-bold { font-weight: 700; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-20 { margin-top: 20px; }
+        .mt-30 { margin-top: 30px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .reveal h1 { font-size: 2.5em; }
+            .reveal h2 { font-size: 2em; }
+            .reveal h3 { font-size: 1.5em; }
+            .reveal p { font-size: 1em; }
+            .feature-grid { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: 1fr; }
+            .journey-item { flex-direction: column; }
+            .team-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Loading Screen */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--primary-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Icon Styles */
+        .icon {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        .icon-large {
+            width: 48px;
+            height: 48px;
+        }
+
+        /* Reveal.js Controls */
+        .reveal .controls {
+            color: var(--accent-green);
+        }
+
+        .reveal .progress {
+            color: var(--accent-green);
+            background: rgba(255, 255, 255, 0.1);
+            height: 3px;
+        }
+
+        .reveal .progress span {
+            background: var(--accent-green);
+        }
+
+        .heights-title {
+            font-family: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 800;
+            font-size: 3.5em;
+            letter-spacing: 0.04em;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-fill-color: transparent;
+            margin-bottom: 0.2em;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Video Background -->
+    <video autoplay loop muted playsinline id="videoBackground">
+      <source src="bc.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+
+    <!-- Gradient Overlay -->
+    <div class="gradient-overlay"></div>
+
+    <div class="reveal">
+        <div class="slides">
+
+
+            <!-- Slide 0: Title -->
+            <section>
+                <div class="logo-container">
+                    <img src="logo.png" alt="Heights Logo" class="logo-image" 
+                         style="max-width: 180px; width: 100%; height: auto; display: block; filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.5)); background: transparent; border-radius: 12px; object-fit: contain; margin: 0 auto;" 
+                         onerror="this.onerror=null;this.src='https://dummyimage.com/180x60/0a0a0a/00ff88&text=HEIGHTS';" />
+                </div>
+                <h1 class="heights-title">Heights</h1>
+                <p style="font-size: 1.5em; color: var(--muted-text);">AI-Powered Unified Trading Platform</p>
+            </section>
+
+            <!-- Slide 1: Problem -->
+            <section>
+                <h2>1. 🚨 Problem</h2>
+                <div class="problem-statement">
+                    <p class="mb-0" style="font-size: 1.2em;">
+                        Every retail trader we spoke to was juggling between <span class="font-bold">4 or more apps</span> — for crypto, Indian stocks, AI insights, and news.<br>
+                        It's manual, disconnected, and costs them <span class="font-bold">2–3 hours every week</span> — leading to missed trades and bad decisions.
+                    </p>
+                </div>
+                <div class="mt-30">
+                    <h3 style="color: var(--error-red);">The Hidden Costs</h3>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 600px; margin: 0 auto;">
+                        <div style="background: rgba(255, 68, 68, 0.1); padding: 20px; border-radius: 8px;">
+                            <p class="font-bold" style="font-size: 1.5em; margin: 0;">18 min/day</p>
+                            <p class="text-muted" style="font-size: 0.9em;">Lost switching apps</p>
+                        </div>
+                        <div style="background: rgba(255, 68, 68, 0.1); padding: 20px; border-radius: 8px;">
+                            <p class="font-bold" style="font-size: 1.5em; margin: 0;">$6k/year</p>
+                            <p class="text-muted" style="font-size: 0.9em;">Platform fees</p>
+                        </div>
+                        <div style="background: rgba(255, 68, 68, 0.1); padding: 20px; border-radius: 8px;">
+                            <p class="font-bold" style="font-size: 1.5em; margin: 0;">14% losses</p>
+                            <p class="text-muted" style="font-size: 0.9em;">Missed opportunities</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 2: Solution -->
+            <section>
+                <h2>2. ✅ Solution</h2>
+                <div class="solution-statement">
+                    <p class="mb-0" style="font-size: 1.2em;">
+                        Heights is an <span class="text-green font-bold">AI-first trading platform</span> that unifies decentralized crypto, Indian equities (soon), and intelligent insights — all in one app.<br>
+                        We simplify the chaos and give traders clarity, speed, and automation.
+                    </p>
+                </div>
+                <div class="mt-30">
+                    <h3 class="text-green">One Platform, Infinite Possibilities</h3>
+                    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                        <div style="background: rgba(0, 255, 136, 0.1); padding: 12px 30px; border-radius: 30px; border: 2px solid var(--accent-green);">
+                            <span class="font-bold">11-second setup</span>
+                        </div>
+                        <div style="background: rgba(0, 255, 136, 0.1); padding: 12px 30px; border-radius: 30px; border: 2px solid var(--accent-green);">
+                            <span class="font-bold">87% AI accuracy</span>
+                        </div>
+                        <div style="background: rgba(0, 255, 136, 0.1); padding: 12px 30px; border-radius: 30px; border: 2px solid var(--accent-green);">
+                            <span class="font-bold">All markets unified</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 3: Product Demo -->
+            <section>
+                <h2>3. <span style="vertical-align: middle;">📹</span> Product Demo</h2>
+                <div class="demo-flex-container" style="display: flex; flex-direction: row; align-items: flex-start; justify-content: center; gap: 40px; flex-wrap: wrap; width: 100%; max-width: 1000px; margin: 0 auto;">
+                    <div style="flex: 1 1 400px; max-width: 640px; min-width: 320px; aspect-ratio: 16/9; background: #111; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 32px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">
+                        <video controls style="width: 100%; height: 100%; background: #000;">
+                            <source src="demo.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    <div style="flex: 0 1 360px; max-width: 360px; min-width: 260px;">
+                        <h3 style="text-align: left; margin-bottom: 18px;">Key Features</h3>
+                        <div class="feature-item" style="padding: 15px; margin-bottom: 15px;">
+                            <p class="font-bold mb-0">AI Market Predictions</p>
+                            <p class="text-muted" style="font-size: 0.9em;">87% accuracy on 15-min intervals</p>
+                        </div>
+                        <div class="feature-item" style="padding: 15px; margin-bottom: 15px;">
+                            <p class="font-bold mb-0">Unified Trading</p>
+                            <p class="text-muted" style="font-size: 0.9em;">Stocks, crypto, forex in one place</p>
+                        </div>
+                        <div class="feature-item" style="padding: 15px; margin-bottom: 15px;">
+                            <p class="font-bold mb-0">Real-time Execution</p>
+                            <p class="text-muted" style="font-size: 0.9em;">&lt;50ms latency worldwide</p>
+                        </div>
+                        <div class="feature-item" style="padding: 15px; margin-bottom: 15px;">
+                            <p class="font-bold mb-0">Seamless Portfolio Tracking</p>
+                            <p class="text-muted" style="font-size: 0.9em;">All assets, one dashboard</p>
+                        </div>
+                        <div class="feature-item" style="padding: 15px; margin-bottom: 15px;">
+                            <p class="font-bold mb-0">Instant News Alerts</p>
+                            <p class="text-muted" style="font-size: 0.9em;">Stay ahead with real-time news tied to your assets</p>
+                        </div>
+                    </div>
+                </div>
+                <style>
+                @media (max-width: 900px) {
+                    .demo-flex-container {
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        gap: 24px !important;
+                    }
+                }
+                </style>
+            </section>
+
+            <!-- Slide 4: Traction -->
+            <section>
+                <h2>4. 📊 Traction (20-Day Sprint)</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <span class="metric-value">60+</span>
+                        <span class="metric-label">User Interviews</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-value">30</span>
+                        <span class="metric-label">Letters of Intent</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-value">25</span>
+                        <span class="metric-label">Beta Testers</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-value">87%</span>
+                        <span class="metric-label">AI Model Accuracy</span>
+                    </div>
+                </div>
+                <div class="mt-30">
+                    <h3 class="text-blue">Early Validation</h3>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; max-width: 600px; margin: 0 auto;">
+                        <div>
+                            <p class="font-bold" style="font-size: 1.3em; margin: 0;">76%</p>
+                            <p class="text-muted">Week 1 retention</p>
+                        </div>
+                        <div>
+                            <p class="font-bold" style="font-size: 1.3em; margin: 0;">4.2/5</p>
+                            <p class="text-muted">User satisfaction</p>
+                        </div>
+                        <div>
+                            <p class="font-bold" style="font-size: 1.3em; margin: 0;">11 sec</p>
+                            <p class="text-muted">Avg. setup time</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 5: Buildathon Journey -->
+            <section>
+                <h2>5. ⚙️ Buildathon Journey</h2>
+                <div class="journey-video-container">
+                    <div class="journey-video-wrapper vertical">
+                        <video autoplay loop muted playsinline>
+                            <source src="journey_vertical_1.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    <div class="journey-video-wrapper horizontal">
+                        <video autoplay loop muted playsinline>
+                            <source src="journey_horizontal.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    <div class="journey-video-wrapper vertical">
+                        <video autoplay loop muted playsinline>
+                            <source src="journey_vertical_2.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+                <div style="max-width: 850px; margin: 30px auto 0; text-align: left; padding: 25px; background: rgba(17, 17, 17, 0.6); border-radius: 12px; border: 1px solid var(--border-color); backdrop-filter: blur(5px);">
+                    <ul style="font-size:1.1em; list-style-position: inside; padding-left: 10px; margin: 0;">
+                        <li><span class="text-green">AI &amp; Tech:</span> Fine-tuned models with LangChain and nailed Coinbase integration.</li>
+                        <li><span class="text-green">User-Driven:</span> Validated and improved the platform with real user feedback from 60+ interviews.</li>
+                        <li><span class="text-green">Traction:</span> Secured 30+ signed Letters of Intent.</li>
+                        <li><span class="text-green">Active Users:</span> Onboarded 25 beta testers who are using the product now.</li>
+                    </ul>
+                </div>
+                <style>
+                    .journey-video-container {
+                        display: flex;
+                        flex-direction: row;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 20px;
+                        width: 100%;
+                        max-width: 1100px;
+                        margin: 30px auto 0;
+                    }
+                    .journey-video-wrapper {
+                        background: #111;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+                    }
+                    .journey-video-wrapper.vertical {
+                        flex: 1;
+                        max-width: 220px;
+                        aspect-ratio: 9 / 16;
+                    }
+                    .journey-video-wrapper.horizontal {
+                        flex: 2;
+                        max-width: 500px;
+                        aspect-ratio: 16 / 9;
+                    }
+                    .journey-video-wrapper video {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                    }
+                    @media (max-width: 900px) {
+                        .journey-video-container {
+                            flex-direction: column;
+                        }
+                        .journey-video-wrapper.horizontal {
+                            order: -1;
+                        }
+                    }
+                </style>
+            </section>
+
+            <!-- Slide 6: Team -->
+            <section>
+                <h2>6. Team</h2>
+                <div class="team-grid">
+                    <div class="team-member">
+                        <div class="member-avatar" style="background: none; padding: 0; display: flex; justify-content: center; align-items: center; margin: 0 auto 20px auto;">
+                            <img src="laven.jpg" alt="Laven Patel" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; display: block;" />
+                        </div>
+                        <h3>Laven Patel</h3>
+                        <p class="text-green font-bold">Founder</p>
+                        <p>Solo founder, full-stack developer, and product owner. My background is in finance, AI, product design, and blockchain development. I've taken Heights from idea to build, test, and user traction.</p>
+                        <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+                            <div>
+                                <p class="font-bold text-blue mb-0">Finance & AI</p>
+                                <p class="text-muted" style="font-size: 0.8em;">Background</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-blue mb-0">Blockchain</p>
+                                <p class="text-muted" style="font-size: 0.8em;">Developer</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-blue mb-0">Product</p>
+                                <p class="text-muted" style="font-size: 0.8em;">Owner</p>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <p>Looking to onboard:</p>
+                            <ul style="text-align:left;">
+                                <li>A tech co-founder to scale the AI engine</li>
+                                <li>A compliance & legal lead to help us launch Indian equities with confidence</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 7: CTA -->
+            <section>
+                <h1>Ready to Join the Revolution?</h1>
+                <div style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 212, 255, 0.1)); padding: 40px; border-radius: 20px; max-width: 800px; margin: 30px auto;">
+                    <p style="font-size: 1.4em;">
+                        We're raising <span class="text-green font-bold">$1.5M pre-seed</span> to scale to 
+                        <span class="text-green font-bold">10,000 traders</span> by Q2 2025
+                    </p>
+                    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; margin-top: 20px; align-items: center;">
+                        <a href="https://instagram.com/laven_patel20" target="_blank" style="color: var(--text-color); text-decoration: none; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="instagram" class="lucide" style="width: 20px; height: 20px;"></i>laven_patel20
+                        </a>
+                        <a href="https://x.com/laven_patel20" target="_blank" style="color: var(--text-color); text-decoration: none; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="x" class="lucide" style="width: 20px; height: 20px;"></i>@laven_patel20
+                        </a>
+                        <a href="https://www.linkedin.com/in/laven-patel-599bb5280/" target="_blank" style="color: var(--text-color); text-decoration: none; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="linkedin" class="lucide" style="width: 20px; height: 20px;"></i>Laven Patel
+                        </a>
+                        <a href="https://github.com/Swigstan1810" target="_blank" style="color: var(--text-color); text-decoration: none; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="github" class="lucide" style="width: 20px; height: 20px;"></i>Swigstan1810
+                        </a>
+                        <a href="mailto:heights@heightss.com" style="color: var(--text-color); text-decoration: none; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="mail" class="lucide" style="width: 20px; height: 20px;"></i>laven@heightss.com
+                        </a>
+                        <a href="https://heightss.com" target="_blank" style="color: var(--text-color); text-decoration: none; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="globe" class="lucide" style="width: 20px; height: 20px;"></i>heightss.com
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+    <script>
+        // Hide loading screen after 1 second
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }, 1000);
+        });
+
+        // Initialize Reveal.js
+        Reveal.initialize({
+            hash: true,
+            controls: true,
+            progress: true,
+            center: true,
+            transition: 'slide'
+        });
+
+        // Initialize AOS
+        AOS.init();
+
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
