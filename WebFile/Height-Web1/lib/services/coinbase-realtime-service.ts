@@ -426,8 +426,90 @@ class CoinbaseRealtimeService {
       return [];
     }
   }
+
+  /**
+   * Gets market data for a single symbol on-demand.
+   * This method connects, subscribes, waits for the first ticker message,
+   * and then disconnects. It's useful for one-off requests without
+   * maintaining a persistent connection.
+   */
+  public async getMarketDataForSymbol(symbol: string): Promise<MarketData | null> {
+    const productId = `${symbol.toUpperCase()}-USD`;
+
+    // Immediately return null for non-crypto symbols to avoid errors.
+    // A more robust implementation would check against a list of known products.
+    if (symbol.length > 5 || !/^[A-Z0-9]+$/.test(symbol)) {
+        console.warn(`[Realtime] Invalid or non-crypto symbol format: ${symbol}`);
+        return null;
+    }
+
+    return new Promise((resolve, reject) => {
+      let tempWs: WebSocket | null = null;
+      const timeout = setTimeout(() => {
+        if (tempWs) {
+          tempWs.close();
+        }
+        console.error(`[Realtime] Timeout fetching data for ${productId}`);
+        reject(new Error(`Timeout fetching data for ${productId}`));
+      }, 10000); // 10-second timeout
+
+      try {
+        tempWs = new WebSocket('wss://ws-feed.exchange.coinbase.com');
+
+        tempWs.onopen = () => {
+          console.log(`[Realtime] Temporary WebSocket connected for ${productId}`);
+          const subscription = {
+            type: 'subscribe',
+            product_ids: [productId],
+            channels: ['ticker'],
+          };
+          tempWs?.send(JSON.stringify(subscription));
+        };
+
+        tempWs.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === 'ticker' && data.product_id === productId) {
+            clearTimeout(timeout);
+            const price = parseFloat(data.price);
+            const open24h = parseFloat(data.open_24h);
+            const change24h = price - open24h;
+            
+            const marketData: MarketData = {
+              symbol: symbol.toUpperCase(),
+              productId,
+              price,
+              change24h,
+              change24hPercent: open24h > 0 ? (change24h / open24h) * 100 : 0,
+              volume24h: parseFloat(data.volume_24h),
+              high24h: parseFloat(data.high_24h),
+              low24h: parseFloat(data.low_24h),
+              timestamp: new Date(data.time),
+              source: 'coinbase',
+            };
+            
+            tempWs?.close();
+            resolve(marketData);
+          }
+        };
+
+        tempWs.onclose = () => {
+          console.log(`[Realtime] Temporary WebSocket for ${productId} closed.`);
+        };
+
+        tempWs.onerror = (error) => {
+          clearTimeout(timeout);
+          console.error(`[Realtime] Temporary WebSocket error for ${productId}:`, error);
+          tempWs?.close();
+          reject(error);
+        };
+      } catch (error) {
+          clearTimeout(timeout);
+          reject(error);
+      }
+    });
+  }
 }
 
-// Create singleton instance
+// Export a singleton instance of the service
 export const coinbaseRealtimeService = new CoinbaseRealtimeService();
 export default coinbaseRealtimeService;
