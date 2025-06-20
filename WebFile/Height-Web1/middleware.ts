@@ -69,7 +69,8 @@ export async function middleware(request: NextRequest) {
     // Content Security Policy - Prevents XSS attacks
     'Content-Security-Policy': 
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://s3.tradingview.com; " +
+      "frame-src https://s.tradingview.com; " +
       "style-src 'self' 'unsafe-inline'; " +
       "img-src 'self' data: https: blob:; " +
       "font-src 'self' data:; " +

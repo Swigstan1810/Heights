@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
+import { useTheme } from 'next-themes';
 
 declare global {
   interface Window {
@@ -11,127 +12,95 @@ declare global {
 interface TradingViewWidgetProps {
   symbol: string;
   height?: number;
-  theme?: 'light' | 'dark';
-  allowSymbolChange?: boolean;
-  showIntervalTabs?: boolean;
 }
 
-export default function TradingViewWidget({
+const EnhancedTradingViewWidget: React.FC<TradingViewWidgetProps> = ({
   symbol,
-  height = 500,
-  theme = 'dark',
-  allowSymbolChange = false,
-  showIntervalTabs = false
-}: TradingViewWidgetProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Generate a stable unique ID for the widget container
-  const widgetIdRef = useRef(`tradingview_${Math.random().toString(36).substring(2, 10)}`);
+  height = 500
+}) => {
+  const container = useRef<HTMLDivElement>(null);
+  const isScriptReady = useRef(false);
+  const { theme: colorTheme } = useTheme();
 
   useEffect(() => {
-    let script: HTMLScriptElement | null = null;
-    let widget: any = null;
-    setLoading(true);
-    setError(null);
+    const scriptId = 'tradingview-widget-script';
 
-    // Cleanup function
-    const cleanup = () => {
-      if (widget && typeof widget.remove === 'function') {
-        try {
-          widget.remove();
-        } catch (e) {
-          // ignore
-        }
-      }
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
-      if (script && script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-
-    // Load TradingView script if not already loaded
-    if (!window.TradingView) {
-      script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = () => {
-        createWidget();
-      };
-      script.onerror = () => {
-        setError('Failed to load TradingView script');
-        setLoading(false);
-      };
-      document.head.appendChild(script);
-    } else {
-      createWidget();
-    }
-
-    function createWidget() {
-      if (!window.TradingView || !containerRef.current) {
-        setError('TradingView not available');
-        setLoading(false);
+    const createWidget = () => {
+      if (!container.current || !window.TradingView) {
         return;
       }
-      try {
-        containerRef.current.innerHTML = '';
-        widget = new window.TradingView.widget({
-          autosize: true,
-          symbol,
-          interval: "D",
-          timezone: "Etc/UTC",
-          theme,
-          style: "1",
-          locale: "en",
-          toolbar_bg: theme === 'dark' ? "#1e1e1e" : "#f1f3f6",
-          enable_publishing: false,
-          allow_symbol_change: allowSymbolChange,
-          container_id: widgetIdRef.current,
-          hide_side_toolbar: !showIntervalTabs,
-          hide_legend: false,
-          save_image: false,
-          studies: ["RSI@tv-basicstudies"],
-          height,
-          width: "100%"
-        });
-        setLoading(false);
-      } catch (err) {
-        setError('Failed to initialize TradingView widget');
-        setLoading(false);
+      
+      // Clear any existing widget
+      container.current.innerHTML = '';
+
+      new window.TradingView.widget({
+        width: '100%',
+        height: height,
+        symbol: `COINBASE:${symbol}USD` || "COINBASE:BTCUSD",
+        interval: 'D',
+        timezone: 'Etc/UTC',
+        theme: colorTheme === 'dark' ? 'dark' : 'light',
+        style: '1',
+        locale: 'en',
+        enable_publishing: false,
+        allow_symbol_change: true,
+        container_id: container.current.id,
+        autosize: true,
+        studies: [
+          "STD;RSI",
+          "STD;Stochastic_RSI",
+          "STD;MACD"
+        ],
+      });
+    };
+
+    const handleScriptLoad = () => {
+      isScriptReady.current = true;
+      createWidget();
+    };
+
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = handleScriptLoad;
+      document.body.appendChild(script);
+    } else if (isScriptReady.current) {
+      createWidget();
+    } else {
+      // If script exists but hasn't loaded, add a listener
+      const existingScript = document.getElementById(scriptId);
+      if (existingScript) {
+        existingScript.addEventListener('load', handleScriptLoad);
       }
     }
 
-    return cleanup;
-  }, [symbol, height, theme, allowSymbolChange, showIntervalTabs]);
+    // Cleanup function
+    return () => {
+      const existingScript = document.getElementById(scriptId);
+      if (existingScript) {
+        existingScript.removeEventListener('load', handleScriptLoad);
+      }
+      if (container.current) {
+        container.current.innerHTML = '';
+      }
+    };
+  }, [symbol, colorTheme, height]);
+
+  // Use a stable, unique ID for the container
+  const widgetContainerId = useRef(`tradingview_widget_${Math.random().toString(36).substring(2, 9)}`).current;
 
   return (
-    <div className="w-full overflow-hidden rounded-lg bg-background">
-      <div
-        ref={containerRef}
-        id={widgetIdRef.current}
-        className="w-full"
-        style={{ height: `${height}px` }}
-      >
-        {loading && (
-          <div className="flex items-center justify-center h-full bg-muted/50">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="mt-2 text-sm text-muted-foreground">Loading chart...</p>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="flex items-center justify-center h-full bg-muted/50">
-            <div className="text-center">
-              <p className="text-red-500 mb-2">Chart Error</p>
-              <p className="text-sm text-muted-foreground">{error}</p>
-            </div>
-          </div>
-        )}
-      </div>
+    <div className="tradingview-widget-container" style={{ height: `${height}px`, width: '100%' }}>
+      <div 
+        id={widgetContainerId}
+        ref={container} 
+        style={{ height: '100%', width: '100%' }}
+      />
     </div>
   );
-}
+};
+
+// Memoize the component to prevent unnecessary re-renders
+export default memo(EnhancedTradingViewWidget);
