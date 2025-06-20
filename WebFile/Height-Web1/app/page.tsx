@@ -36,7 +36,8 @@ import {
   TrendingDownIcon,
   Eye,
   Brain,
-  Heart
+  Heart,
+  X
 } from "lucide-react";
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -271,6 +272,7 @@ export default function EnhancedHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isMobile, setIsMobile] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
   const { scrollY } = useScroll();
   
   // Parallax effects
@@ -489,7 +491,7 @@ export default function EnhancedHome() {
                 variant="outline" 
                 size="lg" 
                 className="text-lg px-8 py-4 border-border text-foreground hover:bg-background hover:border-emerald-500/50"
-                onClick={() => router.push('/demo')}
+                onClick={() => setShowDemo(true)}
               >
                 <Eye className="h-5 w-5 mr-2" />
                 View Live Demo
@@ -585,6 +587,43 @@ export default function EnhancedHome() {
           </motion.div>
         </div>
       </motion.section>
+
+      {/* Demo Video Modal */}
+      <AnimatePresence>
+        {showDemo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setShowDemo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-background rounded-lg shadow-2xl overflow-hidden border border-border/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <video 
+                src="/demo.mp4" 
+                controls 
+                autoPlay 
+                loop 
+                className="w-full h-full"
+              />
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-4 right-4 h-8 w-8 rounded-full"
+                onClick={() => setShowDemo(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Features Section */}
       <motion.section 
