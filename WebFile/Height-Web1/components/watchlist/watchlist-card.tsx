@@ -1,4 +1,4 @@
-// components/watchlist/watchlist-card.tsx - Modern watchlist-only version
+// components/watchlist/watchlist-card.tsx - Updated with theme support and consistent styling
 "use client";
 
 import { useState } from 'react';
@@ -22,7 +22,9 @@ import {
   BookmarkCheck,
   Sparkles,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Bitcoin,
+  CheckCircle2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { MarketDataItem } from '@/hooks/use-watchlist-data';
@@ -36,6 +38,7 @@ interface WatchlistCardProps {
   formatCurrency: (value: number) => string;
   formatPercentage: (value: number) => string;
   index?: number;
+  showBalances?: boolean;
 }
 
 export function WatchlistCard({
@@ -46,7 +49,8 @@ export function WatchlistCard({
   onViewChart,
   formatCurrency,
   formatPercentage,
-  index = 0
+  index = 0,
+  showBalances = true
 }: WatchlistCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -55,7 +59,7 @@ export function WatchlistCard({
       case 'stock':
         return <Building2 className="h-5 w-5" />;
       case 'crypto':
-        return <Coins className="h-5 w-5" />;
+        return <Bitcoin className="h-5 w-5" />;
       case 'mutual_fund':
         return <Banknote className="h-5 w-5" />;
       case 'commodity':
@@ -87,24 +91,24 @@ export function WatchlistCard({
   const getAssetTypeBadgeColor = (assetType: string) => {
     switch (assetType) {
       case 'stock':
-        return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
+        return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-800';
       case 'crypto':
-        return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100';
+        return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-300 dark:border-orange-800';
       case 'mutual_fund':
-        return 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100';
+        return 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/20 dark:text-purple-300 dark:border-purple-800';
       case 'commodity':
-        return 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100';
+        return 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100 dark:bg-yellow-950/20 dark:text-yellow-300 dark:border-yellow-800';
       case 'bond':
-        return 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100';
+        return 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/20 dark:text-green-300 dark:border-green-800';
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100';
+        return 'bg-muted text-muted-foreground border-border hover:bg-muted/80';
     }
   };
 
   const getPriceChangeColor = (change: number) => {
-    if (change > 0) return 'text-emerald-600';
-    if (change < 0) return 'text-red-500';
-    return 'text-gray-600';
+    if (change > 0) return 'text-emerald-600 dark:text-emerald-400';
+    if (change < 0) return 'text-red-500 dark:text-red-400';
+    return 'text-muted-foreground';
   };
 
   const getPriceChangeIcon = (change: number) => {
@@ -135,9 +139,9 @@ export function WatchlistCard({
       className="h-full"
     >
       <Card
-        className={`group cursor-pointer transition-all duration-300 hover:shadow-xl border-0 bg-white/50 backdrop-blur-sm h-full ${
+        className={`group cursor-pointer transition-all duration-300 hover:shadow-xl border-0 shadow-lg bg-card/50 backdrop-blur-sm h-full ${
           isHovered ? 'shadow-xl scale-[1.02]' : 'hover:shadow-lg'
-        } ${isInWatchlist ? 'ring-2 ring-amber-200 bg-amber-50/30' : ''}`}
+        } ${isInWatchlist ? 'ring-2 ring-amber-200 dark:ring-amber-800 bg-amber-50/30 dark:bg-amber-950/20' : ''}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -151,7 +155,7 @@ export function WatchlistCard({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bold text-gray-900 text-lg truncate">
+                    <h3 className="font-bold text-foreground text-lg truncate">
                       {item.name}
                     </h3>
                   </div>
@@ -166,7 +170,7 @@ export function WatchlistCard({
                     </Badge>
                   </div>
                   {item.exchange && (
-                    <p className="text-xs text-gray-500 mt-1">{item.exchange}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{item.exchange}</p>
                   )}
                 </div>
               </div>
@@ -175,12 +179,12 @@ export function WatchlistCard({
                 size="sm"
                 variant="ghost"
                 onClick={isInWatchlist ? onRemoveFromWatchlist : onAddToWatchlist}
-                className="h-10 w-10 p-0 hover:bg-amber-50"
+                className="h-10 w-10 p-0 hover:bg-amber-50 dark:hover:bg-amber-950/20"
               >
                 {isInWatchlist ? (
                   <BookmarkCheck className="h-5 w-5 text-amber-600" />
                 ) : (
-                  <Bookmark className="h-5 w-5 text-gray-400 hover:text-amber-600" />
+                  <Bookmark className="h-5 w-5 text-muted-foreground hover:text-amber-600" />
                 )}
               </Button>
             </div>
@@ -189,11 +193,11 @@ export function WatchlistCard({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-3xl font-bold text-gray-900">
-                    {formatCurrency(safePrice)}
+                  <div className="text-3xl font-bold text-foreground">
+                    {showBalances ? formatCurrency(safePrice) : '••••••'}
                   </div>
-                  {item.price_inr && item.price !== item.price_inr && (
-                    <div className="text-sm text-gray-500">
+                  {item.price_inr && item.price !== item.price_inr && showBalances && (
+                    <div className="text-sm text-muted-foreground">
                       ${item.price.toFixed(2)} USD
                     </div>
                   )}
@@ -201,22 +205,28 @@ export function WatchlistCard({
                 <div className="text-right">
                   <div className={`flex items-center gap-1 text-lg font-bold ${getPriceChangeColor(safeChange24hPercent)}`}>
                     {getPriceChangeIcon(safeChange24hPercent)}
-                    {formatPercentage(safeChange24hPercent)}
+                    {showBalances ? formatPercentage(safeChange24hPercent) : '••••'}
                   </div>
                   <div className={`text-sm ${getPriceChangeColor(safeChange24h)}`}>
-                    {safeChange24h >= 0 ? '+' : ''}{formatCurrency(safeChange24h)}
+                    {showBalances ? (
+                      <>
+                        {safeChange24h >= 0 ? '+' : ''}{formatCurrency(safeChange24h)}
+                      </>
+                    ) : (
+                      '••••'
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* 24h Price Range */}
-              {item.high_24h && item.low_24h && item.high_24h > item.low_24h && (
+              {item.high_24h && item.low_24h && item.high_24h > item.low_24h && showBalances && (
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>24h Low: {formatCurrency(item.low_24h)}</span>
                     <span>24h High: {formatCurrency(item.high_24h)}</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-red-400 via-yellow-400 to-emerald-400 rounded-full transition-all duration-500"
                       style={{
@@ -231,39 +241,40 @@ export function WatchlistCard({
             {/* Market Stats */}
             <div className="grid grid-cols-2 gap-4">
               {safeVolume24h > 0 && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">24h Volume</p>
-                  <p className="font-bold text-gray-900 text-sm">
-                    {formatVolume(safeVolume24h)}
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">24h Volume</p>
+                  <p className="font-bold text-foreground text-sm">
+                    {showBalances ? formatVolume(safeVolume24h) : '••••••'}
                   </p>
                 </div>
               )}
               {item.market_cap > 0 && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Market Cap</p>
-                  <p className="font-bold text-gray-900 text-sm">
-                    {item.market_cap >= 1e12 
-                      ? `₹${(item.market_cap / 1e12).toFixed(2)}T`
-                      : item.market_cap >= 1e9 
-                      ? `₹${(item.market_cap / 1e9).toFixed(2)}B` 
-                      : `₹${(item.market_cap / 1e6).toFixed(2)}M`
-                    }
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Market Cap</p>
+                  <p className="font-bold text-foreground text-sm">
+                    {showBalances ? (
+                      item.market_cap >= 1e12 
+                        ? `₹${(item.market_cap / 1e12).toFixed(2)}T`
+                        : item.market_cap >= 1e9 
+                        ? `₹${(item.market_cap / 1e9).toFixed(2)}B` 
+                        : `₹${(item.market_cap / 1e6).toFixed(2)}M`
+                    ) : '••••••'}
                   </p>
                 </div>
               )}
               {item.dividend_yield && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Dividend Yield</p>
-                  <p className="font-bold text-gray-900 text-sm">
-                    {(item.dividend_yield * 100).toFixed(2)}%
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Dividend Yield</p>
+                  <p className="font-bold text-foreground text-sm">
+                    {showBalances ? `${(item.dividend_yield * 100).toFixed(2)}%` : '••••'}
                   </p>
                 </div>
               )}
               {item.expense_ratio && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Expense Ratio</p>
-                  <p className="font-bold text-gray-900 text-sm">
-                    {(item.expense_ratio * 100).toFixed(2)}%
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Expense Ratio</p>
+                  <p className="font-bold text-foreground text-sm">
+                    {showBalances ? `${(item.expense_ratio * 100).toFixed(2)}%` : '••••'}
                   </p>
                 </div>
               )}
@@ -271,12 +282,12 @@ export function WatchlistCard({
 
             {/* Sector */}
             {item.sector && (
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-3">
+              <div className="bg-gradient-to-r from-muted/50 to-muted/30 rounded-lg p-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-gray-500" />
-                  <span className="text-xs text-gray-500">Sector</span>
+                  <Sparkles className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Sector</span>
                 </div>
-                <p className="font-semibold text-gray-900 text-sm mt-1">
+                <p className="font-semibold text-foreground text-sm mt-1">
                   {item.sector}
                 </p>
               </div>
@@ -284,11 +295,11 @@ export function WatchlistCard({
           </div>
 
           {/* Action Buttons */}
-          <div className="mt-6 pt-4 border-t border-gray-100">
+          <div className="mt-6 pt-4 border-t border-border/50">
             <div className="flex gap-3">
               <Button
                 onClick={onViewChart}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
+                className="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
                 size="sm"
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
@@ -299,7 +310,7 @@ export function WatchlistCard({
                 variant="outline"
                 size="sm"
                 onClick={() => window.open(`https://www.tradingview.com/chart/?symbol=${item.symbol}`, '_blank')}
-                className="px-3 hover:bg-gray-50 border-gray-200"
+                className="px-3 hover:bg-muted border-border/50"
               >
                 <ExternalLink className="h-4 w-4" />
               </Button>
@@ -312,9 +323,9 @@ export function WatchlistCard({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mt-4 pt-4 border-t border-gray-100"
+              className="mt-4 pt-4 border-t border-border/50"
             >
-              <div className="text-xs text-gray-500 space-y-1">
+              <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex justify-between">
                   <span>Last Updated:</span>
                   <span>{new Date(item.last_updated).toLocaleTimeString()}</span>

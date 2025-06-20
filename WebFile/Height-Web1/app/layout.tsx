@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WalletProvider } from "@/components/providers/wallet-provider";
 import { Toaster } from "sonner";
+import { ErrorBoundary } from '@/components/error-boundary';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,17 +21,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="dark">
-          <AuthProvider>
-            <WalletProvider>
-              {children}
-              <Toaster position="top-right" richColors />
-            </WalletProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </body>
-    </html>
+    <ErrorBoundary>
+      <html lang="en" suppressHydrationWarning>
+        <body className={inter.className}>
+          <ThemeProvider attribute="class" defaultTheme="dark">
+            <AuthProvider>
+              <WalletProvider>
+                {children}
+                <Toaster position="top-right" richColors />
+              </WalletProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </body>
+      </html>
+    </ErrorBoundary>
   );
 }

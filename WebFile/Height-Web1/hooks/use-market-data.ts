@@ -8,6 +8,8 @@ interface UseMarketDataOptions {
   symbols?: string[];
   autoConnect?: boolean;
   updateInterval?: number;
+  retryAttempts?: number;
+  retryDelay?: number;
 }
 
 interface MarketDataState {
@@ -17,13 +19,25 @@ interface MarketDataState {
   connectionStatus: string;
   lastUpdate: Date | null;
   isConnected: boolean;
+  retryCount: number;
+  fatalError: boolean;
+}
+
+interface MarketDataStats {
+  totalSymbols: number;
+  subscribedSymbols: string[];
+  avgChange24h: number;
+  lastUpdateTime: Date | null;
+  connectionUptime: number;
 }
 
 export function useMarketData(options: UseMarketDataOptions = {}) {
   const {
     symbols = ['BTC', 'ETH', 'SOL', 'MATIC', 'LINK', 'AVAX'],
     autoConnect = true,
-    updateInterval = 1000
+    updateInterval = 1000,
+    retryAttempts = 3,
+    retryDelay = 5000
   } = options;
 
   const [state, setState] = useState<MarketDataState>({
@@ -32,122 +46,292 @@ export function useMarketData(options: UseMarketDataOptions = {}) {
     error: null,
     connectionStatus: 'disconnected',
     lastUpdate: null,
-    isConnected: false
+    isConnected: false,
+    retryCount: 0,
+    fatalError: false
   });
 
   const subscriptionsRef = useRef<Map<string, () => void>>(new Map());
   const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionStartTime = useRef<Date | null>(null);
+  const isUnmountedRef = useRef(false);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    isUnmountedRef.current = false;
+    return () => {
+      isUnmountedRef.current = true;
+    };
+  }, []);
+
+  // Safe state update function
+  const safeSetState = useCallback((updater: (prev: MarketDataState) => MarketDataState) => {
+    if (!isUnmountedRef.current) {
+      setState(updater);
+    }
+  }, []);
 
   // Update connection status
   const updateConnectionStatus = useCallback(() => {
-    const status = coinbaseRealtimeService.getConnectionState();
-    setState(prev => ({
-      ...prev,
-      connectionStatus: status,
-      isConnected: status === 'connected'
-    }));
-  }, []);
+    if (isUnmountedRef.current) return;
 
-  // Subscribe to a symbol
+    try {
+      const status = coinbaseRealtimeService.getConnectionState();
+      const isReady = coinbaseRealtimeService.isReady();
+      
+      safeSetState(prev => ({
+        ...prev,
+        connectionStatus: status,
+        isConnected: status === 'connected' && isReady
+      }));
+
+      // Set connection start time when first connected
+      if (status === 'connected' && !connectionStartTime.current) {
+        connectionStartTime.current = new Date();
+      } else if (status === 'disconnected') {
+        connectionStartTime.current = null;
+      }
+    } catch (error) {
+      console.error('[useMarketData] Error updating connection status:', error);
+      safeSetState(prev => ({
+        ...prev,
+        connectionStatus: 'error',
+        isConnected: false,
+        error: error instanceof Error ? error.message : 'Connection status error'
+      }));
+    }
+  }, [safeSetState]);
+
+  // Subscribe to a symbol with error handling
   const subscribe = useCallback((symbol: string) => {
-    if (subscriptionsRef.current.has(symbol)) {
-      return; // Already subscribed
+    if (isUnmountedRef.current || subscriptionsRef.current.has(symbol)) {
+      return; // Already subscribed or component unmounted
     }
 
-    const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (marketData) => {
-      setState(prev => ({
-        ...prev,
-        data: new Map(prev.data).set(symbol, marketData),
-        lastUpdate: new Date(),
-        loading: false,
-        error: null
-      }));
-    });
+    try {
+      const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (marketData) => {
+        if (isUnmountedRef.current) return;
 
-    subscriptionsRef.current.set(symbol, unsubscribe);
-  }, []);
+        try {
+          safeSetState(prev => ({
+            ...prev,
+            data: new Map(prev.data).set(symbol, marketData),
+            lastUpdate: new Date(),
+            loading: false,
+            error: null,
+            retryCount: 0 // Reset retry count on successful update
+          }));
+        } catch (error) {
+          console.error(`[useMarketData] Error updating data for ${symbol}:`, error);
+        }
+      });
+
+      subscriptionsRef.current.set(symbol, unsubscribe);
+      console.log(`[useMarketData] Subscribed to ${symbol}`);
+    } catch (error) {
+      console.error(`[useMarketData] Error subscribing to ${symbol}:`, error);
+      safeSetState(prev => ({
+        ...prev,
+        error: `Failed to subscribe to ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }));
+    }
+  }, [safeSetState]);
 
   // Unsubscribe from a symbol
   const unsubscribe = useCallback((symbol: string) => {
-    const unsubscribeFn = subscriptionsRef.current.get(symbol);
-    if (unsubscribeFn) {
-      unsubscribeFn();
-      subscriptionsRef.current.delete(symbol);
-      
-      setState(prev => {
-        const newData = new Map(prev.data);
-        newData.delete(symbol);
-        return { ...prev, data: newData };
-      });
+    if (isUnmountedRef.current) return;
+
+    try {
+      const unsubscribeFn = subscriptionsRef.current.get(symbol);
+      if (unsubscribeFn) {
+        unsubscribeFn();
+        subscriptionsRef.current.delete(symbol);
+        
+        safeSetState(prev => {
+          const newData = new Map(prev.data);
+          newData.delete(symbol);
+          return { ...prev, data: newData };
+        });
+        
+        console.log(`[useMarketData] Unsubscribed from ${symbol}`);
+      }
+    } catch (error) {
+      console.error(`[useMarketData] Error unsubscribing from ${symbol}:`, error);
     }
-  }, []);
+  }, [safeSetState]);
 
   // Subscribe to multiple symbols
   const subscribeToSymbols = useCallback((symbolList: string[]) => {
-    symbolList.forEach(symbol => subscribe(symbol));
+    if (isUnmountedRef.current) return;
+
+    const validSymbols = symbolList.filter(symbol => 
+      symbol && typeof symbol === 'string' && symbol.trim().length > 0
+    );
+
+    if (validSymbols.length === 0) {
+      console.warn('[useMarketData] No valid symbols provided for subscription');
+      return;
+    }
+
+    console.log(`[useMarketData] Subscribing to ${validSymbols.length} symbols:`, validSymbols);
+    
+    validSymbols.forEach(symbol => {
+      // Add small delay between subscriptions to avoid overwhelming the service
+      setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          subscribe(symbol.trim().toUpperCase());
+        }
+      }, Math.random() * 1000); // Random delay up to 1 second
+    });
   }, [subscribe]);
 
-  // Get market data for a specific symbol
+  // Get market data for a specific symbol with retry logic
   const getMarketData = useCallback(async (symbol: string): Promise<MarketData | null> => {
+    if (isUnmountedRef.current || !symbol) return null;
+
     try {
+      safeSetState(prev => ({ ...prev, error: null }));
+      
       const data = await coinbaseRealtimeService.getMarketData(symbol);
-      if (data) {
-        setState(prev => ({
+      
+      if (data && !isUnmountedRef.current) {
+        safeSetState(prev => ({
           ...prev,
           data: new Map(prev.data).set(symbol, data),
           lastUpdate: new Date(),
           error: null
         }));
       }
+      
       return data;
     } catch (error) {
-      console.error('Error fetching market data:', error);
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Failed to fetch market data'
-      }));
+      console.error(`[useMarketData] Error fetching market data for ${symbol}:`, error);
+      
+      if (!isUnmountedRef.current) {
+        safeSetState(prev => ({
+          ...prev,
+          error: `Failed to fetch data for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }));
+      }
+      
       return null;
     }
-  }, []);
+  }, [safeSetState]);
 
-  // Refresh all subscribed symbols
+  // Refresh all subscribed symbols with retry logic
   const refresh = useCallback(async () => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    if (isUnmountedRef.current) return;
+
+    safeSetState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
       const symbolList = Array.from(subscriptionsRef.current.keys());
-      const promises = symbolList.map(symbol => getMarketData(symbol));
-      await Promise.all(promises);
+      
+      if (symbolList.length === 0) {
+        safeSetState(prev => ({ ...prev, loading: false }));
+        return;
+      }
+
+      console.log(`[useMarketData] Refreshing data for ${symbolList.length} symbols`);
+
+      // Fetch data for all symbols with proper error handling
+      const promises = symbolList.map(async (symbol) => {
+        try {
+          return await getMarketData(symbol);
+        } catch (error) {
+          console.error(`[useMarketData] Error refreshing ${symbol}:`, error);
+          return null;
+        }
+      });
+
+      await Promise.allSettled(promises);
+      
+      if (!isUnmountedRef.current) {
+        safeSetState(prev => ({ ...prev, loading: false }));
+      }
     } catch (error) {
-      console.error('Error refreshing market data:', error);
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Failed to refresh market data'
-      }));
-    } finally {
-      setState(prev => ({ ...prev, loading: false }));
+      console.error('[useMarketData] Error during refresh:', error);
+      
+      if (!isUnmountedRef.current) {
+        safeSetState(prev => ({
+          ...prev,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Failed to refresh market data'
+        }));
+      }
     }
-  }, [getMarketData]);
+  }, [getMarketData, safeSetState]);
+
+  // Retry connection with exponential backoff
+  const retryConnection = useCallback(() => {
+    if (isUnmountedRef.current || state.retryCount >= retryAttempts) {
+      return;
+    }
+
+    const delay = retryDelay * Math.pow(2, state.retryCount); // Exponential backoff
+    
+    console.log(`[useMarketData] Retrying connection in ${delay}ms (attempt ${state.retryCount + 1}/${retryAttempts})`);
+    
+    retryTimeoutRef.current = setTimeout(async () => {
+      if (isUnmountedRef.current) return;
+
+      try {
+        safeSetState(prev => ({ 
+          ...prev, 
+          retryCount: prev.retryCount + 1,
+          error: null 
+        }));
+
+        // Check if service is ready
+        if (coinbaseRealtimeService.isReady()) {
+          // Re-subscribe to symbols
+          const symbolList = Array.from(subscriptionsRef.current.keys());
+          if (symbolList.length > 0) {
+            subscribeToSymbols(symbolList);
+          }
+        } else {
+          // Service not ready, try again
+          retryConnection();
+        }
+      } catch (error) {
+        console.error('[useMarketData] Retry failed:', error);
+        if (!isUnmountedRef.current) {
+          retryConnection(); // Try again
+        }
+      }
+    }, delay);
+  }, [state.retryCount, retryAttempts, retryDelay, safeSetState, subscribeToSymbols]);
 
   // Clear all subscriptions
   const clearSubscriptions = useCallback(() => {
-    subscriptionsRef.current.forEach(unsubscribeFn => unsubscribeFn());
+    subscriptionsRef.current.forEach(unsubscribeFn => {
+      try {
+        unsubscribeFn();
+      } catch (error) {
+        console.error('[useMarketData] Error during cleanup:', error);
+      }
+    });
     subscriptionsRef.current.clear();
-    setState(prev => ({
-      ...prev,
-      data: new Map(),
-      lastUpdate: null
-    }));
-  }, []);
+    
+    if (!isUnmountedRef.current) {
+      safeSetState(prev => ({
+        ...prev,
+        data: new Map(),
+        lastUpdate: null
+      }));
+    }
+  }, [safeSetState]);
 
   // Get data for a specific symbol
   const getSymbolData = useCallback((symbol: string): MarketData | null => {
-    return state.data.get(symbol) || null;
+    if (!symbol) return null;
+    return state.data.get(symbol.toUpperCase()) || null;
   }, [state.data]);
 
   // Get all data as array
   const getAllData = useCallback((): MarketData[] => {
-    return Array.from(state.data.values());
+    return Array.from(state.data.values()).filter(data => data && typeof data === 'object');
   }, [state.data]);
 
   // Get top gainers
@@ -173,51 +357,123 @@ export function useMarketData(options: UseMarketDataOptions = {}) {
       .slice(0, limit);
   }, [getAllData]);
 
+  // Get statistics
+  const getStats = useCallback((): MarketDataStats => {
+    const allData = getAllData();
+    const connectionUptime = connectionStartTime.current 
+      ? Date.now() - connectionStartTime.current.getTime() 
+      : 0;
+
+    return {
+      totalSymbols: state.data.size,
+      subscribedSymbols: Array.from(subscriptionsRef.current.keys()),
+      avgChange24h: allData.length > 0 
+        ? allData.reduce((sum, data) => sum + data.change24hPercent, 0) / allData.length 
+        : 0,
+      lastUpdateTime: state.lastUpdate,
+      connectionUptime
+    };
+  }, [getAllData, state.data.size, state.lastUpdate]);
+
   // Initialize subscriptions
   useEffect(() => {
-    if (autoConnect && symbols.length > 0) {
-      // Load initial data
-      Promise.all(symbols.map(symbol => getMarketData(symbol)))
-        .then(() => {
-          setState(prev => ({ ...prev, loading: false }));
-        })
-        .catch(error => {
-          console.error('Error loading initial data:', error);
-          setState(prev => ({
-            ...prev,
-            loading: false,
-            error: error instanceof Error ? error.message : 'Failed to load initial data'
-          }));
-        });
+    if (autoConnect && symbols.length > 0 && !isUnmountedRef.current) {
+      console.log('[useMarketData] Initializing with symbols:', symbols);
+      
+      // Wait for service to be ready
+      const checkReady = () => {
+        if (isUnmountedRef.current) return;
+        
+        if (coinbaseRealtimeService.isReady()) {
+          subscribeToSymbols(symbols);
+          safeSetState(prev => ({ ...prev, loading: false }));
+        } else {
+          // Service not ready, wait and check again
+          setTimeout(checkReady, 1000);
+        }
+      };
 
-      // Subscribe to real-time updates
-      subscribeToSymbols(symbols);
+      checkReady();
     }
-  }, [autoConnect, symbols, getMarketData, subscribeToSymbols]);
+  }, [autoConnect, symbols, subscribeToSymbols, safeSetState]);
 
   // Monitor connection status
   useEffect(() => {
     if (autoConnect) {
       updateConnectionStatus();
       statusIntervalRef.current = setInterval(updateConnectionStatus, updateInterval);
-    }
 
-    return () => {
-      if (statusIntervalRef.current) {
-        clearInterval(statusIntervalRef.current);
-      }
-    };
-  }, [autoConnect, updateInterval, updateConnectionStatus]);
+      // Set up retry logic for failed connections
+      const connectionCheckInterval = setInterval(() => {
+        if (isUnmountedRef.current) return;
+
+        const status = coinbaseRealtimeService.getConnectionState();
+        if (status === 'closed' || status === 'unknown') {
+          retryConnection();
+        }
+      }, retryDelay);
+
+      return () => {
+        if (statusIntervalRef.current) {
+          clearInterval(statusIntervalRef.current);
+        }
+        clearInterval(connectionCheckInterval);
+      };
+    }
+  }, [autoConnect, updateInterval, updateConnectionStatus, retryConnection, retryDelay]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      clearSubscriptions();
+      isUnmountedRef.current = true;
+      
       if (statusIntervalRef.current) {
         clearInterval(statusIntervalRef.current);
       }
+      
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      
+      clearSubscriptions();
     };
   }, [clearSubscriptions]);
+
+  // Add a function to force cleanup and set fatalError
+  const handleFatalError = useCallback((err: any) => {
+    if (!isUnmountedRef.current) {
+      clearSubscriptions();
+      if (statusIntervalRef.current) clearInterval(statusIntervalRef.current);
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      setState(prev => ({ ...prev, fatalError: true, error: err instanceof Error ? err.message : 'Fatal error' }));
+    }
+  }, [clearSubscriptions]);
+
+  // At the top of the hook, if fatalError is set, return a minimal object:
+  if (state.fatalError) {
+    return {
+      ...state,
+      data: new Map(),
+      loading: false,
+      error: state.error || 'Fatal error in market data',
+      isConnected: false,
+      getAllData: () => [],
+      getSymbolData: () => null,
+      getTopGainers: () => [],
+      getTopLosers: () => [],
+      getByVolume: () => [],
+      getStats: () => ({
+        totalSymbols: 0,
+        subscribedSymbols: [],
+        avgChange24h: 0,
+        lastUpdateTime: null,
+        connectionUptime: 0
+      }),
+      subscribe: () => {},
+      unsubscribe: () => {},
+      getMarketData: () => []
+    };
+  }
 
   return {
     // State
@@ -230,6 +486,7 @@ export function useMarketData(options: UseMarketDataOptions = {}) {
     refresh,
     clearSubscriptions,
     getMarketData,
+    retryConnection,
     
     // Getters
     getSymbolData,
@@ -237,57 +494,78 @@ export function useMarketData(options: UseMarketDataOptions = {}) {
     getTopGainers,
     getTopLosers,
     getByVolume,
+    getStats,
     
-    // Computed
+    // Computed values
     totalSymbols: state.data.size,
     subscribedSymbols: Array.from(subscriptionsRef.current.keys()),
     avgChange24h: getAllData().length > 0 
       ? getAllData().reduce((sum, data) => sum + data.change24hPercent, 0) / getAllData().length 
-      : 0
+      : 0,
+    
+    // Service info
+    isServiceReady: coinbaseRealtimeService.isReady(),
+    validProducts: coinbaseRealtimeService.getValidProducts(),
+    popularPairs: coinbaseRealtimeService.getPopularPairs()
   };
 }
 
 // Hook for single symbol
-export function useSymbolData(symbol: string) {
-  const { getSymbolData, subscribe, unsubscribe, loading, error, isConnected } = useMarketData({
-    symbols: [symbol],
+export function useSymbolData(symbol: string, options: Omit<UseMarketDataOptions, 'symbols'> = {}) {
+  const marketData = useMarketData({
+    ...options,
+    symbols: symbol ? [symbol] : [],
     autoConnect: true
   });
 
   return {
-    data: getSymbolData(symbol),
-    loading,
-    error,
-    isConnected,
-    subscribe: () => subscribe(symbol),
-    unsubscribe: () => unsubscribe(symbol)
+    data: marketData.getSymbolData(symbol),
+    loading: marketData.loading,
+    error: marketData.error,
+    isConnected: marketData.isConnected,
+    lastUpdate: marketData.lastUpdate,
+    subscribe: () => marketData.subscribe(symbol),
+    unsubscribe: () => marketData.unsubscribe(symbol),
+    refresh: () => marketData.getMarketData(symbol)
   };
 }
 
 // Hook for portfolio tracking
-export function usePortfolioData(symbols: string[]) {
-  const marketData = useMarketData({ symbols, autoConnect: true });
+export function usePortfolioData(symbols: string[], options: UseMarketDataOptions = {}) {
+  const marketData = useMarketData({ 
+    ...options, 
+    symbols, 
+    autoConnect: true 
+  });
   
   const calculatePortfolioValue = useCallback((holdings: Record<string, number>) => {
     let totalValue = 0;
     let totalChange24h = 0;
+    let validHoldings = 0;
     
     Object.entries(holdings).forEach(([symbol, quantity]) => {
+      if (quantity <= 0) return;
+      
       const data = marketData.getSymbolData(symbol);
-      if (data) {
+      if (data && data.price > 0) {
         const value = data.price * quantity;
         const change = (data.price * data.change24hPercent / 100) * quantity;
         totalValue += value;
         totalChange24h += change;
+        validHoldings++;
       }
     });
     
-    const totalChange24hPercent = totalValue > 0 ? (totalChange24h / (totalValue - totalChange24h)) * 100 : 0;
+    const totalChange24hPercent = totalValue > 0 && totalChange24h !== 0
+      ? (totalChange24h / (totalValue - totalChange24h)) * 100 
+      : 0;
     
     return {
       totalValue,
       totalChange24h,
-      totalChange24hPercent
+      totalChange24hPercent,
+      validHoldings,
+      totalHoldings: Object.keys(holdings).length
     };
   }, [marketData]);
 

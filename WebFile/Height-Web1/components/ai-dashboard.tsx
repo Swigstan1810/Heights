@@ -71,8 +71,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useMarketData } from '@/hooks/use-market-data';
 import { NewsInsights } from '@/components/news-insights';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 // Message Interface
 interface Message {
@@ -196,13 +196,14 @@ export default function EnhancedAIDashboard() {
     responseTime: 1.2,
     activeAlerts: 3
   });
-  const { data: marketDataMap, loading: isLoadingData } = useMarketData({ symbols: ['BTC', 'ETH', 'SOL', 'MATIC', 'AAPL', 'GOOGL', 'TSLA'] });
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const supabase = createClientComponentClient();
+
+  console.log('[AIDashboard] Render start');
 
   // Initialize with welcome message
   useEffect(() => {
@@ -440,79 +441,85 @@ How can I help you today?`,
   // Sidebar content component
   const SidebarContent = () => (
     <>
-      {/* Quick Actions */}
+      {/* AI Metrics Section - Fixed */}
       <div className="p-3 sm:p-4 border-b border-border">
         <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-foreground">
-          <Rocket className="h-3 w-3 sm:h-4 sm:w-4 text-[#1F7D53]" />
-          Quick Actions
+          <Brain className="h-3 w-3 sm:h-4 sm:w-4 text-[#1F7D53]" />
+          AI Metrics
         </h3>
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-          {QUICK_ACTIONS.map((action) => (
-            <Button
-              key={action.id}
-              variant="outline"
-              size="sm"
-              className={cn(
-                "h-auto py-2 sm:py-3 px-2 sm:px-3 flex flex-col items-center gap-1 sm:gap-2 hover:border-[#1F7D53]/50 text-xs border-border text-foreground hover:text-foreground",
-                action.bgColor
-              )}
-              onClick={() => {
-                setActiveMode('chat');
-                sendMessage(action.prompt);
-                setShowMobileSidebar(false);
-              }}
-            >
-              <action.icon className={cn("h-4 w-4 sm:h-5 sm:w-5", action.color)} />
-              <span className="text-[10px] sm:text-xs text-center leading-tight">{action.label}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {/* Market Overview */}
-      <div className="flex-1 overflow-auto p-3 sm:p-4">
-        <h3 className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-foreground">
-          <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-[#1F7D53]" />
-          Live Market
-        </h3>
-        <div className="space-y-1.5 sm:space-y-2">
-          {isLoadingData ? (
-            <div className="text-center py-6 sm:py-8">
-              <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin mx-auto mb-2 text-muted-foreground/50" />
-              <p className="text-xs sm:text-sm text-muted-foreground/50">Loading market data...</p>
+        {/* Investment Score */}
+        <div className="bg-gradient-to-br from-[#1F7D53]/10 to-[#1F7D53]/5 border border-[#1F7D53]/20 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-foreground">AI Investment Score</p>
+              <p className="text-lg font-bold text-[#1F7D53]">81</p>
             </div>
-          ) : (
-            (() => {
-              const validAssets = Array.from(marketDataMap.values()).filter(
-                asset => typeof asset.price === 'number' && typeof asset.change24hPercent === 'number'
-              );
-              if (validAssets.length === 0) {
-                return <div className="text-center py-6 text-muted-foreground/50 text-xs">No market data available</div>;
-              }
-              return validAssets.slice(0, 8).map((asset, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 sm:p-3 bg-card border border-border rounded-lg">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                      ['BTC','ETH','SOL','MATIC'].includes(asset.symbol) ? 'bg-[#1F7D53]' : 'bg-foreground'
-                    }`} />
-                    <span className="font-medium text-xs sm:text-sm text-foreground">{asset.symbol}</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-xs sm:text-sm text-foreground">${asset.price.toFixed(2)}</p>
-                    <p className={cn(
-                      "text-[10px] sm:text-xs",
-                      asset.change24hPercent >= 0 ? "text-[#1F7D53]" : "text-red-500"
-                    )}>
-                      {asset.change24hPercent >= 0 ? '+' : ''}{asset.change24hPercent.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-              ));
-            })()
-          )}
+            <div className="relative w-12 h-12">
+              <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 40 40">
+                <circle cx="20" cy="20" r="16" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                <circle cx="20" cy="20" r="16" fill="none" stroke="#1F7D53" strokeWidth="3" strokeDasharray="81" strokeDashoffset="19" strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-[#1F7D53]" />
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Streak Badge */}
+        <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-foreground">Current Streak</p>
+              <div className="flex items-center gap-1">
+                <span className="text-lg font-bold text-amber-600">7</span>
+                <span className="text-xs text-amber-600">days</span>
+              </div>
+            </div>
+            <Zap className="h-5 w-5 text-amber-500" />
+          </div>
+        </div>
+        {/* Personal Best */}
+        <div className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border border-purple-500/20 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-foreground">Personal Best</p>
+              <div className="flex items-center gap-1">
+                <span className="text-lg font-bold text-purple-600">14</span>
+                <span className="text-xs text-purple-600">days</span>
+              </div>
+            </div>
+            <Star className="h-5 w-5 text-purple-500" />
+          </div>
+        </div>
+        {/* Recent Insights */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">Recent AI Insights</p>
+          <div className="space-y-1">
+            <div className="text-[10px] text-muted-foreground flex items-start gap-1">
+              <div className="w-1 h-1 rounded-full bg-[#1F7D53] mt-1.5 flex-shrink-0" />
+              <span>"BTC shows bullish momentum"</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground flex items-start gap-1">
+              <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+              <span>"ETH staking yields up</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground flex items-start gap-1">
+              <div className="w-1 h-1 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
+              <span>"SOL ecosystem sees record growth"</span>
+            </div>
+          </div>
+        </div>
+        {/* Achievements */}
+        <div className="mt-3">
+          <p className="text-xs font-medium text-foreground mb-2">Recent Achievements</p>
+          <div className="flex flex-wrap gap-1">
+            <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/20">First Chat</Badge>
+            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/20">5 Days</Badge>
+            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-500/20">Insight Seeker</Badge>
+          </div>
         </div>
       </div>
-
+      
       {/* Resources */}
       <div className="p-3 sm:p-4 border-t border-border">
         <div className="space-y-2">
@@ -529,415 +536,381 @@ How can I help you today?`,
     </>
   );
 
+  const handleTabChange = useCallback((newMode: 'investment' | 'chat' | 'analysis' | 'insights') => {
+    console.log('[AIDashboard] Switching to:', newMode);
+    setActiveMode(newMode);
+    if (showMobileSidebar) {
+      setShowMobileSidebar(false);
+    }
+    if (newMode === 'chat' && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [showMobileSidebar]);
+
   return (
-    <div className="h-screen max-h-screen overflow-hidden bg-background flex flex-col" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
-      {/* Top Header - Fixed */}
-      <div className="flex-shrink-0 border-b bg-background border-border z-10">
-        <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Mobile Sidebar Toggle */}
-              <Sheet open={showMobileSidebar} onOpenChange={setShowMobileSidebar}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="lg:hidden h-8 w-8 p-0 text-foreground"
-                  >
-                    <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 bg-background border-border">
-                  <SheetHeader className="sr-only">
-                    <SheetTitle>Navigation Menu</SheetTitle>
-                  </SheetHeader>
-                  <SidebarContent />
-                </SheetContent>
-              </Sheet>
-              
-              <div className="flex items-center gap-2">
-                <HeightsLogo size="md" className="sm:hidden text-[#1F7D53]" />
-                <HeightsLogo size="lg" className="hidden sm:block text-[#1F7D53]" />
-                <div>
-                  <h1 className="text-base sm:text-xl font-bold text-foreground">Heights AI</h1>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/60">Powered by Heights +</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Status Indicators */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="hidden sm:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 bg-[#1F7D53]/20 text-[#1F7D53] rounded-full text-xs sm:text-sm">
-                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#1F7D53] rounded-full animate-pulse" />
-                Live
-              </div>
-              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-background border-[#1F7D53]/30 text-[#1F7D53]">Heights</Badge>
-              <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-background border-[#1F7D53]/30 text-[#1F7D53]">+</Badge>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex w-[320px] xl:w-[360px] border-r bg-background border-border flex-col">
-          <SidebarContent />
-        </div>
-
-        {/* Main Chat Area */}
-        <div className="flex-1 min-w-0 flex flex-col bg-background">
-          {/* Mode Tabs - Fixed */}
-          <div className="flex-shrink-0 border-b z-10 border-border">
-            <div className="w-full">
-              <div className="flex h-10 sm:h-12 border-b-0">
-                <button
-                  onClick={() => setActiveMode('chat')}
-                  className={cn(
-                    "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all",
-                    activeMode === 'chat' && "bg-[#1F7D53] text-background"
-                  )}
-                >
-                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-                  Chat
-                </button>
-                <button
-                  onClick={() => setActiveMode('analysis')}
-                  className={cn(
-                    "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all",
-                    activeMode === 'analysis' && "bg-[#1F7D53] text-background"
-                  )}
-                >
-                  <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Analysis</span>
-                  <span className="sm:hidden">Data</span>
-                </button>
-                <button
-                  onClick={() => setActiveMode('insights')}
-                  className={cn(
-                    "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all",
-                    activeMode === 'insights' && "bg-[#1F7D53] text-background"
-                  )}
-                >
-                  <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Insights</span>
-                  <span className="sm:hidden">Tips</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Tab Content - Scrollable */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {activeMode === 'chat' && (
-              <div className="h-full flex flex-col">
-                {/* Messages Area - Flexible height with proper scrolling */}
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <div 
-                    ref={messagesContainerRef}
-                    className="h-full overflow-y-auto overscroll-behavior-contain bg-background"
-                    style={{ 
-                      WebkitOverflowScrolling: 'touch',
-                      scrollBehavior: 'smooth'
-                    }}
-                  >
-                    <div className="min-h-full flex flex-col justify-end">
-                      <div className="w-full max-w-4xl mx-auto py-4 sm:py-6">
-                        {messages.length === 1 && (
-                          <div className="text-center py-6 sm:py-12 px-4">
-                            <Brain className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-[#1F7D53]" />
-                            <h3 className="text-base sm:text-lg font-semibold mb-2 text-foreground">Start a conversation</h3>
-                            <p className="text-xs sm:text-sm text-muted-foreground/60 mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
-                            
-                            {/* Suggested Prompts */}
-                            <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
-                              {SUGGESTED_PROMPTS.map((prompt, idx) => (
-                                <Button
-                                  key={idx}
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => sendMessage(prompt)}
-                                  className="text-[10px] sm:text-xs h-7 sm:h-8 border-border text-foreground hover:text-foreground hover:border-[#1F7D53]/50"
-                                >
-                                  {prompt}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        <AnimatePresence>
-                          {messages.map(renderMessage)}
-                        </AnimatePresence>
-
-                        {isLoading && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex justify-start mb-4 sm:mb-6 px-2 sm:px-0"
-                          >
-                            <div className="w-full max-w-[85%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3">
-                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
-                                <HeightsLogo size="sm" className="text-foreground" animate={false} />
-                              </div>
-                              <div className="bg-background border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-3 sm:py-4">
-                                <div className="flex items-center gap-2">
-                                  <Loader2 className="h-4 w-4 animate-spin text-[#1F7D53]" />
-                                  <span className="text-sm text-muted-foreground">Analyzing...</span>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                        
-                        <div ref={messagesEndRef} className="h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Input Area - Fixed at bottom */}
-                <div className="flex-shrink-0 border-t bg-background border-border p-3 sm:p-4">
-                  <div className="w-full max-w-4xl mx-auto">
-                    {/* Quick Actions Bar - Horizontal scroll on mobile */}
-                    <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 sm:pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-hide">
-                      {QUICK_ACTIONS.slice(0, 4).map((action) => (
-                        <Button
-                          key={action.id}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => sendMessage(action.prompt)}
-                          disabled={isLoading}
-                          className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0 border-border text-foreground hover:text-foreground hover:border-[#1F7D53]/50"
-                        >
-                          <action.icon className={cn("h-3 w-3 mr-1", action.color)} />
-                          {action.label}
-                        </Button>
-                      ))}
-                    </div>
-
-                    {/* Input Field */}
-                    <div className="flex gap-2">
-                      <div className="flex-1 relative">
-                        <Textarea
-                          ref={inputRef}
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="Ask about any stock, crypto, or investment strategy..."
-                          className="min-h-[50px] sm:min-h-[60px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-sm leading-normal bg-background border-border text-foreground placeholder-foreground/50"
-                          disabled={isLoading}
-                          rows={2}
-                        />
-                        <div className="absolute bottom-2 right-2 flex items-center gap-0.5 sm:gap-1">
-                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-foreground/50 hover:text-foreground" disabled>
-                            <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-foreground/50 hover:text-foreground" disabled>
-                            <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => sendMessage(input)}
-                        disabled={isLoading || !input.trim()}
-                        size="lg"
-                        className="h-[50px] sm:h-[60px] px-4 sm:px-6 bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53] flex-shrink-0"
-                      >
-                        {isLoading ? (
-                          <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                        ) : (
-                          <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-                        )}
-                      </Button>
-                    </div>
-
-                    <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1.5 sm:mt-2 text-center">
-                      Press Enter to send • Shift+Enter for new line • Powered by Heights +
-                    </p>
+    <ErrorBoundary>
+      <div className="h-screen max-h-screen overflow-hidden bg-background flex flex-col" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+        {/* Top Header - Fixed */}
+        <div className="flex-shrink-0 border-b bg-background border-border z-10">
+          <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Mobile Sidebar Toggle */}
+                <Sheet open={showMobileSidebar} onOpenChange={setShowMobileSidebar}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="lg:hidden h-8 w-8 p-0 text-foreground"
+                    >
+                      <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 bg-background border-border">
+                    <SheetHeader className="sr-only">
+                      <SheetTitle>Navigation Menu</SheetTitle>
+                    </SheetHeader>
+                    <SidebarContent />
+                  </SheetContent>
+                </Sheet>
+                
+                <div className="flex items-center gap-2">
+                  <HeightsLogo size="md" className="sm:hidden text-[#1F7D53]" />
+                  <HeightsLogo size="lg" className="hidden sm:block text-[#1F7D53]" />
+                  <div>
+                    <h1 className="text-base sm:text-xl font-bold text-foreground">Heights AI</h1>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/60">Powered by Heights +</p>
                   </div>
                 </div>
               </div>
-            )}
-            
-            {activeMode === 'analysis' && (
-              <div className="h-full overflow-auto bg-background">
-                <div className="p-4 sm:p-6 lg:p-8">
-                  <div className="max-w-6xl mx-auto">
-                    <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-[#1F7D53]" />
-                      Market Analysis Dashboard
-                    </h2>
-                    {/* Performance Metrics Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                      <Card className="bg-background border-border">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Total Analyses Today</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-foreground">{metrics.totalAnalyses}</div>
-                          <p className="text-xs text-[#1F7D53] flex items-center gap-1 mt-1">
-                            <TrendingUp className="h-3 w-3" />
-                            +12% from yesterday
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-background border-border">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Avg Confidence Score</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-foreground">{metrics.averageConfidence.toFixed(1)}%</div>
-                          <Progress value={metrics.averageConfidence} className="mt-2 h-1" />
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-background border-border">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Success Rate</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-foreground">{metrics.successRate.toFixed(1)}%</div>
-                          <Badge variant="outline" className="mt-1 text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
-                            High Accuracy
-                          </Badge>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-background border-border">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-xs sm:text-sm text-foreground/70">Response Time</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                          <div className="text-2xl font-bold text-foreground">{metrics.responseTime || '1.2'}s</div>
-                          <p className="text-xs text-muted-foreground/50 mt-1">Avg processing time</p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                    {/* Asset Performance Analysis */}
-                    <Card className="bg-background border-border mb-6">
-                      <CardHeader className="p-6">
-                        <CardTitle className="text-base sm:text-lg text-foreground flex items-center justify-between">
-                          <span>Asset Performance Analysis</span>
-                          <Button variant="outline" size="sm" className="text-xs border-border text-foreground hover:text-foreground">
-                            <RefreshCw className="h-3 w-3 mr-1" />
-                            Refresh
-                          </Button>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-6 pt-0">
-                        <div className="space-y-4">
-                          {Array.from(marketDataMap.values()).slice(0, 5).map((asset, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:border-[#1F7D53]/50 transition-all">
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-full bg-[#1F7D53]/20 flex items-center justify-center">
-                                  <span className="text-sm font-bold text-[#1F7D53]">{asset.symbol.slice(0, 2)}</span>
+
+              {/* Status Indicators */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="hidden sm:flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 bg-[#1F7D53]/20 text-[#1F7D53] rounded-full text-xs sm:text-sm">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#1F7D53] rounded-full animate-pulse" />
+                  Live
+                </div>
+                <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-background border-[#1F7D53]/30 text-[#1F7D53]">Heights</Badge>
+                <Badge variant="secondary" className="hidden md:flex text-[10px] sm:text-xs bg-background border-[#1F7D53]/30 text-[#1F7D53]">+</Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 min-h-0 flex overflow-hidden">
+          {/* Desktop Sidebar */}
+          <div className="hidden lg:flex w-[320px] xl:w-[360px] border-r bg-background border-border flex-col">
+            <SidebarContent />
+          </div>
+
+          {/* Main Chat Area */}
+          <div className="flex-1 min-w-0 flex flex-col bg-background">
+            {/* Mode Tabs - Fixed */}
+            <div className="flex-shrink-0 border-b z-10 border-border">
+              <div className="w-full">
+                <div className="flex h-10 sm:h-12 border-b-0">
+                  <button
+                    onClick={() => handleTabChange('chat')}
+                    className={cn(
+                      "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all hover:bg-[#1F7D53]/10",
+                      activeMode === 'chat' && "bg-[#1F7D53] text-white"
+                    )}
+                  >
+                    <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
+                    Chat
+                  </button>
+                  <button
+                    onClick={() => handleTabChange('analysis')}
+                    className={cn(
+                      "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all hover:bg-[#1F7D53]/10",
+                      activeMode === 'analysis' && "bg-[#1F7D53] text-white"
+                    )}
+                  >
+                    <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Analysis</span>
+                    <span className="sm:hidden">Data</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabChange('insights')}
+                    className={cn(
+                      "flex-1 rounded-t-lg text-xs sm:text-sm text-foreground flex items-center justify-center gap-1 sm:gap-2 transition-all hover:bg-[#1F7D53]/10",
+                      activeMode === 'insights' && "bg-[#1F7D53] text-white"
+                    )}
+                  >
+                    <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Insights</span>
+                    <span className="sm:hidden">Tips</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tab Content - Scrollable */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {activeMode === 'chat' && (
+                <div className="h-full flex flex-col">
+                  {/* Messages Area - Flexible height with proper scrolling */}
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <div 
+                      ref={messagesContainerRef}
+                      className="h-full overflow-y-auto overscroll-behavior-contain bg-background"
+                      style={{ 
+                        WebkitOverflowScrolling: 'touch',
+                        scrollBehavior: 'smooth'
+                      }}
+                    >
+                      <div className="min-h-full flex flex-col justify-end">
+                        <div className="w-full max-w-4xl mx-auto py-4 sm:py-6">
+                          {messages.length === 1 && (
+                            <div className="text-center py-6 sm:py-12 px-4">
+                              <Brain className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-[#1F7D53]" />
+                              <h3 className="text-base sm:text-lg font-semibold mb-2 text-foreground">Start a conversation</h3>
+                              <p className="text-xs sm:text-sm text-muted-foreground/60 mb-4 sm:mb-6">Ask me anything about investments, markets, or trading</p>
+                              
+                              {/* Suggested Prompts */}
+                              <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
+                                {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                                  <Button
+                                    key={idx}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => sendMessage(prompt)}
+                                    className="text-[10px] sm:text-xs h-7 sm:h-8 border-border text-foreground hover:text-foreground hover:border-[#1F7D53]/50"
+                                  >
+                                    {prompt}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <AnimatePresence>
+                            {messages.map(renderMessage)}
+                          </AnimatePresence>
+
+                          {isLoading && (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="flex justify-start mb-4 sm:mb-6 px-2 sm:px-0"
+                            >
+                              <div className="w-full max-w-[85%] sm:max-w-[80%] flex items-start gap-2 sm:gap-3">
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#255F38] to-[#1F7D53] flex items-center justify-center">
+                                  <HeightsLogo size="sm" className="text-foreground" animate={false} />
                                 </div>
-                                <div>
-                                  <p className="font-medium text-foreground">{asset.symbol}</p>
-                                  <p className="text-xs text-muted-foreground">{asset.source}</p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-medium text-foreground">${asset.price.toFixed(2)}</p>
-                                <p className={cn(
-                                  "text-xs flex items-center justify-end gap-1",
-                                  asset.change24hPercent >= 0 ? "text-[#1F7D53]" : "text-red-500"
-                                )}>
-                                  {asset.change24hPercent >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                                  {asset.change24hPercent >= 0 ? '+' : ''}{asset.change24hPercent.toFixed(2)}%
-                                </p>
-                              </div>
-                              <div className="hidden sm:block">
-                                <Badge variant="outline" className={cn(
-                                  "text-xs",
-                                  asset.change24hPercent >= 0 
-                                    ? "bg-[#1F7D53]/10 text-[#1F7D53] border-[#1F7D53]/30"
-                                    : "bg-red-500/10 text-red-500 border-red-500/30"
-                                )}>
-                                  {asset.change24hPercent >= 0 ? 'Bullish' : 'Bearish'}
-                                </Badge>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                    {/* AI Model Performance */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <Card className="bg-background border-border">
-                        <CardHeader className="p-6">
-                          <CardTitle className="text-base text-foreground">AI Model Performance</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 pt-0">
-                          <div className="space-y-4">
-                            <div>
-                              <div className="flex justify-between mb-1">
-                                <span className="text-sm text-foreground/70">Claude 3.5 Sonnet</span>
-                                <span className="text-sm text-foreground">98.2%</span>
-                              </div>
-                              <Progress value={98.2} className="h-2" />
-                            </div>
-                            <div>
-                              <div className="flex justify-between mb-1">
-                                <span className="text-sm text-foreground/70">Perplexity Integration</span>
-                                <span className="text-sm text-foreground">94.7%</span>
-                              </div>
-                              <Progress value={94.7} className="h-2" />
-                            </div>
-                            <div>
-                              <div className="flex justify-between mb-1">
-                                <span className="text-sm text-foreground/70">Market Data Accuracy</span>
-                                <span className="text-sm text-foreground">99.1%</span>
-                              </div>
-                              <Progress value={99.1} className="h-2" />
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-background border-border">
-                        <CardHeader className="p-6">
-                          <CardTitle className="text-base text-foreground">Query Categories</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 pt-0">
-                          <div className="space-y-3">
-                            {[
-                              { category: 'Crypto Analysis', count: 342, percentage: 45 },
-                              { category: 'Stock Predictions', count: 198, percentage: 26 },
-                              { category: 'Portfolio Review', count: 156, percentage: 20 },
-                              { category: 'Market News', count: 68, percentage: 9 }
-                            ].map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-[#1F7D53]" />
-                                  <span className="text-sm text-foreground/70">{item.category}</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-foreground">{item.count}</span>
-                                  <div className="w-20 bg-card rounded-full h-2">
-                                    <div 
-                                      className="h-2 bg-[#1F7D53] rounded-full"
-                                      style={{ width: `${item.percentage}%` }}
-                                    />
+                                <div className="bg-background border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-3 sm:py-4">
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin text-[#1F7D53]" />
+                                    <span className="text-sm text-muted-foreground">Analyzing...</span>
                                   </div>
                                 </div>
                               </div>
-                            ))}
+                            </motion.div>
+                          )}
+                          
+                          <div ref={messagesEndRef} className="h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Input Area - Fixed at bottom */}
+                  <div className="flex-shrink-0 border-t bg-background border-border p-3 sm:p-4">
+                    <div className="w-full max-w-4xl mx-auto">
+                      {/* Quick Actions Bar - Horizontal scroll on mobile */}
+                      <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 sm:pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-hide">
+                        {QUICK_ACTIONS.slice(0, 4).map((action) => (
+                          <Button
+                            key={action.id}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => sendMessage(action.prompt)}
+                            disabled={isLoading}
+                            className="whitespace-nowrap text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 flex-shrink-0 border-border text-foreground hover:text-foreground hover:border-[#1F7D53]/50"
+                          >
+                            <action.icon className={cn("h-3 w-3 mr-1", action.color)} />
+                            {action.label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {/* Input Field */}
+                      <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                          <Textarea
+                            ref={inputRef}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Ask about any stock, crypto, or investment strategy..."
+                            className="min-h-[50px] sm:min-h-[60px] max-h-[120px] sm:max-h-[200px] resize-none pr-10 sm:pr-12 text-sm leading-normal bg-background border-border text-foreground placeholder-foreground/50"
+                            disabled={isLoading}
+                            rows={2}
+                          />
+                          <div className="absolute bottom-2 right-2 flex items-center gap-0.5 sm:gap-1">
+                            <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-foreground/50 hover:text-foreground" disabled>
+                              <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 sm:h-8 sm:w-8 p-0 text-foreground/50 hover:text-foreground" disabled>
+                              <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                        <Button
+                          onClick={() => sendMessage(input)}
+                          disabled={isLoading || !input.trim()}
+                          size="lg"
+                          className="h-[50px] sm:h-[60px] px-4 sm:px-6 bg-gradient-to-r from-[#27391C] to-[#1F7D53] hover:from-[#255F38] hover:to-[#1F7D53] flex-shrink-0"
+                        >
+                          {isLoading ? (
+                            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+                          )}
+                        </Button>
+                      </div>
+
+                      <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1.5 sm:mt-2 text-center">
+                        Press Enter to send • Shift+Enter for new line • Powered by Heights +
+                      </p>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-            
-            {activeMode === 'insights' && (
-              <div className="h-full overflow-auto bg-background p-4 sm:p-6 lg:p-8">
-                <NewsInsights />
-              </div>
-            )}
+              )}
+              
+              {activeMode === 'analysis' && (
+                <div className="h-full overflow-auto bg-background">
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    <div className="max-w-6xl mx-auto">
+                      <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-[#1F7D53]" />
+                        Market Analysis Dashboard
+                      </h2>
+                      {/* Performance Metrics Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <Card className="bg-background border-border">
+                          <CardHeader className="p-4">
+                            <CardTitle className="text-xs sm:text-sm text-foreground/70">Total Analyses Today</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0">
+                            <div className="text-2xl font-bold text-foreground">{metrics.totalAnalyses}</div>
+                            <p className="text-xs text-[#1F7D53] flex items-center gap-1 mt-1">
+                              <TrendingUp className="h-3 w-3" />
+                              +12% from yesterday
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-background border-border">
+                          <CardHeader className="p-4">
+                            <CardTitle className="text-xs sm:text-sm text-foreground/70">Avg Confidence Score</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0">
+                            <div className="text-2xl font-bold text-foreground">{metrics.averageConfidence.toFixed(1)}%</div>
+                            <Progress value={metrics.averageConfidence} className="mt-2 h-1" />
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-background border-border">
+                          <CardHeader className="p-4">
+                            <CardTitle className="text-xs sm:text-sm text-foreground/70">Success Rate</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0">
+                            <div className="text-2xl font-bold text-foreground">{metrics.successRate.toFixed(1)}%</div>
+                            <Badge variant="outline" className="mt-1 text-xs bg-[#1F7D53]/20 text-[#1F7D53] border-[#1F7D53]/30">
+                              High Accuracy
+                            </Badge>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-background border-border">
+                          <CardHeader className="p-4">
+                            <CardTitle className="text-xs sm:text-sm text-foreground/70">Response Time</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0">
+                            <div className="text-2xl font-bold text-foreground">{metrics.responseTime || '1.2'}s</div>
+                            <p className="text-xs text-muted-foreground/50 mt-1">Avg processing time</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      {/* AI Model Performance */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card className="bg-background border-border">
+                          <CardHeader className="p-6">
+                            <CardTitle className="text-base text-foreground">AI Model Performance</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-6 pt-0">
+                            <div className="space-y-4">
+                              <div>
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-sm text-foreground/70">Claude 3.5 Sonnet</span>
+                                  <span className="text-sm text-foreground">98.2%</span>
+                                </div>
+                                <Progress value={98.2} className="h-2" />
+                              </div>
+                              <div>
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-sm text-foreground/70">Perplexity Integration</span>
+                                  <span className="text-sm text-foreground">94.7%</span>
+                                </div>
+                                <Progress value={94.7} className="h-2" />
+                              </div>
+                              <div>
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-sm text-foreground/70">Market Data Accuracy</span>
+                                  <span className="text-sm text-foreground">99.1%</span>
+                                </div>
+                                <Progress value={99.1} className="h-2" />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-background border-border">
+                          <CardHeader className="p-6">
+                            <CardTitle className="text-base text-foreground">Query Categories</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-6 pt-0">
+                            <div className="space-y-3">
+                              {[
+                                { category: 'Crypto Analysis', count: 342, percentage: 45 },
+                                { category: 'Stock Predictions', count: 198, percentage: 26 },
+                                { category: 'Portfolio Review', count: 156, percentage: 20 },
+                                { category: 'Market News', count: 68, percentage: 9 }
+                              ].map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-[#1F7D53]" />
+                                    <span className="text-sm text-foreground/70">{item.category}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm text-foreground">{item.count}</span>
+                                    <div className="w-20 bg-card rounded-full h-2">
+                                      <div 
+                                        className="h-2 bg-[#1F7D53] rounded-full"
+                                        style={{ width: `${item.percentage}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeMode === 'insights' && (
+                <div className="h-full overflow-auto bg-background p-4 sm:p-6 lg:p-8">
+                  <NewsInsights />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
