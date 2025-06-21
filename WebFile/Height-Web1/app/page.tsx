@@ -844,10 +844,10 @@ export default function EnhancedHome() {
             transition={{ duration: 0.8, delay: 1.1 }}
           >
             {[
-              { value: 25, suffix: "+", label: "Active Traders", icon: Users },
-              { value: 50, suffix: "B+", label: "Daily Volume", prefix: "$", icon: DollarSign },
-              { value: 150, suffix: "+", label: "Trading Pairs", icon: BarChart3 },
-              { value: 99.9, suffix: "%", label: "Uptime", decimals: 1, icon: Target }
+              { value: 25, prefix: "", suffix: "+", label: "Active Traders", icon: Users },
+              { value: 87, prefix: "", suffix: "%", label: "AI Accuracy", icon: Brain },
+              { value: 150, prefix: "", suffix: "+", label: "Trading Pairs", icon: BarChart3 },
+              { value: 99.9, prefix: "", suffix: "%", label: "Uptime", decimals: 1, icon: Target }
             ].map((stat, index) => (
               <div key={index} className="text-center">
                 <div className="bg-gradient-to-br from-background border border-border rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300">
