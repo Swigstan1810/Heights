@@ -161,83 +161,151 @@ function AnimatedCounter({
   );
 }
 
-// Enhanced Market Metrics Component - Replace LiveMarketStats
-const EnhancedMarketMetrics = () => {
-  const [marketMetrics, setMarketMetrics] = useState({
-    totalMarketCap: 2340000000000, // $2.34T
-    dailyVolume: 89500000000, // $89.5B
-    btcDominance: 42.8,
-    fearGreedIndex: 72,
-    defiTvl: 87200000000, // $87.2B
-    activeTradingPairs: 15847,
-    topGainers: [
-      { symbol: 'SOL', change: 12.4, price: 189.34 },
-      { symbol: 'AVAX', change: 8.7, price: 42.18 },
-      { symbol: 'MATIC', change: 6.2, price: 0.87 },
+// Investment Strategies & Insights Component
+const InvestmentStrategiesInsights = () => {
+  const [strategiesData, setStrategiesData] = useState({
+    popularStrategies: [
+      {
+        name: 'Dollar Cost Averaging',
+        description: 'Invest fixed amounts regularly to reduce timing risk',
+        icon: 'Calendar',
+        popularity: 'High',
+        riskLevel: 'Low',
+        timeHorizon: 'Long-term',
+        benefits: ['Reduces market timing risk', 'Builds discipline', 'Smooths volatility']
+      },
+      {
+        name: 'Value Investing',
+        description: 'Buy undervalued assets and hold for long-term growth',
+        icon: 'TrendingUp',
+        popularity: 'High',
+        riskLevel: 'Medium',
+        timeHorizon: 'Long-term',
+        benefits: ['Strong historical returns', 'Lower downside risk', 'Dividend income']
+      },
+      {
+        name: 'Growth Investing',
+        description: 'Focus on companies with high growth potential',
+        icon: 'Rocket',
+        popularity: 'Medium',
+        riskLevel: 'High',
+        timeHorizon: 'Medium-term',
+        benefits: ['High return potential', 'Innovation exposure', 'Compound growth']
+      },
+      {
+        name: 'Index Fund Investing',
+        description: 'Diversify across entire market indices',
+        icon: 'BarChart3',
+        popularity: 'Very High',
+        riskLevel: 'Low',
+        timeHorizon: 'Long-term',
+        benefits: ['Instant diversification', 'Low fees', 'Market returns']
+      }
     ],
-    topLosers: [
-      { symbol: 'ADA', change: -3.2, price: 0.52 },
-      { symbol: 'DOT', change: -2.8, price: 7.24 },
-      { symbol: 'LINK', change: -1.9, price: 18.45 },
+    investmentThemes: [
+      {
+        theme: 'ESG & Sustainable Investing',
+        description: 'Environmental, Social, and Governance focused investments',
+        trending: true,
+        sectors: ['Clean Energy', 'Social Impact', 'Corporate Governance']
+      },
+      {
+        theme: 'Technology Innovation',
+        description: 'AI, blockchain, and emerging tech investments',
+        trending: true,
+        sectors: ['Artificial Intelligence', 'Cybersecurity', 'Cloud Computing']
+      },
+      {
+        theme: 'Healthcare & Biotech',
+        description: 'Medical innovation and healthcare solutions',
+        trending: false,
+        sectors: ['Pharmaceuticals', 'Medical Devices', 'Digital Health']
+      },
+      {
+        theme: 'Infrastructure & Real Assets',
+        description: 'Physical and digital infrastructure investments',
+        trending: false,
+        sectors: ['Transportation', 'Utilities', 'Real Estate']
+      }
+    ],
+    riskProfiles: [
+      {
+        type: 'Conservative',
+        description: 'Capital preservation with modest growth',
+        allocation: 'Bonds 60% | Stocks 30% | Cash 10%',
+        color: 'blue'
+      },
+      {
+        type: 'Moderate',
+        description: 'Balanced growth with managed risk',
+        allocation: 'Stocks 60% | Bonds 30% | Alternatives 10%',
+        color: 'green'
+      },
+      {
+        type: 'Aggressive',
+        description: 'Maximum growth potential with higher risk',
+        allocation: 'Stocks 80% | Alternatives 15% | Bonds 5%',
+        color: 'orange'
+      },
+      {
+        type: 'Speculative',
+        description: 'High-risk, high-reward opportunities',
+        allocation: 'Growth Stocks 50% | Crypto 30% | Options 20%',
+        color: 'purple'
+      }
     ]
   });
 
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Simulate real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMarketMetrics(prev => ({
-        ...prev,
-        totalMarketCap: prev.totalMarketCap + (Math.random() - 0.5) * 10000000000,
-        dailyVolume: prev.dailyVolume + (Math.random() - 0.5) * 1000000000,
-        btcDominance: prev.btcDominance + (Math.random() - 0.5) * 0.5,
-        fearGreedIndex: Math.max(0, Math.min(100, prev.fearGreedIndex + (Math.random() - 0.5) * 3)),
-        topGainers: prev.topGainers.map(coin => ({
-          ...coin,
-          change: coin.change + (Math.random() - 0.5) * 0.5,
-          price: coin.price + (Math.random() - 0.5) * coin.price * 0.01
-        }))
-      }));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const formatNumber = (num: number, prefix = '', suffix = '') => {
-    if (num >= 1e12) return `${prefix}${(num / 1e12).toFixed(2)}T${suffix}`;
-    if (num >= 1e9) return `${prefix}${(num / 1e9).toFixed(2)}B${suffix}`;
-    if (num >= 1e6) return `${prefix}${(num / 1e6).toFixed(2)}M${suffix}`;
-    if (num >= 1e3) return `${prefix}${(num / 1e3).toFixed(2)}K${suffix}`;
-    return `${prefix}${num.toFixed(2)}${suffix}`;
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case 'Low': return 'text-green-500 bg-green-500/10 border-green-500/30';
+      case 'Medium': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30';
+      case 'High': return 'text-red-500 bg-red-500/10 border-red-500/30';
+      default: return 'text-blue-500 bg-blue-500/10 border-blue-500/30';
+    }
   };
 
-  const getFearGreedColor = (index: number) => {
-    if (index >= 75) return 'text-green-500 border-green-500/30 bg-green-500/10';
-    if (index >= 55) return 'text-yellow-500 border-yellow-500/30 bg-yellow-500/10';
-    if (index >= 25) return 'text-orange-500 border-orange-500/30 bg-orange-500/10';
-    return 'text-red-500 border-red-500/30 bg-red-500/10';
+  const getPopularityColor = (popularity: string) => {
+    switch (popularity) {
+      case 'Very High': return 'text-purple-500 bg-purple-500/10 border-purple-500/30';
+      case 'High': return 'text-green-500 bg-green-500/10 border-green-500/30';
+      case 'Medium': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30';
+      default: return 'text-blue-500 bg-blue-500/10 border-blue-500/30';
+    }
   };
 
-  const getFearGreedLabel = (index: number) => {
-    if (index >= 75) return 'Extreme Greed';
-    if (index >= 55) return 'Greed';
-    if (index >= 45) return 'Neutral';
-    if (index >= 25) return 'Fear';
-    return 'Extreme Fear';
+  const getIconComponent = (iconName: string) => {
+    const iconMap: { [key: string]: any } = {
+      'Calendar': Calendar,
+      'TrendingUp': TrendingUp,
+      'Rocket': Rocket,
+      'BarChart3': BarChart3
+    };
+    const IconComponent = iconMap[iconName] || Target;
+    return <IconComponent className="h-5 w-5" />;
+  };
+
+  const getProfileColor = (color: string) => {
+    const colorMap = {
+      blue: 'from-blue-500/10 to-cyan-500/10 border-blue-500/20 text-blue-500',
+      green: 'from-green-500/10 to-emerald-500/10 border-green-500/20 text-green-500',
+      orange: 'from-orange-500/10 to-red-500/10 border-orange-500/20 text-orange-500',
+      purple: 'from-purple-500/10 to-pink-500/10 border-purple-500/20 text-purple-500'
+    };
+    return colorMap[color as keyof typeof colorMap] || colorMap.blue;
   };
 
   return (
     <div className="space-y-6">
-      {/* Header with Status */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">
-            <Zap className="h-3 w-3 mr-1 animate-pulse" />
-            Live Markets
+          <Badge variant="outline" className="text-purple-500 border-purple-500/30 bg-purple-500/10">
+            <Brain className="h-3 w-3 mr-1" />
+            Investment Intelligence
           </Badge>
           <span className="text-sm text-muted-foreground">
-            Global crypto market overview
+            Strategies, themes & insights
           </span>
         </div>
         <span className="text-xs text-muted-foreground">
@@ -245,237 +313,240 @@ const EnhancedMarketMetrics = () => {
         </span>
       </div>
 
-      {/* Main Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Market Cap */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-6 relative overflow-hidden group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 opacity-50" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <Globe className="h-5 w-5 text-blue-500" />
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            </div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-1">Total Market Cap</h3>
-            <p className="text-2xl font-bold text-blue-500">
-              {formatNumber(marketMetrics.totalMarketCap, '$')}
-            </p>
-            <p className="text-xs text-green-500 mt-1">+2.4% (24h)</p>
-          </div>
-        </motion.div>
-
-        {/* Daily Volume */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-6 relative overflow-hidden group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-500/5 opacity-50" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <BarChart3 className="h-5 w-5 text-green-500" />
-              <Activity className="h-4 w-4 text-green-500 animate-pulse" />
-            </div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-1">24h Volume</h3>
-            <p className="text-2xl font-bold text-green-500">
-              {formatNumber(marketMetrics.dailyVolume, '$')}
-            </p>
-            <p className="text-xs text-green-500 mt-1">+15.7% vs avg</p>
-          </div>
-        </motion.div>
-
-        {/* BTC Dominance */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border border-orange-500/20 rounded-lg p-6 relative overflow-hidden group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-yellow-500/5 opacity-50" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <Bitcoin className="h-5 w-5 text-orange-500" />
-              <Crown className="h-4 w-4 text-orange-500" />
-            </div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-1">BTC Dominance</h3>
-            <p className="text-2xl font-bold text-orange-500">
-              {marketMetrics.btcDominance.toFixed(1)}%
-            </p>
-            <div className="w-full bg-muted/30 rounded-full h-1 mt-2">
-              <div 
-                className="bg-orange-500 h-1 rounded-full transition-all duration-1000"
-                style={{ width: `${marketMetrics.btcDominance}%` }}
-              />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Fear & Greed Index */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className={`bg-gradient-to-br border rounded-lg p-6 relative overflow-hidden group ${
-            marketMetrics.fearGreedIndex >= 75 
-              ? 'from-green-500/10 to-emerald-500/10 border-green-500/20'
-              : marketMetrics.fearGreedIndex >= 55
-              ? 'from-yellow-500/10 to-orange-500/10 border-yellow-500/20'
-              : 'from-red-500/10 to-rose-500/10 border-red-500/20'
-          }`}
-        >
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <Brain className="h-5 w-5 text-purple-500" />
-              <Badge variant="outline" className={getFearGreedColor(marketMetrics.fearGreedIndex)}>
-                {getFearGreedLabel(marketMetrics.fearGreedIndex)}
-              </Badge>
-            </div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-1">Fear & Greed</h3>
-            <p className="text-2xl font-bold">
-              {marketMetrics.fearGreedIndex.toFixed(0)}
-            </p>
-            <div className="w-full bg-muted/30 rounded-full h-2 mt-2">
-              <div 
-                className={`h-2 rounded-full transition-all duration-1000 ${
-                  marketMetrics.fearGreedIndex >= 75 ? 'bg-green-500' :
-                  marketMetrics.fearGreedIndex >= 55 ? 'bg-yellow-500' : 'bg-red-500'
-                }`}
-                style={{ width: `${marketMetrics.fearGreedIndex}%` }}
-              />
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Additional Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* DeFi TVL */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500/20 rounded-lg">
-              <Shield className="h-4 w-4 text-purple-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">DeFi TVL</p>
-              <p className="text-lg font-bold text-purple-500">
-                {formatNumber(marketMetrics.defiTvl, '$')}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Active Pairs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="bg-gradient-to-br from-indigo-500/10 to-blue-500/10 border border-indigo-500/20 rounded-lg p-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-500/20 rounded-lg">
-              <Network className="h-4 w-4 text-indigo-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Active Pairs</p>
-              <p className="text-lg font-bold text-indigo-500">
-                {marketMetrics.activeTradingPairs.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Market Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border border-teal-500/20 rounded-lg p-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-teal-500/20 rounded-lg">
-              <TrendingUp className="h-4 w-4 text-teal-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Market Status</p>
-              <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                Bullish
-              </Badge>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Top Movers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Gainers */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.8 }}
-          className="bg-card/50 border border-border/50 rounded-lg p-4"
-        >
-          <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-green-500" />
-            Top Gainers (24h)
-          </h3>
-          <div className="space-y-3">
-            {marketMetrics.topGainers.map((coin, index) => (
-              <div key={coin.symbol} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-lg transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-white font-bold text-xs">
-                    {coin.symbol.charAt(0)}
-                  </div>
-                  <span className="font-medium">{coin.symbol}</span>
+      {/* Popular Investment Strategies */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Target className="h-5 w-5 text-purple-500" />
+          Popular Investment Strategies
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {strategiesData.popularStrategies.map((strategy, index) => (
+            <motion.div
+              key={strategy.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-card/50 border border-border/50 rounded-lg p-6 hover:bg-card/70 transition-all group cursor-pointer"
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-purple-500/20 rounded-lg text-purple-500">
+                  {getIconComponent(strategy.icon)}
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">${coin.price.toFixed(2)}</p>
-                  <p className="text-green-500 text-sm">+{coin.change.toFixed(1)}%</p>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-lg">{strategy.name}</h4>
+                    <Badge variant="outline" className={getPopularityColor(strategy.popularity)}>
+                      {strategy.popularity}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">{strategy.description}</p>
+                  
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <Badge variant="outline" className={getRiskColor(strategy.riskLevel)}>
+                      <Shield className="h-3 w-3 mr-1" />
+                      {strategy.riskLevel} Risk
+                    </Badge>
+                    <Badge variant="outline" className="text-blue-500 bg-blue-500/10 border-blue-500/30">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {strategy.timeHorizon}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Key Benefits:</p>
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      {strategy.benefits.map((benefit, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                          {benefit}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </motion.div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
 
-        {/* Top Losers */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.9 }}
-          className="bg-card/50 border border-border/50 rounded-lg p-4"
-        >
-          <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <TrendingDown className="h-4 w-4 text-red-500" />
-            Top Losers (24h)
-          </h3>
-          <div className="space-y-3">
-            {marketMetrics.topLosers.map((coin, index) => (
-              <div key={coin.symbol} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-lg transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center text-white font-bold text-xs">
-                    {coin.symbol.charAt(0)}
-                  </div>
-                  <span className="font-medium">{coin.symbol}</span>
+      {/* Investment Themes */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-green-500" />
+          Investment Themes & Trends
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {strategiesData.investmentThemes.map((theme, index) => (
+            <motion.div
+              key={theme.theme}
+              initial={{ opacity: 0, x: index % 2 === 0 ? -20 : 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.1 + 0.4 }}
+              className="bg-card/50 border border-border/50 rounded-lg p-6 hover:bg-card/70 transition-all group cursor-pointer relative overflow-hidden"
+            >
+              {theme.trending && (
+                <div className="absolute top-3 right-3">
+                  <Badge variant="outline" className="text-orange-500 bg-orange-500/10 border-orange-500/30">
+                    <Flame className="h-3 w-3 mr-1" />
+                    Trending
+                  </Badge>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">${coin.price.toFixed(2)}</p>
-                  <p className="text-red-500 text-sm">{coin.change.toFixed(1)}%</p>
+              )}
+              
+              <div className="space-y-3">
+                <h4 className="font-semibold text-lg pr-20">{theme.theme}</h4>
+                <p className="text-sm text-muted-foreground">{theme.description}</p>
+                
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Focus Areas:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {theme.sectors.map((sector, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {sector}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </motion.div>
+            </motion.div>
+          ))}
+        </div>
       </div>
+
+      {/* Risk Profiles */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Shield className="h-5 w-5 text-blue-500" />
+          Investment Risk Profiles
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {strategiesData.riskProfiles.map((profile, index) => (
+            <motion.div
+              key={profile.type}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 + 0.8 }}
+              className={`bg-gradient-to-br border rounded-lg p-6 hover:scale-105 transition-all group cursor-pointer ${getProfileColor(profile.color)}`}
+            >
+              <div className="space-y-3">
+                <h4 className="font-semibold text-lg">{profile.type}</h4>
+                <p className="text-sm opacity-80">{profile.description}</p>
+                
+                <div className="space-y-2">
+                  <p className="text-xs font-medium opacity-70">Typical Allocation:</p>
+                  <p className="text-xs opacity-80 font-mono bg-black/10 dark:bg-white/10 p-2 rounded">
+                    {profile.allocation}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Investment Philosophy */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.2 }}
+        className="bg-gradient-to-r from-slate-50/50 to-slate-100/50 dark:from-slate-800/50 dark:to-slate-900/50 border border-border/50 rounded-lg p-6"
+      >
+        <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-indigo-500" />
+          Core Investment Principles
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="text-center space-y-3">
+            <div className="p-4 bg-blue-500/20 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+              <Target className="h-8 w-8 text-blue-500" />
+            </div>
+            <h4 className="font-semibold">Goal-Based Investing</h4>
+            <p className="text-sm text-muted-foreground">
+              Align your investments with specific financial goals and timelines for better outcomes.
+            </p>
+          </div>
+          <div className="text-center space-y-3">
+            <div className="p-4 bg-green-500/20 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+              <PieChart className="h-8 w-8 text-green-500" />
+            </div>
+            <h4 className="font-semibold">Diversification</h4>
+            <p className="text-sm text-muted-foreground">
+              Spread risk across different asset classes, sectors, and geographies for stability.
+            </p>
+          </div>
+          <div className="text-center space-y-3">
+            <div className="p-4 bg-purple-500/20 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+              <Clock className="h-8 w-8 text-purple-500" />
+            </div>
+            <h4 className="font-semibold">Long-term Focus</h4>
+            <p className="text-sm text-muted-foreground">
+              Time in the market beats timing the market - patience is key to building wealth.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Quick Tips */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.4 }}
+        className="bg-card/50 border border-border/50 rounded-lg p-6"
+      >
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Zap className="h-5 w-5 text-yellow-500" />
+          Smart Investment Tips
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Start Early, Start Small</p>
+                <p className="text-xs text-muted-foreground">Compound interest works best with time</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Automate Your Investments</p>
+                <p className="text-xs text-muted-foreground">Remove emotions from investment decisions</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Regular Portfolio Review</p>
+                <p className="text-xs text-muted-foreground">Rebalance annually or when allocations drift</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Keep Costs Low</p>
+                <p className="text-xs text-muted-foreground">High fees can erode returns over time</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Stay Informed, Stay Calm</p>
+                <p className="text-xs text-muted-foreground">Knowledge reduces anxiety and improves decisions</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Emergency Fund First</p>
+                <p className="text-xs text-muted-foreground">Secure your foundation before investing</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 };
@@ -1518,7 +1589,7 @@ export default function HomePage() {
             </h2>
           </div>
           
-          <EnhancedMarketMetrics />
+          <InvestmentStrategiesInsights />
         </motion.section>
 
         {/* Trading Charts Section with Real-time Data */}
