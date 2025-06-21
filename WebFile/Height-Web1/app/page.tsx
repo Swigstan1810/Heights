@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/navbar";
-import { coinbaseRealtimeService, type MarketData } from '@/lib/services/coinbase-realtime-service';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +41,7 @@ import {
 } from "lucide-react";
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import TradingViewWidget from "@/components/trading/tradingview-widget";
 
 // Animated Counter Component
 function AnimatedCounter({ 
@@ -133,92 +133,22 @@ const FloatingParticles = () => (
   </div>
 );
 
-// Enhanced Live Crypto Ticker
-const LiveCryptoTicker = () => {
-  const [cryptoData, setCryptoData] = useState<Map<string, MarketData>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const trackedSymbols = ['BTC', 'ETH', 'SOL', 'MATIC', 'LINK', 'AVAX'];
-
-  useEffect(() => {
-    const unsubscribes: (() => void)[] = [];
-    
-    trackedSymbols.forEach(symbol => {
-      const unsubscribe = coinbaseRealtimeService.subscribe(symbol, (data) => {
-        setCryptoData(prev => new Map(prev).set(symbol, data));
-        setLoading(false);
-      });
-      unsubscribes.push(unsubscribe);
-    });
-
-    return () => {
-      unsubscribes.forEach(unsub => unsub());
-    };
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-        {trackedSymbols.map((symbol, index) => (
-          <div key={symbol} className="animate-pulse">
-            <div className="bg-background border border-border rounded-xl p-3 md:p-4">
-              <div className="h-4 bg-muted rounded w-12 mb-2"></div>
-              <div className="h-6 bg-muted rounded w-20 mb-1"></div>
-              <div className="h-3 bg-muted rounded w-16"></div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+// TradingView Charts Section
+const TradingViewCharts = () => {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-      {Array.from(cryptoData.entries()).map(([symbol, data], index) => (
-        <motion.div
-          key={symbol}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="group cursor-pointer"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <div className="bg-gradient-to-br from-background border border-border rounded-xl p-3 md:p-4 hover:border-emerald-500/30 transition-all duration-300 relative overflow-hidden">
-            {/* Glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs md:text-sm font-semibold text-foreground">
-                  {symbol}
-                </span>
-                <div className={`w-2 h-2 rounded-full ${
-                  data.change24hPercent >= 0 ? 'bg-emerald-400' : 'bg-red-400'
-                } animate-pulse`} />
-              </div>
-              
-              <div className="space-y-1">
-                <p className="font-bold text-sm md:text-lg text-foreground">
-                  ${data.price.toLocaleString(undefined, { 
-                    minimumFractionDigits: 2, 
-                    maximumFractionDigits: data.price < 1 ? 4 : 2
-                  })}
-                </p>
-                <div className={`text-xs md:text-sm flex items-center ${
-                  data.change24hPercent >= 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}>
-                  {data.change24hPercent >= 0 ? (
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3 mr-1" />
-                  )}
-                  {data.change24hPercent >= 0 ? '+' : ''}{data.change24hPercent.toFixed(2)}%
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      ))}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="bg-gradient-to-br from-background border border-border rounded-2xl p-2">
+        <h3 className="text-xl font-bold text-center my-2">BTC/USD Chart</h3>
+        <div className="h-[400px]">
+          <TradingViewWidget symbol="COINBASE:BTCUSD" />
+        </div>
+      </div>
+      <div className="bg-gradient-to-br from-background border border-border rounded-2xl p-2">
+        <h3 className="text-xl font-bold text-center my-2">Tata Motors (NSE)</h3>
+        <div className="h-[400px]">
+          <TradingViewWidget symbol="NSE:TATAMOTORS" />
+        </div>
+      </div>
     </div>
   );
 };
@@ -868,7 +798,7 @@ export default function EnhancedHome() {
             ))}
           </motion.div>
 
-          {/* Live Market Data */}
+          {/* Live Market Charts */}
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
@@ -877,29 +807,14 @@ export default function EnhancedHome() {
           >
             <div className="text-center mb-8">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Live Market Data
+                Live Market Charts
               </h2>
               <p className="text-xl text-foreground max-w-2xl mx-auto">
-                Real-time price feeds from major exchanges with institutional-grade reliability
+                Interactive charts for top assets, powered by TradingView.
               </p>
             </div>
             
-            <div className="bg-gradient-to-br from-background to-background backdrop-blur-sm border border-border rounded-2xl p-6 md:p-8">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm">
-                    <Activity className="h-4 w-4" />
-                    Live Data
-                  </div>
-                  <span className="text-foreground text-sm">Updated every second</span>
-                </div>
-                <Badge variant="outline" className="border-border text-foreground">
-                  Coinbase WebSocket
-                </Badge>
-              </div>
-              
-              <LiveCryptoTicker />
-            </div>
+            <TradingViewCharts />
           </motion.div>
         </div>
       </motion.section>
