@@ -135,7 +135,6 @@ function AnimatedCounter({
 
   useEffect(() => {
     if (!isVisible) return;
-
     const steps = 60;
     const stepValue = value / steps;
     const stepDuration = duration / steps;
