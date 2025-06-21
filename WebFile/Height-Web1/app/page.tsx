@@ -37,7 +37,8 @@ import {
   Eye,
   Brain,
   Heart,
-  X
+  X,
+  BookOpen
 } from "lucide-react";
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -268,6 +269,321 @@ const features = [
   }
 ];
 
+// Trading Intelligence Section - Add this between Features and Social Proof sections
+const TradingIntelligenceSection = () => {
+  const tradingStrategies = [
+    {
+      name: 'Scalping',
+      description: 'Quick profits from small price movements',
+      timeframe: 'Seconds to Minutes',
+      riskLevel: 'High',
+      skillLevel: 'Advanced',
+      icon: Zap,
+      color: 'from-yellow-500 to-orange-500'
+    },
+    {
+      name: 'Day Trading',
+      description: 'Hold positions within a single trading day',
+      timeframe: 'Minutes to Hours',
+      riskLevel: 'Medium-High',
+      skillLevel: 'Intermediate',
+      icon: TrendingUp,
+      color: 'from-blue-500 to-cyan-500'
+    },
+    {
+      name: 'Swing Trading',
+      description: 'Capture medium-term price swings',
+      timeframe: 'Days to Weeks',
+      riskLevel: 'Medium',
+      skillLevel: 'Beginner-Intermediate',
+      icon: BarChart3,
+      color: 'from-green-500 to-emerald-500'
+    },
+    {
+      name: 'Position Trading',
+      description: 'Long-term trend following strategy',
+      timeframe: 'Weeks to Months',
+      riskLevel: 'Low-Medium',
+      skillLevel: 'Beginner',
+      icon: Target,
+      color: 'from-purple-500 to-pink-500'
+    }
+  ];
+
+  const tradingPrinciples = [
+    {
+      title: 'Risk Management',
+      description: 'Never risk more than you can afford to lose',
+      icon: Shield,
+      tips: ['Use stop-loss orders', 'Position sizing', 'Diversification']
+    },
+    {
+      title: 'Technical Analysis',
+      description: 'Study price charts and market patterns',
+      icon: LineChart,
+      tips: ['Support & resistance', 'Chart patterns', 'Technical indicators']
+    },
+    {
+      title: 'Market Psychology',
+      description: 'Understand market sentiment and emotions',
+      icon: Brain,
+      tips: ['Fear & greed cycles', 'Market sentiment', 'Crowd psychology']
+    },
+    {
+      title: 'Continuous Learning',
+      description: 'Markets evolve, so should your knowledge',
+      icon: BookOpen,
+      tips: ['Study market trends', 'Learn from mistakes', 'Stay updated']
+    }
+  ];
+
+  const tradingTools = [
+    {
+      category: 'Chart Analysis',
+      tools: ['Candlestick Patterns', 'Moving Averages', 'RSI & MACD', 'Volume Analysis'],
+      icon: BarChart3,
+      color: 'blue'
+    },
+    {
+      category: 'Risk Management',
+      tools: ['Stop Loss Orders', 'Position Sizing', 'Risk/Reward Ratios', 'Portfolio Balance'],
+      icon: Shield,
+      color: 'green'
+    },
+    {
+      category: 'Market Research',
+      tools: ['News Analysis', 'Economic Calendar', 'Market Sentiment', 'Competitor Analysis'],
+      icon: Globe,
+      color: 'purple'
+    },
+    {
+      category: 'Order Types',
+      tools: ['Market Orders', 'Limit Orders', 'Stop Orders', 'Trailing Stops'],
+      icon: Target,
+      color: 'orange'
+    }
+  ];
+
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case 'High': return 'text-red-500 bg-red-500/10 border-red-500/30';
+      case 'Medium-High': return 'text-orange-500 bg-orange-500/10 border-orange-500/30';
+      case 'Medium': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30';
+      case 'Low-Medium': return 'text-blue-500 bg-blue-500/10 border-blue-500/30';
+      default: return 'text-green-500 bg-green-500/10 border-green-500/30';
+    }
+  };
+
+  const getSkillColor = (skill: string) => {
+    switch (skill) {
+      case 'Advanced': return 'text-purple-500 bg-purple-500/10 border-purple-500/30';
+      case 'Intermediate': return 'text-blue-500 bg-blue-500/10 border-blue-500/30';
+      case 'Beginner-Intermediate': return 'text-green-500 bg-green-500/10 border-green-500/30';
+      default: return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30';
+    }
+  };
+
+  const getToolColor = (color: string) => {
+    const colorMap = {
+      blue: 'from-blue-500/10 to-cyan-500/10 border-blue-500/20 text-blue-500',
+      green: 'from-green-500/10 to-emerald-500/10 border-green-500/20 text-green-500',
+      purple: 'from-purple-500/10 to-pink-500/10 border-purple-500/20 text-purple-500',
+      orange: 'from-orange-500/10 to-red-500/10 border-orange-500/20 text-orange-500'
+    };
+    return colorMap[color as keyof typeof colorMap] || colorMap.blue;
+  };
+
+  return (
+    <motion.section 
+      className="py-20 px-4 md:px-8 bg-gradient-to-br from-background to-slate-50/50 dark:to-slate-900/50"
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.8 }}
+    >
+      <div className="max-w-7xl mx-auto">
+        {/* Section Header */}
+        <div className="text-center mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-medium mb-6"
+          >
+            <Brain className="h-4 w-4 mr-2" />
+            Trading Intelligence Hub
+          </motion.div>
+          
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            Master the Art of Trading
+          </h2>
+          <p className="text-xl text-foreground max-w-3xl mx-auto">
+            Discover proven strategies, essential tools, and fundamental principles that successful traders use to navigate the markets.
+          </p>
+        </div>
+
+        {/* Trading Strategies */}
+        <div className="mb-16">
+          <h3 className="text-2xl md:text-3xl font-bold text-center mb-8">
+            Popular Trading Strategies
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {tradingStrategies.map((strategy, index) => (
+              <motion.div
+                key={strategy.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ scale: 1.02 }}
+                className="bg-background border border-border rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 group"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`p-3 rounded-xl bg-gradient-to-r ${strategy.color}`}>
+                    <strategy.icon className="h-6 w-6 text-white" />
+                  </div>
+                  <Badge variant="outline" className={getSkillColor(strategy.skillLevel)}>
+                    {strategy.skillLevel}
+                  </Badge>
+                </div>
+                
+                <h4 className="text-lg font-semibold mb-2">{strategy.name}</h4>
+                <p className="text-sm text-muted-foreground mb-4">{strategy.description}</p>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Timeframe:</span>
+                    <span className="font-medium">{strategy.timeframe}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Risk Level:</span>
+                    <Badge variant="outline" className={getRiskColor(strategy.riskLevel)}>
+                      {strategy.riskLevel}
+                    </Badge>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Trading Principles */}
+        <div className="mb-16">
+          <h3 className="text-2xl md:text-3xl font-bold text-center mb-8">
+            Essential Trading Principles
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {tradingPrinciples.map((principle, index) => (
+              <motion.div
+                key={principle.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 + 0.4 }}
+                className="bg-background border border-border rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 group"
+              >
+                <div className="p-3 bg-emerald-500/20 rounded-xl mb-4 w-fit">
+                  <principle.icon className="h-6 w-6 text-emerald-500" />
+                </div>
+                
+                <h4 className="text-lg font-semibold mb-2">{principle.title}</h4>
+                <p className="text-sm text-muted-foreground mb-4">{principle.description}</p>
+                
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Key Points:</p>
+                  {principle.tips.map((tip, tipIndex) => (
+                    <div key={tipIndex} className="flex items-center gap-2">
+                      <CheckCircle className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">{tip}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Trading Tools */}
+        <div className="mb-16">
+          <h3 className="text-2xl md:text-3xl font-bold text-center mb-8">
+            Professional Trading Tools
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {tradingTools.map((toolCategory, index) => (
+              <motion.div
+                key={toolCategory.category}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 + 0.8 }}
+                className={`bg-gradient-to-br border rounded-2xl p-6 hover:scale-105 transition-all duration-300 ${getToolColor(toolCategory.color)}`}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <toolCategory.icon className="h-6 w-6" />
+                  <h4 className="text-lg font-semibold">{toolCategory.category}</h4>
+                </div>
+                
+                <div className="space-y-2">
+                  {toolCategory.tools.map((tool, toolIndex) => (
+                    <div key={toolIndex} className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 bg-current rounded-full opacity-60" />
+                      <span className="text-sm opacity-80">{tool}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Trading Wisdom */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 1.2 }}
+          className="bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-emerald-500/20 rounded-2xl p-8"
+        >
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Crown className="h-8 w-8 text-white" />
+            </div>
+            <h3 className="text-2xl font-bold mb-4">Trading Wisdom</h3>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Remember: Successful trading is not about being right all the time, but about managing risk and cutting losses quickly while letting profits run.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center p-4 bg-background/50 rounded-xl">
+              <Target className="h-8 w-8 text-emerald-500 mx-auto mb-3" />
+              <h4 className="font-semibold mb-2">Plan Your Trade</h4>
+              <p className="text-sm text-muted-foreground">
+                Have a clear strategy before entering any position
+              </p>
+            </div>
+            <div className="text-center p-4 bg-background/50 rounded-xl">
+              <Shield className="h-8 w-8 text-blue-500 mx-auto mb-3" />
+              <h4 className="font-semibold mb-2">Manage Your Risk</h4>
+              <p className="text-sm text-muted-foreground">
+                Protect your capital with proper risk management
+              </p>
+            </div>
+            <div className="text-center p-4 bg-background/50 rounded-xl">
+              <Brain className="h-8 w-8 text-purple-500 mx-auto mb-3" />
+              <h4 className="font-semibold mb-2">Control Emotions</h4>
+              <p className="text-sm text-muted-foreground">
+                Keep fear and greed in check for better decisions
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </motion.section>
+  );
+};
+
 export default function EnhancedHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -343,7 +659,7 @@ export default function EnhancedHome() {
       rating: 5
     },
     {
-      quote: "Customer support is exceptional. The team is knowledgeable and always ready to help. Heights truly cares about its users' success.",
+      quote: "As someone new to trading, the AI guidance on Heights has been invaluable. It helps me understand when to buy, sell, or hold without overwhelming me with complex data.",
       role: "Crypto Investor",
       rating: 5
     }
@@ -588,42 +904,7 @@ export default function EnhancedHome() {
         </div>
       </motion.section>
 
-      {/* Demo Video Modal */}
-      <AnimatePresence>
-        {showDemo && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
-            onClick={() => setShowDemo(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-4xl bg-background rounded-lg shadow-2xl overflow-hidden border border-border/20"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <video 
-                src="/demo.mp4" 
-                controls 
-                autoPlay 
-                loop 
-                className="w-full h-full"
-              />
-              <Button
-                variant="secondary"
-                size="icon"
-                className="absolute top-4 right-4 h-8 w-8 rounded-full"
-                onClick={() => setShowDemo(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <TradingIntelligenceSection />
 
       {/* Features Section */}
       <motion.section 
