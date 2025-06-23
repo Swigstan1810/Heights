@@ -601,7 +601,29 @@ export default function EnhancedHome() {
   return (
     <main className="min-h-screen bg-background text-foreground relative overflow-hidden">
       <Navbar />
-      
+      {/* Demo Video Modal */}
+      {showDemo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl mx-auto p-4">
+            <button
+              className="absolute top-2 right-2 z-10 p-2 rounded-full bg-background/80 hover:bg-background border border-border"
+              onClick={() => setShowDemo(false)}
+              aria-label="Close demo video"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <video
+              src="/demo.mp4"
+              controls
+              autoPlay
+              className="w-full h-auto rounded-2xl shadow-lg border border-border bg-black"
+              style={{ maxHeight: '70vh' }}
+            >
+              Sorry, your browser does not support embedded videos.
+            </video>
+          </div>
+        </div>
+      )}
       {/* Enhanced Background Elements */}
       <div className="fixed inset-0 -z-10">
         {/* Gradient overlays */}
