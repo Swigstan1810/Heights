@@ -81,34 +81,28 @@ Heights is more than just a platform—it's a movement towards decentralized fin
 ---
 
 ## 🤝 Contributors  
-We welcome contributions from developers, blockchain enthusiasts, and traders. Create a pull request or open an issue to get started!  
+We welcome contributions from developers, blockchain enthusiasts, and traders who are committed to making Heights successful. Contributors are invited to participate in the project's growth while understanding that all rights remain reserved by Heights Organization.
+
+Create a pull request or open an issue to get started and help us build the future of decentralized trading!  
 
 ---
 
-## 📜 License  
-This project is licensed under the MIT License. 
+## 📜 Copyright & License  
+**© 2025 Heights Organization. All Rights Reserved.**
 
-MIT License
+**Founder & CEO:** Laven Patel
 
-Copyright (c) 2025 Laven Patel
+This project and all associated intellectual property, including but not limited to source code, documentation, branding, and conceptual frameworks, are the exclusive property of Heights Organization. All rights are reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the \"Software\"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+While we encourage community contributions to help make Heights successful, contributors acknowledge that:
+- All contributions become part of Heights Organization's intellectual property
+- Heights Organization retains full ownership and control over the project
+- Contributors are welcomed to participate in building a revolutionary trading platform
+- The vision and direction remain under the exclusive guidance of Heights Organization
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+**Unauthorized reproduction, distribution, or commercial use of this project or its components is strictly prohibited without express written permission from Heights Organization.**
 
-THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+For licensing inquiries or partnership opportunities, please contact Heights Organization.
 
 ---
 
