@@ -34,6 +34,21 @@ Heights aspires to empower individuals to trade, invest, and grow their financia
 
 ---
 
+## 📁 WebFile Features  
+The **WebFile** directory contains the core web application with advanced trading capabilities:
+
+- **Portfolio Management**: Real-time portfolio tracking and analytics
+- **Advanced Trading Interface**: Professional trading tools with multiple order types
+- **Wallet Integration**: Secure multi-currency wallet support
+- **AI-Powered Predictions**: Machine learning models for market forecasting
+- **Two-Factor Authentication**: Enhanced security for user accounts
+- **TradingView Charts**: Interactive charting with technical indicators
+- **Order Book & Trade History**: Live market depth and transaction records
+- **Stripe Payment Integration**: Seamless payment processing
+- **Smart Contract Integration**: Direct blockchain interaction for trading
+
+---
+
 ## 🛠️ Tech Stack  
 - **Blockchain**: Ethereum for smart contracts and blockchain functionality.  
 - **Frontend**: React.js, Next.js for responsive and dynamic UI.  
@@ -74,7 +89,10 @@ Heights takes inspiration from the [Ethereum Whitepaper](https://ethereum.org/en
 ## 🌐 Join Us  
 Heights is more than just a platform—it's a movement towards decentralized financial freedom. Let’s shape the future of trading together.  
 
-- **Website**: Coming soon  
+**🚀 Ready to start your trading and investment journey?**  
+Visit **heightss.com** and begin your trading and investment journey with Heights today!
+
+- **Website**: [heightss.com](https://heightss.com)  
 - **GitHub**: [Heights GitHub Repository](https://github.com/Swigstan1810)  
 
 
