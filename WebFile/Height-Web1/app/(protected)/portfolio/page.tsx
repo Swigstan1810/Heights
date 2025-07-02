@@ -233,8 +233,7 @@ export default function ConnectedPortfolioPage() {
         .single();
 
       if (wallet) {
-        const balance = await hgtContract.balanceOf(wallet.wallet_address);
-        const formattedBalance = ethers.formatEther(balance);
+        const formattedBalance = await hgtContract.getBalance(wallet.wallet_address);
         
         // Get token info for accurate pricing
         const tokenInfo = await hgtContract.getTokenInfo();
