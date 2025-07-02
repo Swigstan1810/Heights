@@ -9,28 +9,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, AlertCircle, Loader2, Info, Mail, Lock, Shield } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
+import { CheckCircle, AlertCircle, Loader2, Info, Mail, Lock, Shield, User } from "lucide-react";
+import { useAuth, SecurityUtils } from "@/contexts/auth-context";
 
 export default function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [passwordStrength, setPasswordStrength] = useState({
     score: 0,
-    feedback: ''
+    feedback: [] as string[],
+    color: 'bg-gray-200'
   });
+  const [submitAttempts, setSubmitAttempts] = useState(0);
   
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
-  const supabase = createClientComponentClient<Database>();
   
   // Redirect if already logged in
   useEffect(() => {
@@ -49,22 +50,58 @@ export default function SignUp() {
     }
   }, [searchParams]);
   
-  // Password strength checker
+  // Enhanced password strength checker
   const checkPasswordStrength = (pwd: string) => {
+    if (!pwd) {
+      setPasswordStrength({ score: 0, feedback: [], color: 'bg-gray-200' });
+      return;
+    }
+
+    const validation = SecurityUtils.validatePassword(pwd);
     let score = 0;
-    let feedback = '';
-    
-    if (pwd.length >= 8) score++;
-    if (pwd.length >= 12) score++;
-    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
-    if (/\d/.test(pwd)) score++;
-    if (/[@$!%*?&#]/.test(pwd)) score++;
-    
-    if (score <= 1) feedback = 'Weak password';
-    else if (score <= 3) feedback = 'Moderate password';
-    else feedback = 'Strong password';
-    
-    setPasswordStrength({ score, feedback });
+    const feedback: string[] = [];
+
+    // Length check
+    if (pwd.length >= 8) score += 20;
+    else feedback.push('At least 8 characters');
+
+    // Character type checks
+    if (/[A-Z]/.test(pwd)) score += 20;
+    else feedback.push('One uppercase letter');
+
+    if (/[a-z]/.test(pwd)) score += 20;
+    else feedback.push('One lowercase letter');
+
+    if (/[0-9]/.test(pwd)) score += 20;
+    else feedback.push('One number');
+
+    if (/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) score += 20;
+    else feedback.push('One special character');
+
+    // Bonus points for length
+    if (pwd.length >= 12) score += 10;
+    if (pwd.length >= 16) score += 10;
+
+    // Penalty for common patterns
+    if (/(.)\1{2,}/.test(pwd)) score -= 10; // Repeated characters
+    if (/123456|password|qwerty/i.test(pwd)) score -= 20; // Common patterns
+
+    const colors = {
+      0: 'bg-gray-200',
+      20: 'bg-red-500',
+      40: 'bg-orange-500',
+      60: 'bg-yellow-500',
+      80: 'bg-blue-500',
+      100: 'bg-green-500'
+    };
+
+    const colorKey = Math.min(100, Math.max(0, Math.floor(score / 20) * 20)) as keyof typeof colors;
+
+    setPasswordStrength({
+      score: Math.min(100, Math.max(0, score)),
+      feedback: validation.isValid ? [] : feedback,
+      color: colors[colorKey]
+    });
   };
   
   useEffect(() => {
@@ -75,94 +112,112 @@ export default function SignUp() {
   
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple rapid submissions
+    if (loading || submitAttempts >= 3) {
+      setError('Too many attempts. Please wait a moment before trying again.');
+      return;
+    }
+
+    setSubmitAttempts(prev => prev + 1);
     setError(null);
     setSuccess(null);
     
-    // Basic validation
-    if (!email || !password || !confirmPassword) {
-      setError("All fields are required");
-      return;
-    }
-    
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-    
-    // Password validation
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long");
-      return;
-    }
-    
-    if (passwordStrength.score < 2) {
-      setError("Please choose a stronger password. Include uppercase, lowercase, numbers, and special characters.");
-      return;
-    }
-    
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-    
-    setLoading(true);
-    
     try {
-      // Check rate limiting
-      const canProceed = await supabase.rpc('check_oauth_rate_limit', {
-        p_identifier: email,
-        p_provider: 'email'
-      });
-
-      if (!canProceed) {
-        setError("Too many signup attempts. Please try again later.");
-        setLoading(false);
+      // Enhanced validation
+      if (!fullName.trim() || !email || !password || !confirmPassword) {
+        setError("All fields are required");
         return;
       }
       
-      // Sign up the user
-      const { error: signUpError } = await signUp(email, password);
+      // Validate full name
+      if (fullName.trim().length < 2) {
+        setError("Full name must be at least 2 characters");
+        return;
+      }
       
-      if (signUpError) {
-        console.error('Signup error:', signUpError);
-        
+      if (!/^[a-zA-Z\s'-]+$/.test(fullName.trim())) {
+        setError("Full name can only contain letters, spaces, hyphens, and apostrophes");
+        return;
+      }
+      
+      // Validate email
+      if (!SecurityUtils.validateEmail(email)) {
+        setError("Please enter a valid email address");
+        return;
+      }
+      
+      if (SecurityUtils.isDisposableEmail(email)) {
+        setError("Disposable email addresses are not allowed");
+        return;
+      }
+      
+      // Validate password strength
+      if (passwordStrength.score < 60) {
+        setError("Please choose a stronger password for better security");
+        return;
+      }
+      
+      if (password !== confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
+      
+      // Check terms acceptance
+      if (!acceptTerms) {
+        setError("You must accept the terms and conditions");
+        return;
+      }
+      
+      setLoading(true);
+      
+      // Sign up the user with enhanced data
+      const result = await signUp(email, password, {
+        fullName: fullName.trim(),
+      });
+      
+      if (result.error) {
         // Handle specific error cases
-        if (signUpError.message.includes('rate limit')) {
-          setError("Too many signup attempts. Please wait a few minutes and try again.");
-        } else if (signUpError.message.includes('already registered')) {
-          setError("This email is already registered. Please login instead.");
-        } else if (signUpError.message.includes('disposable')) {
+        if (result.error.message.includes('already registered')) {
+          setError("An account with this email already exists. Try signing in instead.");
+        } else if (result.error.message.includes('password')) {
+          setError(result.error.message);
+        } else if (result.error.message.includes('rate limit')) {
+          setError("Too many signup attempts. Please try again in 1 hour.");
+        } else if (result.error.message.includes('disposable')) {
           setError("Please use a valid email address. Disposable email addresses are not allowed.");
         } else {
-          setError(signUpError.message || "An error occurred during signup. Please try again.");
+          setError(result.error.message || "An error occurred during signup. Please try again.");
         }
         return;
       }
       
       // If sign up successful
-      setSuccess("Registration successful! Please check your email to confirm your account.");
+      setSuccess("Registration successful! Please check your email to verify your account before signing in.");
       
-      // Log security event
-      await supabase.rpc('log_security_event', {
-        p_user_id: null,
-        p_event_type: 'signup_success',
-        p_event_details: { email, method: 'password' },
-        p_ip_address: window.location.hostname,
-        p_user_agent: navigator.userAgent
-      });
+      // Clear form for security
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      setFullName('');
+      setAcceptTerms(false);
+      setPasswordStrength({ score: 0, feedback: [], color: 'bg-gray-200' });
       
-      // Redirect after a delay
+      // Redirect after delay with message
       setTimeout(() => {
-        router.push("/login?registered=true");
-      }, 3000);
+        router.push("/login?message=Please check your email to verify your account");
+      }, 4000);
       
     } catch (err: unknown) {
       console.error('Unexpected signup error:', err);
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
+      
+      // Reset attempt counter after 60 seconds
+      setTimeout(() => {
+        setSubmitAttempts(0);
+      }, 60000);
     }
   };
   
@@ -307,6 +362,24 @@ export default function SignUp() {
         
         <form onSubmit={handleSignUp} className="space-y-6">
           <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name</Label>
+            <div className="relative">
+              <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="fullName"
+                type="text"
+                className="pl-10"
+                placeholder="Your full name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                disabled={loading || googleLoading || !!success}
+                autoComplete="name"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -340,22 +413,28 @@ export default function SignUp() {
                 autoComplete="new-password"
               />
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className={`h-1 flex-1 rounded-full transition-colors ${
-                passwordStrength.score === 0 ? 'bg-gray-200' :
-                passwordStrength.score <= 2 ? 'bg-red-500' :
-                passwordStrength.score <= 3 ? 'bg-yellow-500' :
-                'bg-green-500'
-              }`} />
-              <span className={`text-xs ${
-                passwordStrength.score === 0 ? 'text-gray-500' :
-                passwordStrength.score <= 2 ? 'text-red-500' :
-                passwordStrength.score <= 3 ? 'text-yellow-500' :
-                'text-green-500'
-              }`}>
-                {passwordStrength.feedback}
-              </span>
-            </div>
+            {password && (
+              <div className="mt-2">
+                <div className="flex items-center space-x-2 mb-1">
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
+                      style={{ width: `${passwordStrength.score}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {passwordStrength.score < 40 ? 'Weak' : 
+                     passwordStrength.score < 70 ? 'Fair' : 
+                     passwordStrength.score < 90 ? 'Good' : 'Strong'}
+                  </span>
+                </div>
+                {passwordStrength.feedback.length > 0 && (
+                  <p className="text-xs text-gray-600">
+                    Missing: {passwordStrength.feedback.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Use 8+ characters with a mix of letters, numbers & symbols
             </p>
@@ -379,10 +458,33 @@ export default function SignUp() {
             </div>
           </div>
           
+          {/* Terms and Conditions */}
+          <div className="flex items-start space-x-3">
+            <input
+              id="acceptTerms"
+              name="acceptTerms"
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-1 w-4 h-4 text-primary border rounded focus:ring-primary"
+              disabled={loading || googleLoading || !!success}
+            />
+            <label htmlFor="acceptTerms" className="text-sm text-muted-foreground">
+              I agree to the{' '}
+              <Link href="/terms" className="text-primary hover:underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" className="text-primary hover:underline">
+                Privacy Policy
+              </Link>
+            </label>
+          </div>
+          
           <Button
             type="submit"
             className="w-full"
-            disabled={loading || googleLoading || !!success}
+            disabled={loading || googleLoading || !!success || !acceptTerms || passwordStrength.score < 60}
           >
             {loading ? (
               <>

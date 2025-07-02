@@ -1,4 +1,4 @@
-// contexts/auth-context.tsx - Optimized version with caching and better performance
+// contexts/auth-context.tsx - Production-ready authentication with robust security
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
@@ -26,6 +26,8 @@ interface Profile {
   kyc_completed: boolean;
   two_factor_enabled: boolean;
   last_login_at: string | null;
+  login_attempts: number | null;
+  locked_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -48,24 +50,124 @@ interface AuthState {
   isAuthenticated: boolean;
   isInitialized: boolean;
   error: string | null;
+  isAccountLocked: boolean;
+  sessionExpiry: Date | null;
 }
 
 interface AuthContextType extends AuthState {
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; requiresEmailVerification?: boolean }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, captchaToken?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, userData?: any) => Promise<{ error: Error | null; requiresEmailVerification?: boolean }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshWalletBalance: () => Promise<void>;
   refreshSession: () => Promise<void>;
   checkSession: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<{ error: Error | null }>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (password: string) => Promise<{ error: Error | null }>;
   clearError: () => void;
+  checkAccountLockStatus: () => Promise<boolean>;
 }
 
-// Cache for profile and wallet data
-const dataCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Security utilities
+const SecurityUtils = {
+  // Validate password strength
+  validatePassword(password: string): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    if (password.length < 8) {
+      errors.push('Password must be at least 8 characters long');
+    }
+    if (!/[A-Z]/.test(password)) {
+      errors.push('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      errors.push('Password must contain at least one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      errors.push('Password must contain at least one number');
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      errors.push('Password must contain at least one special character');
+    }
+    
+    return { isValid: errors.length === 0, errors };
+  },
+
+  // Validate email format
+  validateEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  },
+
+  // Check for disposable email domains
+  isDisposableEmail(email: string): boolean {
+    const disposableDomains = [
+      '10minutemail.com', 'tempmail.org', 'guerrillamail.com',
+      'mailinator.com', 'temp-mail.org', 'throwaway.email'
+    ];
+    const domain = email.split('@')[1]?.toLowerCase();
+    return disposableDomains.includes(domain);
+  },
+
+  // Rate limiting helper
+  checkRateLimit(key: string, maxAttempts: number, windowMs: number): boolean {
+    if (typeof window === 'undefined') return true;
+    
+    const now = Date.now();
+    const attempts = JSON.parse(localStorage.getItem(`rate_limit_${key}`) || '[]')
+      .filter((timestamp: number) => now - timestamp < windowMs);
+    
+    if (attempts.length >= maxAttempts) {
+      return false;
+    }
+    
+    attempts.push(now);
+    localStorage.setItem(`rate_limit_${key}`, JSON.stringify(attempts));
+    return true;
+  }
+};
+
+// Secure cache implementation
+class SecureCache {
+  private cache = new Map<string, { data: any; timestamp: number; hash: string }>();
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  
+  private generateHash(data: any): string {
+    return btoa(JSON.stringify(data)).slice(0, 10);
+  }
+  
+  get(key: string): any | null {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+    
+    if (Date.now() - cached.timestamp > this.CACHE_DURATION) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
+  }
+  
+  set(key: string, data: any): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      hash: this.generateHash(data)
+    });
+  }
+  
+  delete(key: string): void {
+    this.cache.delete(key);
+  }
+  
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+const dataCache = new SecureCache();
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -79,17 +181,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
     isInitialized: false,
     error: null,
+    isAccountLocked: false,
+    sessionExpiry: null,
   });
 
   const router = useRouter();
   const supabase = createClientComponentClient<Database>();
   const initializationRef = useRef(false);
   const fetchingRef = useRef<Set<string>>(new Set());
+  const sessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Update state helper
+  // Update state helper with validation
   const updateState = useCallback((updates: Partial<AuthState>) => {
-    setState(prev => ({ ...prev, ...updates }));
+    setState(prev => {
+      const newState = { ...prev, ...updates };
+      
+      // Auto-set sessionExpiry when session changes
+      if (updates.session && updates.session.expires_at) {
+        newState.sessionExpiry = new Date(updates.session.expires_at * 1000);
+      }
+      
+      return newState;
+    });
   }, []);
+
+  // Security event logger
+  const logSecurityEvent = useCallback(async (event: string, details: any = {}) => {
+    try {
+      if (!state.user) return;
+      
+      await supabase.from('ai_errors').insert({
+        error: event,
+        error_message: `Security Event: ${event}`,
+        context: {
+          user_id: state.user.id,
+          timestamp: new Date().toISOString(),
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+          ...details
+        }
+      });
+    } catch (error) {
+      console.error('Failed to log security event:', error);
+    }
+  }, [supabase, state.user]);
+
+  // Check account lock status
+  const checkAccountLockStatus = useCallback(async (): Promise<boolean> => {
+    if (!state.user?.email) return false;
+    
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('locked_until, login_attempts')
+        .eq('email', state.user.email)
+        .single();
+      
+      if (data?.locked_until) {
+        const lockUntil = new Date(data.locked_until);
+        const isLocked = lockUntil > new Date();
+        updateState({ isAccountLocked: isLocked });
+        return isLocked;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking account lock status:', error);
+      return false;
+    }
+  }, [supabase, state.user, updateState]);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -98,17 +257,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Get cached data
   const getCachedData = useCallback((key: string) => {
-    const cached = dataCache.get(key);
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      return cached.data;
-    }
-    dataCache.delete(key);
-    return null;
+    return dataCache.get(key);
   }, []);
 
   // Set cached data
   const setCachedData = useCallback((key: string, data: any) => {
-    dataCache.set(key, { data, timestamp: Date.now() });
+    dataCache.set(key, data);
   }, []);
 
   // Profile fetcher with caching and deduplication
@@ -147,6 +301,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         setCachedData(cacheKey, data);
+        
+        // Check if account is locked
+        if (data.locked_until) {
+          const lockUntil = new Date(data.locked_until);
+          updateState({ isAccountLocked: lockUntil > new Date() });
+        }
+        
         return data as Profile;
       }
 
@@ -165,14 +326,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email_verified: currentUser.email_confirmed_at ? true : false,
         kyc_completed: false,
         two_factor_enabled: false,
-        timezone: 'Asia/Kolkata'
+        timezone: 'Asia/Kolkata',
+        login_attempts: 0,
+        last_login_at: new Date().toISOString(),
+        // Add missing required fields with defaults
+        avatar_url: null,
+        username: null,
+        bio: null,
+        phone_number: null,
+        location: null,
+        website: null,
+        date_of_birth: null,
+        password_changed_at: new Date().toISOString(),
+        security_questions: {},
+        backup_codes: null,
+        two_factor_verified_at: null,
+        preferences: { notifications: true, dark_mode: false, language: 'en' },
+        privacy_settings: { profile_visible: false, portfolio_visible: false },
+        risk_tolerance: 'moderate',
+        investment_experience: 'beginner',
+        annual_income_range: null,
+        terms_accepted_at: null,
+        privacy_accepted_at: null,
+        gdpr_consent: false,
+        marketing_consent: false,
+        data_retention_consent: true,
+        created_by: null,
+        updated_by: null,
+        version: 1,
+        status: 'pending_verification'
       };
 
+      // Try to create profile with explicit error handling
+      console.log('[Auth] Attempting to create profile with data:', newProfileData);
+      
       const { data: newProfile, error: insertError } = await supabase
         .from('profiles')
         .insert(newProfileData)
         .select()
         .single();
+      
+      console.log('[Auth] Profile creation result:', { newProfile, insertError });
 
       if (insertError) throw insertError;
 
@@ -427,19 +621,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.user, fetchWalletBalance, updateState]);
 
-  // Sign in
+  // Enhanced sign in with security features
   const signIn = useCallback(async (email: string, password: string) => {
     try {
+      // Validate inputs
+      if (!SecurityUtils.validateEmail(email)) {
+        throw new Error('Invalid email format');
+      }
+      
+      // Check rate limiting
+      if (!SecurityUtils.checkRateLimit(`signin_${email}`, 5, 15 * 60 * 1000)) {
+        throw new Error('Too many login attempts. Please try again in 15 minutes.');
+      }
+      
       updateState({ loading: true, error: null });
+      
+      // Check if account is locked first
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('locked_until, login_attempts')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (profileData?.locked_until) {
+        const lockUntil = new Date(profileData.locked_until);
+        if (lockUntil > new Date()) {
+          const minutesLeft = Math.ceil((lockUntil.getTime() - Date.now()) / (1000 * 60));
+          throw new Error(`Account is locked. Try again in ${minutesLeft} minutes.`);
+        }
+      }
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Update failed login attempts
+        if (profileData) {
+          const attempts = (profileData.login_attempts || 0) + 1;
+          const updates: any = { login_attempts: attempts };
+          
+          // Lock account after 5 failed attempts
+          if (attempts >= 5) {
+            updates.locked_until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+          }
+          
+          await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('email', email);
+        }
+        
+        await logSecurityEvent('login_failed', { 
+          email, 
+          error: error.message,
+          attempts: (profileData?.login_attempts || 0) + 1
+        });
+        
+        throw error;
+      }
 
       if (data.session && data.user) {
+        // Reset failed login attempts on successful login
+        await supabase
+          .from('profiles')
+          .update({ 
+            login_attempts: 0, 
+            locked_until: null,
+            last_login_at: new Date().toISOString()
+          })
+          .eq('email', email);
+        
         // Clear any stale cache for this user
         dataCache.delete(`profile:${data.user.id}`);
         dataCache.delete(`wallet:${data.user.id}`);
@@ -449,10 +702,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user: data.user,
           isAuthenticated: true,
           loading: false,
+          sessionExpiry: new Date(data.session.expires_at! * 1000),
         });
 
-        // Redirect immediately, don't wait for profile/wallet
-        router.push('/ai');
+        // Check if email verification is required
+        const requiresEmailVerification = !data.user.email_confirmed_at;
+        
+        if (!requiresEmailVerification) {
+          // Redirect immediately for verified users
+          router.push('/portfolio');
+        }
         
         // Load profile and wallet in background
         Promise.all([
@@ -464,6 +723,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             walletBalance: walletData,
           });
         }).catch(console.error);
+        
+        return { error: null, requiresEmailVerification };
       }
 
       return { error: null };
@@ -509,31 +770,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, updateState]);
 
-  // Sign up
-  const signUp = useCallback(
-    async (email: string, password: string, captchaToken?: string) => {
+  // Enhanced sign up with security validation
+  const signUp = useCallback(async (email: string, password: string, userData: any = {}) => {
     try {
-        updateState({ loading: true, error: null });
+      // Validate inputs
+      if (!SecurityUtils.validateEmail(email)) {
+        throw new Error('Invalid email format');
+      }
+      
+      if (SecurityUtils.isDisposableEmail(email)) {
+        throw new Error('Disposable email addresses are not allowed');
+      }
+      
+      const passwordValidation = SecurityUtils.validatePassword(password);
+      if (!passwordValidation.isValid) {
+        throw new Error(passwordValidation.errors.join('. '));
+      }
+      
+      // Check rate limiting
+      if (!SecurityUtils.checkRateLimit(`signup_${email}`, 3, 60 * 60 * 1000)) {
+        throw new Error('Too many signup attempts. Please try again in 1 hour.');
+      }
+      
+      updateState({ loading: true, error: null });
       
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-            captchaToken,
-            emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
           data: {
             email: email,
-            auth_provider: 'email'
+            auth_provider: 'email',
+            full_name: userData.fullName || null,
+            ...userData
           }
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        await logSecurityEvent('signup_failed', { 
+          email, 
+          error: error.message 
+        });
+        throw error;
+      }
 
-      // Removed eager wallet_balance insert here
+      await logSecurityEvent('signup_success', { 
+        email,
+        user_id: data.user?.id 
+      });
 
       updateState({ loading: false });
-      return { error: null };
+      
+      // All signups require email verification
+      return { error: null, requiresEmailVerification: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
       console.error('[Auth] Sign up error:', errorMessage);
@@ -543,9 +834,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return { error: error as Error };
     }
-    },
-    [supabase, updateState, router, fetchProfile, fetchWalletBalance]
-  );
+  }, [supabase, updateState, logSecurityEvent]);
 
   // Update profile
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {
@@ -579,11 +868,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.user, supabase, updateState, setCachedData]);
 
-  // Resend verification email
+  // Password reset with security
+  const resetPassword = useCallback(async (email: string) => {
+    try {
+      if (!SecurityUtils.validateEmail(email)) {
+        throw new Error('Invalid email format');
+      }
+      
+      // Check rate limiting
+      if (!SecurityUtils.checkRateLimit(`reset_${email}`, 3, 60 * 60 * 1000)) {
+        throw new Error('Too many reset attempts. Please try again in 1 hour.');
+      }
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : ''
+      });
+      
+      if (error) throw error;
+      
+      await logSecurityEvent('password_reset_requested', { email });
+      return { error: null };
+    } catch (error) {
+      console.error('[Auth] Password reset error:', error);
+      await logSecurityEvent('password_reset_failed', { 
+        email, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      return { error: error as Error };
+    }
+  }, [supabase, logSecurityEvent]);
+
+  // Update password with validation
+  const updatePassword = useCallback(async (password: string) => {
+    try {
+      const passwordValidation = SecurityUtils.validatePassword(password);
+      if (!passwordValidation.isValid) {
+        throw new Error(passwordValidation.errors.join('. '));
+      }
+      
+      const { error } = await supabase.auth.updateUser({ password });
+      
+      if (error) throw error;
+      
+      await logSecurityEvent('password_updated');
+      return { error: null };
+    } catch (error) {
+      console.error('[Auth] Password update error:', error);
+      await logSecurityEvent('password_update_failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      return { error: error as Error };
+    }
+  }, [supabase, logSecurityEvent]);
+
+  // Enhanced resend verification email
   const resendVerificationEmail = useCallback(async () => {
     try {
       if (!state.user?.email) {
         throw new Error('No email address found');
+      }
+
+      // Check rate limiting
+      if (!SecurityUtils.checkRateLimit(`verify_${state.user.email}`, 3, 60 * 60 * 1000)) {
+        throw new Error('Too many verification emails sent. Please try again in 1 hour.');
       }
 
       const { error } = await supabase.auth.resend({
@@ -593,12 +940,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       
+      await logSecurityEvent('verification_email_resent');
       return { error: null };
     } catch (error) {
       console.error('[Auth] Resend verification error:', error);
+      await logSecurityEvent('verification_email_failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
       return { error: error as Error };
     }
-  }, [state.user, supabase]);
+  }, [state.user, supabase, logSecurityEvent]);
 
   const value = {
     ...state,
@@ -611,7 +962,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshSession,
     checkSession,
     resendVerificationEmail,
+    resetPassword,
+    updatePassword,
     clearError,
+    checkAccountLockStatus,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -624,3 +978,6 @@ export function useAuth() {
   }
   return context;
 }
+
+// Export security utilities for use in other components
+export { SecurityUtils };

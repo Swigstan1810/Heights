@@ -43,13 +43,14 @@ import {
   Monitor,
   BookmarkCheck,
   TrendingUp,
-  CreditCard
+  CreditCard,
+  Bitcoin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAVIGATION_ITEMS = [
   { href: '/home', label: 'Dashboard', icon: Home },
-  { href: '/crypto', label: 'Trade', icon: TrendingUp },
+  { href: '/trading', label: 'Crypto Trading', icon: Bitcoin, badge: 'NEW' },
   { href: '/watchlist', label: 'Watchlist', icon: BookmarkCheck },
   { href: '/portfolio', label: 'Portfolio', icon: PieChart },
   { href: '/ai', label: 'AI Assistant', icon: Brain, badge: 'New' },

@@ -37,7 +37,24 @@ import {
   Brain,
   Heart,
   X,
-  BookOpen
+  BookOpen,
+  Layers,
+  Network,
+  Code,
+  Cpu,
+  Database,
+  CloudLightning,
+  Infinity as InfinityIcon,
+  Fingerprint,
+  Bot,
+  PieChart,
+  TrendingUpIcon,
+  Coins,
+  Banknote,
+  CreditCard,
+  Smartphone,
+  Monitor,
+  Headphones
 } from "lucide-react";
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -106,27 +123,52 @@ function AnimatedCounter({
   );
 }
 
-// Floating particles component
+// Enhanced Floating particles with network effect
 const FloatingParticles = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none">
-    {[...Array(30)].map((_, i) => (
+    {/* Main particles */}
+    {[...Array(50)].map((_, i) => (
       <motion.div
-        key={i}
-        className="absolute w-1 h-1 bg-emerald-400/30 rounded-full"
+        key={`particle-${i}`}
+        className="absolute w-1 h-1 bg-gradient-to-r from-emerald-400/40 to-blue-400/40 rounded-full shadow-lg"
         style={{
           left: `${Math.random() * 100}%`,
           top: `${Math.random() * 100}%`,
         }}
         animate={{
-          y: [-20, 20, -20],
-          x: [-10, 10, -10],
-          opacity: [0.3, 0.8, 0.3],
+          y: [-30, 30, -30],
+          x: [-20, 20, -20],
+          opacity: [0.2, 0.8, 0.2],
+          scale: [0.5, 1.2, 0.5],
+        }}
+        transition={{
+          duration: 4 + Math.random() * 6,
+          repeat: Infinity,
+          delay: Math.random() * 3,
+          ease: "easeInOut"
+        }}
+      />
+    ))}
+    
+    {/* Network connections */}
+    {[...Array(8)].map((_, i) => (
+      <motion.div
+        key={`line-${i}`}
+        className="absolute h-px bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent"
+        style={{
+          left: `${10 + i * 12}%`,
+          top: `${20 + Math.random() * 60}%`,
+          width: `${20 + Math.random() * 30}%`,
+          transform: `rotate(${Math.random() * 360}deg)`,
+        }}
+        animate={{
+          opacity: [0, 0.6, 0],
+          scaleX: [0.5, 1, 0.5],
         }}
         transition={{
           duration: 3 + Math.random() * 4,
           repeat: Infinity,
           delay: Math.random() * 2,
-          ease: "easeInOut"
         }}
       />
     ))}
@@ -153,49 +195,55 @@ const TradingViewCharts = () => {
   );
 };
 
-// Feature cards with enhanced design
+// Enhanced feature cards with modern design
 const features = [
   {
     icon: Shield,
-    title: "Bank-Grade Security",
-    description: "Your assets are protected with industry-leading security measures and cold storage",
-    color: "from-emerald-500 to-teal-500",
-    stats: "99.9% Secure"
+    title: "Military-Grade Security",
+    description: "Multi-layer encryption, cold storage, and institutional-grade security protocols protecting your assets 24/7",
+    color: "from-emerald-500 via-teal-500 to-cyan-500",
+    stats: "99.99% Secure",
+    gradient: "bg-gradient-to-br from-emerald-500/10 to-teal-500/5"
   },
   {
-    icon: Zap,
-    title: "Lightning Fast Execution",
-    description: "Execute trades in milliseconds with our high-performance matching engine",
-    color: "from-yellow-500 to-orange-500",
-    stats: "<10ms Latency"
+    icon: CloudLightning,
+    title: "Hyper-Speed Execution",
+    description: "Sub-millisecond trade execution with our quantum-powered matching engine and global infrastructure",
+    color: "from-yellow-400 via-orange-500 to-red-500",
+    stats: "<0.1ms Latency",
+    gradient: "bg-gradient-to-br from-yellow-500/10 to-orange-500/5"
   },
   {
-    icon: Brain,
-    title: "AI-Powered Insights",
-    description: "Get intelligent trading recommendations powered by advanced machine learning",
-    color: "from-purple-500 to-pink-500",
-    stats: "95% Accuracy"
+    icon: Bot,
+    title: "AI-Powered Intelligence",
+    description: "Advanced machine learning algorithms provide real-time market insights and predictive analytics",
+    color: "from-purple-500 via-pink-500 to-rose-500",
+    stats: "97% Accuracy",
+    gradient: "bg-gradient-to-br from-purple-500/10 to-pink-500/5"
   },
   {
-    icon: Globe,
-    title: "Global Markets Access",
-    description: "Trade across multiple exchanges and access international markets seamlessly",
-    color: "from-blue-500 to-cyan-500",
-    stats: "50+ Exchanges"
+    icon: Network,
+    title: "Omni-Chain Access",
+    description: "Trade across 100+ blockchains and traditional markets through our unified liquidity network",
+    color: "from-blue-500 via-indigo-500 to-purple-500",
+    stats: "100+ Chains",
+    gradient: "bg-gradient-to-br from-blue-500/10 to-indigo-500/5"
   },
   {
-    icon: Users,
-    title: "Expert Community",
-    description: "Join a community of professional traders and learn from the best",
-    color: "from-red-500 to-rose-500",
-    stats: "100K+ Traders"
+    icon: InfinityIcon,
+    title: "Infinite Scalability",
+    description: "Built on cutting-edge infrastructure that scales with your trading needs, from retail to institutional",
+    color: "from-green-500 via-emerald-500 to-teal-500",
+    stats: "∞ Scale",
+    gradient: "bg-gradient-to-br from-green-500/10 to-emerald-500/5"
   },
   {
-    icon: Crown,
-    title: "Premium Experience",
-    description: "Enjoy premium features with institutional-grade tools and analytics",
-    color: "from-indigo-500 to-purple-500",
-    stats: "Pro Tools"
+    icon: Cpu,
+    title: "Quantum Performance",
+    description: "Next-generation technology stack delivering unparalleled speed, reliability, and user experience",
+    color: "from-indigo-500 via-purple-500 to-pink-500",
+    stats: "Quantum Speed",
+    gradient: "bg-gradient-to-br from-indigo-500/10 to-purple-500/5"
   }
 ];
 
@@ -624,47 +672,70 @@ export default function EnhancedHome() {
           </div>
         </div>
       )}
-      {/* Enhanced Background Elements */}
-      <div className="fixed inset-0 -z-10">
-        {/* Gradient overlays */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-background to-blue-500/5" />
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent" />
+      {/* Futuristic Background Elements */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        {/* Base gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-background to-slate-800 dark:from-slate-950 dark:via-background dark:to-slate-900" />
         
-        {/* Grid pattern */}
+        {/* Multiple gradient overlays for depth */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/5 via-transparent to-blue-500/8" />
+        <div className="absolute inset-0 bg-gradient-to-bl from-purple-500/3 via-transparent to-pink-500/5" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(16,185,129,0.15),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_120%,rgba(59,130,246,0.1),transparent)]" />
+        
+        {/* Advanced grid pattern */}
         <div 
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0 opacity-30"
           style={{
             backgroundImage: `
-              linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px)
+              linear-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+              linear-gradient(rgba(59, 130, 246, 0.04) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(59, 130, 246, 0.04) 1px, transparent 1px)
             `,
-            backgroundSize: '50px 50px'
+            backgroundSize: '80px 80px, 80px 80px, 20px 20px, 20px 20px'
           }}
         />
         
-        {/* Animated orbs */}
+        {/* Animated geometric shapes */}
         <motion.div
-          className="absolute top-20 left-[10%] w-96 h-96 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-full blur-3xl"
+          className="absolute top-20 left-[15%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-500/15 to-blue-500/15 rounded-full blur-3xl"
           animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.6, 0.3],
-            x: [0, 50, 0],
+            scale: [1, 1.3, 1],
+            opacity: [0.4, 0.7, 0.4],
+            x: [0, 80, 0],
+            y: [0, -40, 0],
           }}
           transition={{
-            duration: 8,
+            duration: 12,
             repeat: Infinity,
             ease: "easeInOut"
           }}
         />
         <motion.div
-          className="absolute bottom-20 right-[10%] w-80 h-80 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"
+          className="absolute top-[40%] right-[10%] w-[400px] h-[400px] bg-gradient-to-r from-purple-500/20 to-pink-500/15 rounded-full blur-3xl"
           animate={{
-            scale: [1.2, 1, 1.2],
-            opacity: [0.2, 0.5, 0.2],
-            x: [0, -30, 0],
+            scale: [1.2, 0.8, 1.2],
+            opacity: [0.3, 0.6, 0.3],
+            x: [0, -60, 0],
+            y: [0, 60, 0],
           }}
           transition={{
-            duration: 10,
+            duration: 15,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute bottom-20 left-[20%] w-[350px] h-[350px] bg-gradient-to-r from-cyan-500/15 to-blue-500/20 rounded-full blur-3xl"
+          animate={{
+            scale: [0.9, 1.4, 0.9],
+            opacity: [0.2, 0.5, 0.2],
+            x: [0, 40, 0],
+            y: [0, -30, 0],
+          }}
+          transition={{
+            duration: 18,
             repeat: Infinity,
             ease: "easeInOut"
           }}
@@ -842,6 +913,146 @@ export default function EnhancedHome() {
       </motion.section>
 
       <TradingIntelligenceSection />
+
+      {/* Ecosystem Section */}
+      <motion.section 
+        className="py-24 px-4 md:px-8 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-20">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="inline-flex items-center px-6 py-3 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-400 text-sm font-semibold mb-8 backdrop-blur-md"
+            >
+              <Network className="h-4 w-4 mr-2" />
+              Powered by Leading Ecosystems
+            </motion.div>
+            
+            <h2 className="text-5xl md:text-6xl font-black mb-8">
+              <span className="text-foreground">One Platform.</span>
+              <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-rose-400">
+                Infinite Possibilities.
+              </span>
+            </h2>
+            <p className="text-xl md:text-2xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
+              Connect to the world's leading blockchain networks and traditional markets through our unified infrastructure.
+            </p>
+          </div>
+
+          {/* Supported Networks */}
+          <div className="mb-16">
+            <h3 className="text-2xl md:text-3xl font-bold text-center mb-12">
+              Supported Networks & Exchanges
+            </h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+              {[
+                { name: "Ethereum", icon: "Ξ", color: "from-blue-400 to-blue-600" },
+                { name: "Bitcoin", icon: "₿", color: "from-orange-400 to-orange-600" },
+                { name: "Solana", icon: "◎", color: "from-purple-400 to-purple-600" },
+                { name: "Polygon", icon: "⬟", color: "from-indigo-400 to-indigo-600" },
+                { name: "Arbitrum", icon: "Ⴙ", color: "from-blue-400 to-cyan-400" },
+                { name: "Avalanche", icon: "🔺", color: "from-red-400 to-red-600" },
+                { name: "Binance", icon: "B", color: "from-yellow-400 to-yellow-600" },
+                { name: "Coinbase", icon: "C", color: "from-blue-500 to-blue-700" },
+                { name: "Kraken", icon: "K", color: "from-purple-500 to-purple-700" },
+                { name: "NYSE", icon: "₱", color: "from-green-400 to-green-600" },
+                { name: "NASDAQ", icon: "Ɲ", color: "from-teal-400 to-teal-600" },
+                { name: "LSE", icon: "£", color: "from-emerald-400 to-emerald-600" },
+              ].map((network, index) => (
+                <motion.div
+                  key={network.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  className="group"
+                >
+                  <div className="bg-background/50 border border-border/50 rounded-2xl p-6 text-center hover:border-purple-500/40 transition-all duration-300 backdrop-blur-sm">
+                    <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br ${network.color} flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
+                      {network.icon}
+                    </div>
+                    <h4 className="font-semibold text-foreground">{network.name}</h4>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* Asset Categories */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              {
+                title: "Cryptocurrencies",
+                description: "Trade 500+ digital assets across multiple blockchains",
+                icon: Bitcoin,
+                stats: "500+ Assets",
+                color: "from-orange-500 to-yellow-500",
+                assets: ["Bitcoin", "Ethereum", "Solana", "Cardano", "Polygon"]
+              },
+              {
+                title: "Traditional Stocks",
+                description: "Access global equity markets with fractional shares",
+                icon: TrendingUpIcon,
+                stats: "10,000+ Stocks",
+                color: "from-green-500 to-emerald-500",
+                assets: ["Apple", "Tesla", "Google", "Microsoft", "Amazon"]
+              },
+              {
+                title: "DeFi & NFTs",
+                description: "Participate in decentralized finance and digital collectibles",
+                icon: Layers,
+                stats: "1,000+ Protocols",
+                color: "from-purple-500 to-pink-500",
+                assets: ["Uniswap", "Aave", "Compound", "OpenSea", "Blur"]
+              }
+            ].map((category, index) => (
+              <motion.div
+                key={category.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.2 }}
+                whileHover={{ scale: 1.02 }}
+                className="group"
+              >
+                <div className="bg-background/50 border border-border/50 rounded-3xl p-8 hover:border-purple-500/40 transition-all duration-500 backdrop-blur-sm h-full">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className={`p-4 rounded-2xl bg-gradient-to-br ${category.color} shadow-lg`}>
+                      <category.icon className="h-8 w-8 text-white" />
+                    </div>
+                    <Badge variant="outline" className="border-purple-500/30 bg-purple-500/10 text-purple-400 font-bold">
+                      {category.stats}
+                    </Badge>
+                  </div>
+                  
+                  <h3 className="text-2xl font-bold mb-4 text-foreground">{category.title}</h3>
+                  <p className="text-muted-foreground mb-6 leading-relaxed">{category.description}</p>
+                  
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-muted-foreground mb-3">Popular Assets:</p>
+                    {category.assets.map((asset, assetIndex) => (
+                      <div key={assetIndex} className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full" />
+                        <span className="text-sm text-muted-foreground">{asset}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </motion.section>
 
       {/* Features Section */}
       <motion.section 
@@ -1027,6 +1238,34 @@ export default function EnhancedHome() {
           </div>
         </div>
       </motion.section>
+        
+        {/* Footer with additional trust signals */}
+        <motion.div 
+          className="max-w-7xl mx-auto mt-16 pt-8 border-t border-border/30"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+        >
+          <div className="flex flex-wrap justify-center items-center gap-8 text-muted-foreground text-sm">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-emerald-400" />
+              <span>ISO 27001 Certified</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-blue-400" />
+              <span>GDPR Compliant</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Fingerprint className="h-4 w-4 text-purple-400" />
+              <span>Multi-Factor Authentication</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4 text-pink-400" />
+              <span>Regulatory Approved</span>
+            </div>
+          </div>
+        </motion.div>
     </main>
   );
 }

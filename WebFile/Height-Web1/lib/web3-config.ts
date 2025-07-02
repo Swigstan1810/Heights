@@ -5,13 +5,22 @@ export const NETWORK_NAMES: { [key: number]: string } = {
   11155111: 'Sepolia Testnet',
   137: 'Polygon Mainnet',
   80001: 'Mumbai Testnet',
+  42161: 'Arbitrum One',
+  421613: 'Arbitrum Goerli',
 };
 
 // Supported chain IDs
-export const SUPPORTED_CHAINS: number[] = [11155111]; // Sepolia testnet only for now
+export const SUPPORTED_CHAINS: number[] = [42161, 421613, 11155111]; // Arbitrum mainnet, testnet, and Sepolia for development
 
-// Contract information
-export const CONTRACT_ADDRESS: string = '0x51cDdeBb33814F660415dF040Afd6d6124670682'; // Heights Token contract address
+// Contract information - Heights Token addresses per network
+export const CONTRACT_ADDRESSES: { [key: number]: string } = {
+  42161: process.env.NEXT_PUBLIC_HGT_ADDRESS_ARBITRUM || '', // Arbitrum mainnet
+  421613: process.env.NEXT_PUBLIC_HGT_ADDRESS_ARBITRUM_GOERLI || '', // Arbitrum testnet
+  11155111: '0x51cDdeBb33814F660415dF040Afd6d6124670682', // Sepolia testnet
+};
+
+// Legacy support - defaults to Arbitrum mainnet
+export const CONTRACT_ADDRESS: string = CONTRACT_ADDRESSES[42161] || '0x51cDdeBb33814F660415dF040Afd6d6124670682';
 
 // Explorer URL templates
 export const EXPLORER_TX_URLS: { [key: number]: string } = {
@@ -20,6 +29,8 @@ export const EXPLORER_TX_URLS: { [key: number]: string } = {
   11155111: 'https://sepolia.etherscan.io/tx/',
   137: 'https://polygonscan.com/tx/',
   80001: 'https://mumbai.polygonscan.com/tx/',
+  42161: 'https://arbiscan.io/tx/',
+  421613: 'https://goerli.arbiscan.io/tx/',
 };
 
 export const EXPLORER_ADDRESS_URLS: { [key: number]: string } = {
@@ -28,6 +39,8 @@ export const EXPLORER_ADDRESS_URLS: { [key: number]: string } = {
   11155111: 'https://sepolia.etherscan.io/address/',
   137: 'https://polygonscan.com/address/',
   80001: 'https://mumbai.polygonscan.com/address/',
+  42161: 'https://arbiscan.io/address/',
+  421613: 'https://goerli.arbiscan.io/address/',
 };
 
 // Web3 utilities

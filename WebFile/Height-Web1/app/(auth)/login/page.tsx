@@ -1,10 +1,11 @@
+
 // app/(auth)/login/page.tsx - Updated to redirect to home
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth, SecurityUtils } from "@/contexts/auth-context";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +24,6 @@ import {
   Info,
   Chrome
 } from "lucide-react";
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
-
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,12 +33,14 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lockoutTime, setLockoutTime] = useState<number | null>(null);
+  const [submitAttempts, setSubmitAttempts] = useState(0);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams?.get('redirectTo') || '/ai'; // Changed default to /home
-  const { signIn, signInWithGoogle, user, loading: authLoading } = useAuth();
-  const supabase = createClientComponentClient<Database>();
+  const message = searchParams?.get('message');
+  const registered = searchParams?.get('registered');
+  const { signIn, signInWithGoogle, user, loading: authLoading, isAccountLocked, checkAccountLockStatus } = useAuth();
   
   // Security feature: Clear sensitive data on unmount
   useEffect(() => {
@@ -52,12 +52,12 @@ export default function Login() {
   // Check if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      console.log("User already logged in, redirecting to: /ai");
-      router.push('/ai'); // Changed to /home
+      console.log("User already logged in, redirecting to: /portfolio");
+      router.push('/portfolio');
     }
   }, [user, authLoading, router]);
 
-  // Check for OAuth error in URL
+  // Handle URL parameters and setup remember me
   useEffect(() => {
     const error = searchParams?.get('error');
     const errorDescription = searchParams?.get('error_description');
@@ -65,119 +65,83 @@ export default function Login() {
     if (error) {
       setError(errorDescription || 'Authentication failed. Please try again.');
     }
-  }, [searchParams]);
-  
-  // Check for account lockout
-  const checkAccountLockout = async (email: string) => {
-    try {
-      const { data, error } = await supabase
-        .rpc('is_account_locked', { p_email: email });
-      
-      if (error) {
-        console.error('Error checking account lockout:', error);
-        return false;
-      }
-      
-      return data || false;
-    } catch (error) {
-      console.error('Error in lockout check:', error);
-      return false;
+    
+    // Show success message if user registered
+    if (registered) {
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 5000);
     }
-  };
+    
+    // Load remembered email
+    if (typeof window !== 'undefined') {
+      const rememberedEmail = localStorage.getItem('heights_remember_email');
+      if (rememberedEmail) {
+        setEmail(rememberedEmail);
+        setRememberMe(true);
+      }
+    }
+  }, [searchParams, registered]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple rapid submissions
+    if (loading || submitAttempts >= 3) {
+      setError('Too many attempts. Please wait a moment before trying again.');
+      return;
+    }
+
+    setSubmitAttempts(prev => prev + 1);
     setError(null);
     setLockoutTime(null);
     
-    // Basic validation
-    if (!email || !password) {
-      setError("Email and password are required");
-      return;
-    }
-    
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-    
-    setLoading(true);
-    
     try {
-      // Check if account is locked
-      const isLocked = await checkAccountLockout(email);
-      if (isLocked) {
-        let attempts = null;
-        let lastAttempt = null;
-        if (typeof window !== 'undefined') {
-          attempts = sessionStorage.getItem(`login_attempts_${email}`);
-          lastAttempt = sessionStorage.getItem(`last_attempt_${email}`);
-        }
-        
-        if (attempts && lastAttempt) {
-          const timeSinceLastAttempt = Date.now() - parseInt(lastAttempt);
-          const remainingTime = Math.ceil((15 * 60 * 1000 - timeSinceLastAttempt) / 60000);
-          setLockoutTime(remainingTime);
-        }
-        
-        setError("Account temporarily locked due to multiple failed login attempts.");
+      // Enhanced validation
+      if (!email || !password) {
+        setError("Email and password are required");
+        return;
+      }
+      
+      // Validate email format
+      if (!SecurityUtils.validateEmail(email)) {
+        setError("Please enter a valid email address");
+        return;
+      }
+      
+      setLoading(true);
+      
+      // Check if account is locked using enhanced auth context
+      const isLocked = await checkAccountLockStatus();
+      if (isLocked || isAccountLocked) {
+        setError("Account is temporarily locked due to multiple failed login attempts. Please try again later.");
         setLoading(false);
         return;
       }
       
       console.log("Attempting login for:", email);
-      const { error: signInError } = await signIn(email, password);
+      const result = await signIn(email, password);
       
-      if (signInError) {
-        console.error("Sign in error:", signInError);
+      if (result.error) {
+        console.error("Sign in error:", result.error);
         
-        // Log failed attempt
-        let p_ip_address = '';
-        let p_user_agent = '';
-        if (typeof window !== 'undefined') {
-          p_ip_address = window.location.hostname;
-          p_user_agent = navigator.userAgent;
-        }
-        await supabase.rpc('handle_failed_login', {
-          p_email: email,
-          p_ip_address,
-          p_user_agent
-        });
-        
-        // Check if it's an invalid credentials error
-        if (signInError.message.includes('Invalid login credentials')) {
-          let attempts = 0;
-          if (typeof window !== 'undefined') {
-            const storedAttempts = sessionStorage.getItem(`login_attempts_${email}`);
-            attempts = storedAttempts ? parseInt(storedAttempts) : 0;
+        // Handle specific error cases with better UX
+        if (result.error.message.includes('Invalid login credentials')) {
+          setError("Invalid email or password. Please check your credentials and try again.");
+        } else if (result.error.message.includes('Email not confirmed')) {
+          setError("Please verify your email address before signing in. Check your inbox for a confirmation link.");
+        } else if (result.error.message.includes('locked')) {
+          const minutesMatch = result.error.message.match(/(\d+) minutes/);
+          if (minutesMatch) {
+            setLockoutTime(parseInt(minutesMatch[1]));
           }
-          
-          if (attempts >= 4) {
-            setError("Invalid credentials. Next failed attempt will lock your account for 15 minutes.");
-          } else if (attempts >= 2) {
-            setError(`Invalid credentials. ${5 - attempts} attempts remaining.`);
-          } else {
-            setError("Invalid email or password. Please try again.");
-          }
-          
-          // Update attempt count in session storage
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem(`login_attempts_${email}`, (attempts + 1).toString());
-            sessionStorage.setItem(`last_attempt_${email}`, Date.now().toString());
-          }
+          setError(result.error.message);
+        } else if (result.error.message.includes('rate limit')) {
+          setError("Too many login attempts. Please wait 15 minutes and try again.");
         } else {
-          setError(signInError.message);
+          setError(result.error.message);
         }
       } else {
-        console.log("Sign in successful, redirecting to: /ai");
-        
-        // Clear login attempts on success
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem(`login_attempts_${email}`);
-          sessionStorage.removeItem(`last_attempt_${email}`);
-        }
+        console.log("Sign in successful");
         
         // Handle remember me
         if (rememberMe && typeof window !== 'undefined') {
@@ -186,16 +150,25 @@ export default function Login() {
           localStorage.removeItem('heights_remember_email');
         }
         
+        // Show email verification message if needed
+        if (result.requiresEmailVerification) {
+          setError("Please verify your email address before signing in. Check your inbox for a confirmation link.");
+          setLoading(false);
+          return;
+        }
+        
         // Router push is handled in auth context
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An error occurred during login");
-      }
+      console.error('Unexpected login error:', err);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
+      
+      // Reset attempt counter after 60 seconds
+      setTimeout(() => {
+        setSubmitAttempts(0);
+      }, 60000);
     }
   };
   

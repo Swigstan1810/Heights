@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { useAccount } from 'wagmi';
 import { Navbar } from '@/components/navbar';
+import { HeightsTradingInterface } from '@/components/trading/heights-trading-interface';
+import { createHeightsTokenContract, HeightsTokenUtils } from '@/lib/contracts/heights-token';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -58,6 +60,9 @@ import { ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Tooltip, Legen
 import Link from 'next/link';
 import { useRealtimeSync } from '@/hooks/use-realtime-sync';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { ethers } from 'ethers';
+import { HeightsWallet } from '@/components/wallet/heights-wallet';
+import { brokerageEngine } from '@/lib/services/brokerage-engine';
 
 // Interfaces
 interface PortfolioHolding {
@@ -73,6 +78,9 @@ interface PortfolioHolding {
   profit_loss: number;
   profit_loss_percentage: number;
   updated_at: string;
+  wallet_address?: string;
+  network?: string;
+  is_heights_token?: boolean;
 }
 
 interface TradeRecord {
@@ -207,6 +215,61 @@ export default function ConnectedPortfolioPage() {
     }
   }, [isInitialized, isAuthenticated, router]);
 
+  // Enhanced Heights Token integration
+  const addHeightsTokenBalance = async () => {
+    if (!user) return;
+    try {
+      // Get HGT balance from smart contract using Heights Token contract
+      const provider = new ethers.JsonRpcProvider('https://arb1.arbitrum.io/rpc');
+      const hgtContract = createHeightsTokenContract(provider);
+      
+      // Get user's Heights wallet address
+      const { data: wallet } = await supabase
+        .from('user_wallets')
+        .select('wallet_address')
+        .eq('user_id', user.id)
+        .eq('type', 'heights')
+        .eq('network', 'arbitrum')
+        .single();
+
+      if (wallet) {
+        const balance = await hgtContract.balanceOf(wallet.wallet_address);
+        const formattedBalance = ethers.formatEther(balance);
+        
+        // Get token info for accurate pricing
+        const tokenInfo = await hgtContract.getTokenInfo();
+        
+        if (parseFloat(formattedBalance) > 0) {
+          const hgtPrice = 0.002; // HGT initial price in USD, update from price feed
+          const hgtPriceINR = hgtPrice * 83.25; // Convert to INR
+          
+          setCryptoHoldings(prev => {
+            const filtered = prev.filter(h => h.symbol !== 'HGT');
+            return [...filtered, {
+              id: 'hgt-arbitrum',
+              symbol: 'HGT',
+              name: 'Heights Token',
+              asset_type: 'crypto',
+              quantity: parseFloat(formattedBalance),
+              average_buy_price: hgtPriceINR,
+              current_price: hgtPriceINR,
+              total_invested: parseFloat(formattedBalance) * hgtPriceINR,
+              current_value: parseFloat(formattedBalance) * hgtPriceINR,
+              profit_loss: 0, // Calculate based on purchase history
+              profit_loss_percentage: 0,
+              updated_at: new Date().toISOString(),
+              wallet_address: wallet.wallet_address,
+              network: 'arbitrum',
+              is_heights_token: true
+            }];
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading HGT balance:', error);
+    }
+  };
+
   // Fetch portfolio data from API
   const fetchPortfolioData = useCallback(async () => {
     if (!user) return;
@@ -266,6 +329,9 @@ export default function ConnectedPortfolioPage() {
           executed_at: trade.executed_at || trade.created_at
         })));
       }
+
+      // Add Heights Token check
+      await addHeightsTokenBalance();
 
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
@@ -375,6 +441,71 @@ export default function ConnectedPortfolioPage() {
       window.removeEventListener('portfolioUpdate', handleSyncData);
     };
   }, [fetchPortfolioData]);
+
+  // Add fee report component to Activity Tab
+  const FeeReport = () => {
+    const [feeReport, setFeeReport] = useState<any>(null);
+    const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week');
+    useEffect(() => {
+      if (user) {
+        brokerageEngine.getUserFeeReport(user.id, period).then(setFeeReport);
+      }
+    }, [user, period]);
+    if (!feeReport) return null;
+    return (
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calculator className="h-5 w-5" />
+            Fee Report
+          </CardTitle>
+          <div className="flex gap-2">
+            {(['day', 'week', 'month', 'all'] as const).map(p => (
+              <Button
+                key={p}
+                size="sm"
+                variant={period === p ? 'default' : 'outline'}
+                onClick={() => setPeriod(p)}
+              >
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </Button>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Fees</p>
+                <p className="text-2xl font-bold">${feeReport.totalFees.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Average per Trade</p>
+                <p className="text-2xl font-bold">${feeReport.averageFeePerTrade.toFixed(2)}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Fees by Type</p>
+              <div className="space-y-1">
+                {Object.entries(feeReport.feesByType).map(([type, amount]) => (
+                  <div key={type} className="flex justify-between">
+                    <span className="capitalize">{type}</span>
+                    <span className="font-medium">${(amount as number).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Heights charges only 0.08% on trades - lower than most competitors!
+              </AlertDescription>
+            </Alert>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   if (!isInitialized || loading) {
     return (
@@ -776,21 +907,42 @@ export default function ConnectedPortfolioPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
                   >
-                    <Card className="border-2 hover:shadow-lg transition-all duration-300">
+                    <Card className={`border-2 hover:shadow-lg transition-all duration-300 ${
+                      crypto.is_heights_token 
+                        ? 'border-gradient-to-r from-purple-500 to-pink-500 bg-gradient-to-br from-purple-50/20 to-pink-50/20 dark:from-purple-950/10 dark:to-pink-950/10' 
+                        : ''
+                    }`}>
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center text-white font-bold text-lg">
-                              {getCryptoIcon(crypto.symbol)}
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${
+                              crypto.is_heights_token 
+                                ? 'bg-gradient-to-br from-purple-500 to-pink-500' 
+                                : 'bg-gradient-to-br from-orange-500 to-yellow-500'
+                            }`}>
+                              {crypto.is_heights_token ? 'H' : getCryptoIcon(crypto.symbol)}
                             </div>
                             <div>
-                              <p className="font-semibold text-lg">{crypto.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-lg">{crypto.name}</p>
+                                {crypto.is_heights_token && (
+                                  <Badge variant="outline" className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+                                    <Star className="h-3 w-3 mr-1" />
+                                    Platform Token
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-sm text-muted-foreground">
                                 {crypto.quantity.toFixed(6)} {crypto.symbol}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 Avg: {formatINR(crypto.average_buy_price)}
                               </p>
+                              {crypto.is_heights_token && (
+                                <p className="text-xs text-purple-600 dark:text-purple-400">
+                                  Network: Arbitrum • Auto-detected
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="text-right">
@@ -814,6 +966,13 @@ export default function ConnectedPortfolioPage() {
                             value={Math.min(100, Math.max(0, crypto.profit_loss_percentage + 50))} 
                             className="h-2" 
                           />
+                          {crypto.is_heights_token && (
+                            <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 rounded-lg">
+                              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                                🎉 As a Heights Token holder, you get reduced trading fees and governance rights!
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -1071,6 +1230,26 @@ export default function ConnectedPortfolioPage() {
                 ))}
               </div>
             )}
+            <FeeReport />
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  Heights Wallet
+                </CardTitle>
+                <CardDescription>
+                  Your non-custodial wallet for trading
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/wallet">
+                  <Button className="w-full">
+                    <Wallet className="h-4 w-4 mr-2" />
+                    Open Wallet
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

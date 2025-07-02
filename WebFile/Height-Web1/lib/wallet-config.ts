@@ -1,10 +1,10 @@
 // lib/wallet-config.ts
 import { createConfig, http } from 'wagmi';
-import { mainnet, sepolia } from 'wagmi/chains';
+import { mainnet, sepolia, arbitrum, arbitrumGoerli } from 'wagmi/chains';
 import { coinbaseWallet, metaMask, walletConnect } from 'wagmi/connectors';
 
 export const walletConfig = createConfig({
-  chains: [mainnet, sepolia],
+  chains: [mainnet, sepolia, arbitrum, arbitrumGoerli],
   connectors: [
     coinbaseWallet({
       appName: 'Heights Trading',
@@ -28,5 +28,7 @@ export const walletConfig = createConfig({
   transports: {
     [mainnet.id]: http(),
     [sepolia.id]: http(),
+    [arbitrum.id]: http('https://arb1.arbitrum.io/rpc'),
+    [arbitrumGoerli.id]: http('https://goerli-rollup.arbitrum.io/rpc'),
   },
 });
