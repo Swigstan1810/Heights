@@ -5,32 +5,32 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title Heights Token (HGT)
- * @dev Advanced ERC20 token with anti-whale, anti-bot features for Heights trading platform
+ * @dev Advanced ERC20 token optimized for Arbitrum with anti-whale, anti-bot features
  * @author Heights Development Team
  * 
  * Features:
+ * - Arbitrum-optimized gas usage with batch operations
  * - Anti-whale protection with configurable max wallet/transaction limits
  * - Anti-bot mechanisms with snipe protection and same-block prevention
  * - Dynamic fee system with exemption capabilities
  * - Pausable transfers for emergency situations
  * - Minting and burning capabilities for supply management
+ * - DEX integration for seamless swapping
  * - Comprehensive access controls and security features
  */
 contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, ReentrancyGuard {
-    using SafeMath for uint256;
 
     // Token Configuration
     uint256 private constant INITIAL_SUPPLY = 1_000_000_000 * 10**18; // 1 billion HGT
     uint256 private constant MAX_SUPPLY = 10_000_000_000 * 10**18; // 10 billion HGT max supply
     
     // Anti-whale Configuration
-    uint256 public maxWalletAmount = INITIAL_SUPPLY.mul(2).div(100); // 2% of initial supply
-    uint256 public maxTransactionAmount = INITIAL_SUPPLY.mul(1).div(100); // 1% of initial supply
+    uint256 public maxWalletAmount = INITIAL_SUPPLY * 2 / 100; // 2% of initial supply
+    uint256 public maxTransactionAmount = INITIAL_SUPPLY * 1 / 100; // 1% of initial supply
     
     // Anti-bot Configuration
     uint256 public launchTime;
@@ -52,6 +52,7 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
     
     // Trading Configuration
     mapping(address => bool) public isExchange;
+    mapping(address => bool) public isDEXRouter;
     bool public tradingEnabled = false;
     
     // Events
@@ -76,7 +77,7 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
 
     constructor(
         address _feeRecipient
-    ) ERC20("Heights Token", "HGT") {
+    ) ERC20("Heights Token", "HGT") Ownable(msg.sender) {
         if (_feeRecipient == address(0)) revert ZeroAddress();
         
         feeRecipient = _feeRecipient;
@@ -131,7 +132,7 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
         
         // Calculate and apply fees
         uint256 feeAmount = _calculateAndApplyFees(from, to, amount);
-        uint256 transferAmount = amount.sub(feeAmount);
+        uint256 transferAmount = amount - feeAmount;
         
         // Execute the transfer
         _transfer(from, to, transferAmount);
@@ -161,8 +162,8 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
         }
         
         // Check wallet amount limit for buyers
-        if (!isExchange[from] && balanceOf(to).add(amount) > maxWalletAmount) {
-            revert ExceedsMaxWalletAmount(to, balanceOf(to).add(amount), maxWalletAmount);
+        if (!isExchange[from] && balanceOf(to) + amount > maxWalletAmount) {
+            revert ExceedsMaxWalletAmount(to, balanceOf(to) + amount, maxWalletAmount);
         }
     }
     
@@ -176,7 +177,7 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
         }
         
         // Prevent same-block transactions during snipe protection
-        if (block.timestamp < launchTime.add(SNIPE_PROTECTION_DURATION)) {
+        if (block.timestamp < launchTime + SNIPE_PROTECTION_DURATION) {
             if (_lastTransactionBlock[from] == block.number || _lastTransactionBlock[to] == block.number) {
                 revert SameBlockTransaction();
             }
@@ -221,7 +222,7 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
             feeRate = transferFee;
         }
         
-        return amount.mul(feeRate).div(FEE_DENOMINATOR);
+        return amount * feeRate / FEE_DENOMINATOR;
     }
     
     /**
@@ -229,7 +230,7 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
      */
     function mint(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
-        if (totalSupply().add(amount) > MAX_SUPPLY) {
+        if (totalSupply() + amount > MAX_SUPPLY) {
             revert ExceedsMaxSupply(amount, MAX_SUPPLY);
         }
         
@@ -321,11 +322,20 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
     }
     
     /**
+     * @dev Set DEX router status (only owner)
+     */
+    function setDEXRouterStatus(address account, bool _isDEXRouter) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        isDEXRouter[account] = _isDEXRouter;
+        emit ExemptionUpdated(account, _isDEXRouter, "dexrouter");
+    }
+    
+    /**
      * @dev Update anti-whale configuration (only owner)
      */
     function updateAntiWhaleConfig(uint256 _maxWalletAmount, uint256 _maxTransactionAmount) external onlyOwner {
-        require(_maxWalletAmount >= totalSupply().div(1000), "Max wallet too low"); // At least 0.1%
-        require(_maxTransactionAmount >= totalSupply().div(2000), "Max transaction too low"); // At least 0.05%
+        require(_maxWalletAmount >= totalSupply() / 1000, "Max wallet too low"); // At least 0.1%
+        require(_maxTransactionAmount >= totalSupply() / 2000, "Max transaction too low"); // At least 0.05%
         
         maxWalletAmount = _maxWalletAmount;
         maxTransactionAmount = _maxTransactionAmount;
@@ -433,8 +443,8 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
             return (false, "Bot detected");
         }
         
-        // Check trading enabled
-        if (!tradingEnabled && !isAuthorizedTransactor[from] && !isAuthorizedTransactor[to]) {
+        // Check trading enabled (allow DEX router interactions)
+        if (!tradingEnabled && !isAuthorizedTransactor[from] && !isAuthorizedTransactor[to] && !isDEXRouter[from] && !isDEXRouter[to]) {
             return (false, "Trading not enabled");
         }
         
@@ -444,12 +454,12 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
         }
         
         // Check wallet limits
-        if (!isExemptFromLimits[to] && !isExchange[from] && balanceOf(to).add(amount) > maxWalletAmount) {
+        if (!isExemptFromLimits[to] && !isExchange[from] && balanceOf(to) + amount > maxWalletAmount) {
             return (false, "Exceeds max wallet amount");
         }
         
         // Check same block during snipe protection
-        if (block.timestamp < launchTime.add(SNIPE_PROTECTION_DURATION)) {
+        if (block.timestamp < launchTime + SNIPE_PROTECTION_DURATION) {
             if (_lastTransactionBlock[from] == block.number || _lastTransactionBlock[to] == block.number) {
                 return (false, "Same block transaction during snipe protection");
             }
@@ -461,12 +471,12 @@ contract HeightsToken is ERC20, ERC20Burnable, ERC20Pausable, Ownable, Reentranc
     /**
      * @dev Required override for pausable functionality
      */
-    function _beforeTokenTransfer(address from, address to, uint256 amount)
+    function _update(address from, address to, uint256 value)
         internal
-        whenNotPaused
         override(ERC20, ERC20Pausable)
+        whenNotPaused
     {
-        super._beforeTokenTransfer(from, to, amount);
+        super._update(from, to, value);
     }
     
     /**

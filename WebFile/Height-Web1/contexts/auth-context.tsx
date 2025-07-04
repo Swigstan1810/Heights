@@ -5,7 +5,9 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import { useRouter } from 'next/navigation';
 import { User, Session } from '@supabase/supabase-js';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
+import { supabaseDebug, checkSupabaseConnection } from '@/lib/supabase';
 
 interface Profile {
   id: string;
@@ -186,7 +188,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const router = useRouter();
-  const supabase = createClientComponentClient<Database>();
+  
+  // Initialize Supabase client with comprehensive error handling and debugging
+  const supabase = (() => {
+    try {
+      supabaseDebug.log('Initializing Supabase client in AuthProvider');
+      
+      // First, check if environment variables are available
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      supabaseDebug.log('Environment check in AuthProvider', {
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseKey,
+        urlValue: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'undefined',
+        keyValue: supabaseKey ? `${supabaseKey.substring(0, 20)}...` : 'undefined'
+      });
+      
+      if (!supabaseUrl || !supabaseKey) {
+        supabaseDebug.error('Missing Supabase environment variables in AuthProvider');
+        throw new Error('Supabase configuration is missing - check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
+      }
+      
+      // Try to create client with explicit parameters
+      const client = createClientComponentClient<Database>({
+        supabaseUrl,
+        supabaseKey
+      });
+      
+      supabaseDebug.log('Successfully created Supabase client in AuthProvider');
+      return client;
+    } catch (error) {
+      supabaseDebug.error('Failed to initialize Supabase client in AuthProvider:', error);
+      
+      // Fallback to direct client creation
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseKey) {
+        supabaseDebug.log('Attempting fallback direct client creation');
+        return createClient<Database>(supabaseUrl, supabaseKey, {
+          auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true
+          }
+        });
+      }
+      
+      throw new Error('Supabase configuration is missing - cannot create fallback client');
+    }
+  })();
   const initializationRef = useRef(false);
   const fetchingRef = useRef<Set<string>>(new Set());
   const sessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -296,6 +348,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error && error.code !== 'PGRST116') {
+        // Handle RLS permission errors gracefully
+        if (error.code === 'PGRST301' || error.code === '42501') {
+          console.log('RLS policy blocking profile access, user may need verification');
+          return null;
+        }
         throw error;
       }
 
@@ -411,7 +468,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        // Handle RLS permission errors gracefully
+        if (error.code === 'PGRST301' || error.code === '42501') {
+          console.log('RLS policy blocking wallet access, returning null');
+          return null;
+        }
+        throw error;
+      }
 
       if (!data) {
         const { data: newWallet, error: createError } = await supabase
@@ -447,6 +511,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initializeAuth = async () => {
       try {
+        supabaseDebug.log('Starting auth initialization');
+        
+        // Check Supabase connection first
+        const healthCheck = await checkSupabaseConnection();
+        supabaseDebug.log('Health check result', healthCheck);
+        
+        if (!healthCheck.success) {
+          supabaseDebug.warn('Supabase connection unhealthy, continuing with initialization anyway');
+        }
+        
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) throw error;

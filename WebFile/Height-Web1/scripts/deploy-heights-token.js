@@ -18,7 +18,7 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log(`👤 Deployer: ${deployer.address}`);
   
-  const balance = await deployer.getBalance();
+  const balance = await ethers.provider.getBalance(deployer.address);
   console.log(`💰 Balance: ${ethers.formatEther(balance)} ETH\n`);
 
   // Minimum balance check
@@ -90,7 +90,9 @@ async function main() {
   console.log(`   Max Wallet: ${ethers.formatEther(tokenInfo._maxWalletAmount)} HGT`);
   console.log(`   Max Transaction: ${ethers.formatEther(tokenInfo._maxTransactionAmount)} HGT`);
   console.log(`   Fee Recipient: ${tokenInfo._feeRecipient}`);
-  console.log(`   Trading Enabled: ${tokenInfo._tradingEnabled}\n`);
+  console.log(`   Trading Enabled: ${tokenInfo._tradingEnabled}`);
+  console.log(`   Arbitrum Optimized: ${tokenInfo._isArbitrumOptimized}`);
+  console.log(`   Chain ID: ${tokenInfo._chainId}\n`);
 
   // Save deployment information
   const deploymentInfo = {
@@ -106,14 +108,16 @@ async function main() {
     tokenInfo: {
       name: await heightsToken.name(),
       symbol: await heightsToken.symbol(),
-      decimals: await heightsToken.decimals(),
+      decimals: (await heightsToken.decimals()).toString(),
       totalSupply: tokenInfo._totalSupply.toString(),
       maxSupply: tokenInfo._maxSupply.toString(),
       maxWalletAmount: tokenInfo._maxWalletAmount.toString(),
       maxTransactionAmount: tokenInfo._maxTransactionAmount.toString(),
       buyFee: tokenInfo._buyFee.toString(),
       sellFee: tokenInfo._sellFee.toString(),
-      transferFee: tokenInfo._transferFee.toString()
+      transferFee: tokenInfo._transferFee.toString(),
+      isArbitrumOptimized: tokenInfo._isArbitrumOptimized,
+      chainId: tokenInfo._chainId.toString()
     }
   };
 
@@ -147,14 +151,29 @@ async function main() {
   console.log(`npx hardhat verify --network ${networkName} ${contractAddress} "${feeRecipient}"`);
 
   // Post-deployment setup instructions
+  // Set up DEX routers for Arbitrum
+  if (network.chainId === 42161n || network.chainId === 421614n) {
+    console.log("\n🔄 Setting up DEX router integration...");
+    const uniswapV3Router = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+    
+    try {
+      await heightsToken.setDEXRouterStatus(uniswapV3Router, true);
+      console.log(`✅ Uniswap V3 Router configured: ${uniswapV3Router}`);
+    } catch (error) {
+      console.log(`⚠️  DEX router setup will be done manually: ${error.message}`);
+    }
+  }
+
   console.log("\n⚙️  Post-Deployment Setup:");
   console.log("1. Enable trading when ready:");
   console.log(`   await heightsToken.enableTrading()`);
   console.log("\n2. Set exchange addresses:");
   console.log(`   await heightsToken.setExchangeStatus(exchangeAddress, true)`);
-  console.log("\n3. Configure fee exemptions:");
+  console.log("\n3. Set DEX router addresses (for swaps):");
+  console.log(`   await heightsToken.setDEXRouterStatus(routerAddress, true)`);
+  console.log("\n4. Configure fee exemptions:");
   console.log(`   await heightsToken.setFeeExemption(address, true)`);
-  console.log("\n4. Update fee recipient if needed:");
+  console.log("\n5. Update fee recipient if needed:");
   console.log(`   await heightsToken.updateFeeRecipient(newRecipient)`);
 
   // Security recommendations

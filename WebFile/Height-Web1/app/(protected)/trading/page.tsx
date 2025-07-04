@@ -18,7 +18,13 @@ import {
   Info,
   Zap,
   Shield,
-  Target
+  Target,
+  Lock,
+  Clock,
+  LineChart,
+  TrendingDown,
+  Sparkles,
+  Eye
 } from 'lucide-react';
 import { CryptoTradingInterface } from '@/components/trading/crypto-trading-interface';
 import { toast } from 'sonner';
@@ -215,13 +221,248 @@ export default function TradingPage() {
         </TabsContent>
 
         <TabsContent value="leverage" className="space-y-4">
-          <Alert>
-            <Shield className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Leverage Trading:</strong> Trade with up to 10x leverage. Higher potential returns come with higher risk.
-            </AlertDescription>
-          </Alert>
-          <CryptoTradingInterface />
+          <div className="relative">
+            {/* Leverage Trading Interface - Full UI but locked */}
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Trading Chart */}
+                <div className="lg:col-span-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <LineChart className="h-5 w-5" />
+                        ETH/USD Leverage Chart
+                        <Badge variant="outline" className="ml-auto">
+                          <Activity className="h-3 w-3 mr-1" />
+                          Live
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-80 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg flex items-center justify-center">
+                        <div className="text-center space-y-2">
+                          <LineChart className="h-12 w-12 text-muted-foreground mx-auto" />
+                          <p className="text-muted-foreground">Advanced Trading Chart</p>
+                          <p className="text-sm text-muted-foreground">Real-time price action with indicators</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Trading Panel */}
+                <div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Zap className="h-5 w-5" />
+                        Leverage Trading
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Tabs defaultValue="long">
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="long" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
+                            Long
+                          </TabsTrigger>
+                          <TabsTrigger value="short" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
+                            Short
+                          </TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="long" className="space-y-4 mt-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Amount (USD)</label>
+                            <input
+                              type="number"
+                              placeholder="1000"
+                              className="w-full px-3 py-2 border rounded-lg bg-background"
+                              disabled
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Leverage</label>
+                            <select className="w-full px-3 py-2 border rounded-lg bg-background" disabled>
+                              <option>2x</option>
+                              <option>5x</option>
+                              <option>10x</option>
+                              <option>20x</option>
+                            </select>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Take Profit</label>
+                            <input
+                              type="number"
+                              placeholder="2800"
+                              className="w-full px-3 py-2 border rounded-lg bg-background"
+                              disabled
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Stop Loss</label>
+                            <input
+                              type="number"
+                              placeholder="2400"
+                              className="w-full px-3 py-2 border rounded-lg bg-background"
+                              disabled
+                            />
+                          </div>
+                          
+                          <Button className="w-full" disabled>
+                            <TrendingUp className="h-4 w-4 mr-2" />
+                            Open Long Position
+                          </Button>
+                        </TabsContent>
+                        
+                        <TabsContent value="short" className="space-y-4 mt-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Amount (USD)</label>
+                            <input
+                              type="number"
+                              placeholder="1000"
+                              className="w-full px-3 py-2 border rounded-lg bg-background"
+                              disabled
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Leverage</label>
+                            <select className="w-full px-3 py-2 border rounded-lg bg-background" disabled>
+                              <option>2x</option>
+                              <option>5x</option>
+                              <option>10x</option>
+                              <option>20x</option>
+                            </select>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Take Profit</label>
+                            <input
+                              type="number"
+                              placeholder="2400"
+                              className="w-full px-3 py-2 border rounded-lg bg-background"
+                              disabled
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Stop Loss</label>
+                            <input
+                              type="number"
+                              placeholder="2800"
+                              className="w-full px-3 py-2 border rounded-lg bg-background"
+                              disabled
+                            />
+                          </div>
+                          
+                          <Button className="w-full" variant="destructive" disabled>
+                            <TrendingDown className="h-4 w-4 mr-2" />
+                            Open Short Position
+                          </Button>
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+              
+              {/* Positions & Risk Management */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5" />
+                      Open Positions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Activity className="h-8 w-8 mx-auto mb-2" />
+                      <p>No open positions</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Risk Management
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Account Balance</span>
+                      <span className="font-medium">$10,000.00</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Available Margin</span>
+                      <span className="font-medium">$8,500.00</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Used Margin</span>
+                      <span className="font-medium">$1,500.00</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Margin Level</span>
+                      <span className="font-medium text-green-600">566.67%</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+            
+            {/* Coming Soon Overlay */}
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
+              <Card className="max-w-md w-full mx-4">
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4 shadow-lg">
+                    <Lock className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Leverage Trading</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Advanced leverage trading with comprehensive risk management tools
+                  </p>
+                  
+                  <Alert className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 mb-4">
+                    <Clock className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700 dark:text-amber-300">
+                      <strong>Coming Soon:</strong> We're implementing advanced risk management and regulatory compliance features.
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-blue-500" />
+                      <span>Risk Management</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Target className="h-4 w-4 text-green-500" />
+                      <span>Up to 20x Leverage</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-purple-500" />
+                      <span>Instant Execution</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-orange-500" />
+                      <span>Live Monitoring</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6">
+                    <Button variant="outline" className="gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Notify When Ready
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="markets" className="space-y-4">

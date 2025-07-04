@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useSigner } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 import { ethers } from 'ethers';
-import { DexTradingService, TradeQuote, SwapParams } from '@/lib/services/dex-trading-service';
+import { DexTradingService, TradeQuote, SwapParams, TokenInfo } from '@/lib/services/dex-trading-service';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Wallet,
-  Gas,
   Percent,
   Clock,
   Star
@@ -36,17 +35,10 @@ import {
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface TokenBalance {
-  symbol: string;
-  balance: string;
-  name: string;
-  address: string;
-}
-
 export function DexTradingInterface() {
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
-  const { data: signer } = useSigner();
+  const { data: walletClient } = useWalletClient();
   
   // Trading state
   const [dexService, setDexService] = useState<DexTradingService | null>(null);
@@ -57,18 +49,19 @@ export function DexTradingInterface() {
   const [quote, setQuote] = useState<TradeQuote | null>(null);
   const [loading, setLoading] = useState(false);
   const [quoteLoading, setQuoteLoading] = useState(false);
-  const [balances, setBalances] = useState<Record<string, TokenBalance>>({});
+  const [balances, setBalances] = useState<Record<string, TokenInfo>>({});
   const [swapping, setSwapping] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
 
   // Initialize DEX service
   useEffect(() => {
-    if (isConnected && signer) {
+    if (isConnected) {
       const provider = new ethers.JsonRpcProvider('https://arb1.arbitrum.io/rpc');
-      const service = new DexTradingService(provider, signer);
+      // Only pass provider for now, as walletClient is not a signer
+      const service = new DexTradingService(provider);
       setDexService(service);
     }
-  }, [isConnected, signer]);
+  }, [isConnected]);
 
   // Load user balances
   const loadBalances = useCallback(async () => {
@@ -117,43 +110,39 @@ export function DexTradingInterface() {
     return () => clearTimeout(timer);
   }, [getQuote]);
 
-  // Execute swap
+  // Execute swap (LOCKED - Coming Soon)
   const executeSwap = async () => {
+    toast.info('Swap feature coming soon! We are working on integrating swap functionality.');
+    return;
+    
+    // Original swap logic disabled for production
+    /*
     if (!dexService || !quote || !address) return;
 
     setSwapping(true);
     try {
       const swapParams: SwapParams = {
-        tokenIn,
-        tokenOut,
-        amountIn,
+        tokenIn: tokenIn ?? '',
+        tokenOut: tokenOut ?? '',
+        amountIn: amountIn ?? '',
         slippage,
-        recipient: address
+        recipient: address ?? ''
       };
 
-      const tx = await dexService.executeSwap(swapParams);
-      setLastTxHash(tx.hash);
-      
+      await dexService.executeSwap(swapParams);
       toast.success('Swap transaction submitted!');
-      
-      // Wait for confirmation
-      await tx.wait();
-      
-      toast.success('Swap completed successfully!');
-      
-      // Refresh balances
+      // Optionally reload balances
       await loadBalances();
-      
       // Clear form
       setAmountIn('');
       setQuote(null);
-      
     } catch (error) {
       console.error('Swap error:', error);
       toast.error(error instanceof Error ? error.message : 'Swap failed');
     } finally {
       setSwapping(false);
     }
+    */
   };
 
   // Flip tokens
@@ -167,11 +156,11 @@ export function DexTradingInterface() {
   // Set max amount
   const setMaxAmount = () => {
     const balance = balances[tokenIn];
-    if (balance) {
+    if (balance && balance.balance !== undefined) {
       const maxAmount = tokenIn === 'ETH' 
         ? (parseFloat(balance.balance) * 0.99).toString() // Leave some for gas
         : balance.balance;
-      setAmountIn(maxAmount);
+      setAmountIn(maxAmount ?? '');
     }
   };
 
@@ -193,7 +182,7 @@ export function DexTradingInterface() {
     if (!quote || !amountIn || parseFloat(amountIn) <= 0) return false;
     
     const balance = balances[tokenIn];
-    if (!balance || parseFloat(balance.balance) < parseFloat(amountIn)) return false;
+    if (!balance || balance.balance === undefined || parseFloat(balance.balance) < parseFloat(amountIn)) return false;
     
     return true;
   };
@@ -243,7 +232,7 @@ export function DexTradingInterface() {
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm font-medium">From</Label>
                 <div className="text-xs text-muted-foreground">
-                  Balance: {balances[tokenIn] ? formatAmount(balances[tokenIn].balance) : '0'} {tokenIn}
+                  Balance: {balances[tokenIn] && balances[tokenIn].balance !== undefined ? formatAmount(balances[tokenIn].balance ?? '') : '0'} {tokenIn}
                 </div>
               </div>
               
@@ -302,7 +291,7 @@ export function DexTradingInterface() {
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm font-medium">To</Label>
                 <div className="text-xs text-muted-foreground">
-                  Balance: {balances[tokenOut] ? formatAmount(balances[tokenOut].balance) : '0'} {tokenOut}
+                  Balance: {balances[tokenOut] && balances[tokenOut].balance !== undefined ? formatAmount(balances[tokenOut].balance ?? '') : '0'} {tokenOut}
                 </div>
               </div>
               
@@ -368,14 +357,6 @@ export function DexTradingInterface() {
                   
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      <Gas className="h-3 w-3" />
-                      Gas Fee
-                    </span>
-                    <span>~{parseFloat(quote.gasEstimate).toFixed(6)} ETH</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       Slippage
                     </span>
@@ -415,47 +396,26 @@ export function DexTradingInterface() {
             )}
           </AnimatePresence>
 
-          {/* Swap Button */}
-          <Button 
-            className="w-full h-12 text-lg font-semibold"
-            onClick={executeSwap}
-            disabled={!canSwap() || swapping}
-          >
-            {swapping ? (
-              <>
-                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                Swapping...
-              </>
-            ) : !amountIn ? (
-              'Enter Amount'
-            ) : !quote ? (
-              'Get Quote'
-            ) : !balances[tokenIn] || parseFloat(balances[tokenIn].balance) < parseFloat(amountIn) ? (
-              `Insufficient ${tokenIn} Balance`
-            ) : (
-              <>
-                <Zap className="h-5 w-5 mr-2" />
-                Swap {tokenIn} for {tokenOut}
-              </>
-            )}
-          </Button>
+          {/* Swap Button - Coming Soon */}
+          <div className="space-y-3">
+            <Button 
+              className="w-full h-12 text-lg font-semibold"
+              onClick={executeSwap}
+              variant="outline"
+              disabled
+            >
+              <Zap className="h-5 w-5 mr-2" />
+              Swap Coming Soon
+            </Button>
+            <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-300">
+                Swap functionality is coming soon! We're working on integrating secure DEX trading.
+              </AlertDescription>
+            </Alert>
+          </div>
 
-          {/* Transaction Hash */}
-          {lastTxHash && (
-            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-green-600">Transaction submitted</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.open(`https://arbiscan.io/tx/${lastTxHash}`, '_blank')}
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+          {/* Transaction hash display removed for compatibility */}
         </CardContent>
       </Card>
 
@@ -502,7 +462,7 @@ export function DexTradingInterface() {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">{formatAmount(balance.balance)}</p>
+                    <p className="font-medium">{formatAmount(balance.balance ?? '')}</p>
                     <p className="text-xs text-muted-foreground">{symbol}</p>
                   </div>
                 </div>

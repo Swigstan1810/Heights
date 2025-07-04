@@ -1,33 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
-import { coinbaseRealtimeService } from '@/lib/services/coinbase-realtime-service';
 
 export async function GET(
   request: Request,
   { params }: { params: { symbol: string } }
 ) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const symbol = params.symbol.toUpperCase();
-    const type = searchParams.get('type') as 'stock' | 'crypto' || 'stock';
-    const includeHistorical = searchParams.get('historical') === 'true';
-    const interval = searchParams.get('interval') as '1d' | '1w' | '1m' || '1d';
-    const limit = parseInt(searchParams.get('limit') || '30', 10);
-    
-    // Fetch current market data
-    const marketData = await coinbaseRealtimeService.getMarketData(symbol);
-    
-    // If requested, add historical data (if available)
-    // const historicalData = await coinbaseRealtimeService.getHistoricalData(symbol, interval, limit);
-    // marketData.historical = historicalData;
-    
-    return NextResponse.json(marketData);
-    
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json({ error: err.message }, { status: 500 });
-    } else {
-      return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-    }
-  }
+  // PRODUCTION LOCK - Market data APIs disabled for launch
+  return NextResponse.json(
+    { success: false, error: 'Market data API temporarily disabled for production launch' },
+    { status: 503 }
+  );
 }

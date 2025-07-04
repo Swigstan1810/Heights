@@ -5,6 +5,14 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
+  // PRODUCTION LOCK - Trading disabled for launch
+  return NextResponse.json(
+    { success: false, error: 'Trading functionality is temporarily disabled. Coming soon!' },
+    { status: 503 }
+  );
+  
+  // Original trading logic disabled for production
+  /*
   try {
     const supabase = createRouteHandlerClient({ cookies });
     
@@ -195,6 +203,7 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+  */
 }
 
 // Helper function to get crypto names

@@ -31,6 +31,7 @@ export const HEIGHTS_TOKEN_ABI = [
   "function setFeeExemption(address account, bool exempt)",
   "function setLimitExemption(address account, bool exempt)",
   "function setExchangeStatus(address account, bool _isExchange)",
+  "function setDEXRouterStatus(address account, bool _isDEXRouter)",
   "function setBotStatus(address account, bool _isBot)",
   "function mint(address to, uint256 amount)",
   "function burn(uint256 amount)",

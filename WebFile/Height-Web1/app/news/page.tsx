@@ -90,7 +90,7 @@ export default function NewsPage() {
     },
     { 
       id: 'india', 
-      label: 'Indian Markets', 
+      label: 'India Market', 
       icon: IndianRupee, 
       gradient: 'from-green-600 to-blue-600',
       bg: 'bg-gradient-to-br from-green-50/50 to-blue-50/50 dark:from-green-950/10 dark:to-blue-950/10',
@@ -117,7 +117,7 @@ export default function NewsPage() {
     }
   ];
 
-  // Fetch news articles
+  // Fetch news articles with enhanced error handling and category-specific messaging
   const fetchNews = useCallback(async (category: string = 'all', showLoading: boolean = true) => {
     try {
       if (showLoading) setLoading(true);
@@ -129,96 +129,162 @@ export default function NewsPage() {
       if (data.success) {
         setArticles(data.data);
         setFilteredArticles(data.data);
+        
+        // Enhanced feedback based on data source and category
         if (data.fallback) {
-          toast.info('Using cached news data');
+          toast.info(`Showing ${category === 'all' ? 'sample' : category} news (offline mode)`);
         } else {
-          toast.success(`${data.data.length} latest articles loaded`);
+          const categoryLabel = category === 'all' ? 'latest' : category;
+          toast.success(`${data.data.length} ${categoryLabel} articles loaded from ${data.source}`);
         }
       } else {
         throw new Error('Failed to fetch news');
       }
     } catch (error) {
       console.error('Error fetching news:', error);
-      toast.error('Failed to load news articles');
+      toast.error(`Failed to load ${category === 'all' ? 'news' : category} articles`);
       
-      // Fallback to mock data for demo
-      const mockArticles: NewsArticle[] = [
-        {
-          id: '1',
-          title: 'Bitcoin Surges Past $45,000 as Institutional Adoption Grows',
-          summary: 'Major financial institutions continue to embrace cryptocurrency, driving Bitcoin to new monthly highs amid increased trading volume.',
-          content: 'Bitcoin has experienced significant growth this week, with the price climbing above $45,000 for the first time this month. The surge comes as several major financial institutions announced new cryptocurrency investment products, signaling growing institutional acceptance of digital assets.',
-          category: 'crypto',
-          sentiment: 'positive',
-          impact: 'high',
-          timestamp: new Date().toISOString(),
-          tags: ['Bitcoin', 'Cryptocurrency', 'Institutional Investment'],
-          source: 'CryptoNews',
-          trending: true,
-          image: undefined,
-          url: '#'
-        },
-        {
-          id: '2',
-          title: 'Indian Stock Market Reaches Record High on Strong Q3 Earnings',
-          summary: 'Nifty 50 and Sensex both hit all-time highs as major companies report better-than-expected quarterly results.',
-          content: 'The Indian stock market continued its bullish run today as strong corporate earnings drove investor confidence. Major IT and pharmaceutical companies led the rally with impressive quarterly results.',
-          category: 'india',
-          sentiment: 'positive',
-          impact: 'medium',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          tags: ['Nifty', 'Sensex', 'Earnings', 'India'],
-          source: 'Economic Times',
-          trending: false,
-          image: undefined,
-          url: '#'
-        },
-        {
-          id: '3',
-          title: 'Global Tech Stocks Face Pressure Amid Rising Interest Rates',
-          summary: 'Technology stocks worldwide decline as central banks signal continued monetary tightening to combat inflation.',
-          content: 'Global technology stocks faced selling pressure today as investors reassessed valuations in light of rising interest rates. Central banks worldwide continue their hawkish stance to combat persistent inflation.',
-          category: 'global',
-          sentiment: 'negative',
-          impact: 'high',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          tags: ['Technology', 'Interest Rates', 'Global Markets'],
-          source: 'Financial Times',
-          trending: true,
-          image: undefined,
-          url: '#'
-        },
-        {
-          id: '4',
-          title: 'Ethereum 2.0 Staking Rewards Attract Institutional Interest',
-          summary: 'Major investment firms are exploring Ethereum staking opportunities as the network transitions to proof-of-stake consensus.',
-          content: 'The transition to Ethereum 2.0 has created new opportunities for institutional investors seeking yield. Several major investment firms have announced dedicated Ethereum staking services.',
-          category: 'crypto',
-          sentiment: 'positive',
-          impact: 'medium',
-          timestamp: new Date(Date.now() - 10800000).toISOString(),
-          tags: ['Ethereum', 'Staking', 'DeFi'],
-          source: 'DeFi Pulse',
-          trending: false,
-          image: undefined,
-          url: '#'
-        },
-        {
-          id: '5',
-          title: 'RBI Announces New Digital Rupee Pilot Program',
-          summary: 'Reserve Bank of India expands its central bank digital currency trials to include retail transactions.',
-          content: 'The Reserve Bank of India has announced an expansion of its digital rupee pilot program, marking a significant step in the countrys digital currency adoption journey.',
-          category: 'india',
-          sentiment: 'neutral',
-          impact: 'medium',
-          timestamp: new Date(Date.now() - 14400000).toISOString(),
-          tags: ['Digital Rupee', 'RBI', 'CBDC'],
-          source: 'RBI Bulletin',
-          trending: false,
-          image: undefined,
-          url: '#'
+      // Enhanced fallback with category-specific mock data
+      const getCategoryMockData = (cat: string): NewsArticle[] => {
+        const mockData = {
+          crypto: [
+            {
+              id: 'mock-crypto-1',
+              title: 'Bitcoin Surges Past $45,000 as Institutional Adoption Grows',
+              summary: 'Major financial institutions continue to embrace cryptocurrency, driving Bitcoin to new monthly highs amid increased trading volume.',
+              content: 'Bitcoin has experienced significant growth this week, with the price climbing above $45,000 for the first time this month. The surge comes as several major financial institutions announced new cryptocurrency investment products, signaling growing institutional acceptance of digital assets.',
+              category: 'crypto' as const,
+              sentiment: 'positive' as const,
+              impact: 'high' as const,
+              timestamp: new Date().toISOString(),
+              tags: ['Bitcoin', 'Cryptocurrency', 'Institutional Investment'],
+              source: 'CryptoNews',
+              trending: true,
+              url: '#'
+            },
+            {
+              id: 'mock-crypto-2',
+              title: 'Ethereum 2.0 Staking Rewards Attract Institutional Interest',
+              summary: 'Major investment firms are exploring Ethereum staking opportunities as the network transitions to proof-of-stake consensus.',
+              content: 'The transition to Ethereum 2.0 has created new opportunities for institutional investors seeking yield. Several major investment firms have announced dedicated Ethereum staking services.',
+              category: 'crypto' as const,
+              sentiment: 'positive' as const,
+              impact: 'medium' as const,
+              timestamp: new Date(Date.now() - 3600000).toISOString(),
+              tags: ['Ethereum', 'Staking', 'DeFi'],
+              source: 'DeFi Pulse',
+              trending: false,
+              url: '#'
+            }
+          ],
+          india: [
+            {
+              id: 'mock-india-1',
+              title: 'Indian Stock Market Reaches Record High on Strong Q3 Earnings',
+              summary: 'Nifty 50 and Sensex both hit all-time highs as major companies report better-than-expected quarterly results.',
+              content: 'The Indian stock market continued its bullish run today as strong corporate earnings drove investor confidence. Major IT and pharmaceutical companies led the rally with impressive quarterly results.',
+              category: 'india' as const,
+              sentiment: 'positive' as const,
+              impact: 'high' as const,
+              timestamp: new Date().toISOString(),
+              tags: ['Nifty', 'Sensex', 'Earnings', 'India'],
+              source: 'Economic Times',
+              trending: true,
+              url: '#'
+            },
+            {
+              id: 'mock-india-2',
+              title: 'RBI Announces New Digital Rupee Pilot Program',
+              summary: 'Reserve Bank of India expands its central bank digital currency trials to include retail transactions.',
+              content: 'The Reserve Bank of India has announced an expansion of its digital rupee pilot program, marking a significant step in the countrys digital currency adoption journey.',
+              category: 'india' as const,
+              sentiment: 'neutral' as const,
+              impact: 'medium' as const,
+              timestamp: new Date(Date.now() - 7200000).toISOString(),
+              tags: ['Digital Rupee', 'RBI', 'CBDC'],
+              source: 'RBI Bulletin',
+              trending: false,
+              url: '#'
+            }
+          ],
+          global: [
+            {
+              id: 'mock-global-1',
+              title: 'Global Tech Stocks Face Pressure Amid Rising Interest Rates',
+              summary: 'Technology stocks worldwide decline as central banks signal continued monetary tightening to combat inflation.',
+              content: 'Global technology stocks faced selling pressure today as investors reassessed valuations in light of rising interest rates. Central banks worldwide continue their hawkish stance to combat persistent inflation.',
+              category: 'global' as const,
+              sentiment: 'negative' as const,
+              impact: 'high' as const,
+              timestamp: new Date().toISOString(),
+              tags: ['Technology', 'Interest Rates', 'Global Markets'],
+              source: 'Financial Times',
+              trending: true,
+              url: '#'
+            },
+            {
+              id: 'mock-global-2',
+              title: 'European Markets Rally on Strong Manufacturing Data',
+              summary: 'European indices surge as manufacturing PMI data exceeds expectations across major economies.',
+              content: 'European stock markets posted strong gains today following better-than-expected manufacturing data from Germany, France, and Italy. The positive economic indicators have boosted investor confidence.',
+              category: 'global' as const,
+              sentiment: 'positive' as const,
+              impact: 'medium' as const,
+              timestamp: new Date(Date.now() - 5400000).toISOString(),
+              tags: ['European Markets', 'Manufacturing', 'PMI'],
+              source: 'Reuters',
+              trending: false,
+              url: '#'
+            }
+          ],
+          economy: [
+            {
+              id: 'mock-economy-1',
+              title: 'Federal Reserve Signals Potential Rate Cuts in 2024',
+              summary: 'Fed officials hint at possible monetary policy easing as inflation shows signs of cooling.',
+              content: 'Federal Reserve officials have indicated that interest rate cuts may be on the table for 2024 if inflation continues its downward trend. The central bank remains cautious but optimistic about economic conditions.',
+              category: 'economy' as const,
+              sentiment: 'positive' as const,
+              impact: 'high' as const,
+              timestamp: new Date().toISOString(),
+              tags: ['Federal Reserve', 'Interest Rates', 'Inflation'],
+              source: 'Wall Street Journal',
+              trending: true,
+              url: '#'
+            }
+          ],
+          stock: [
+            {
+              id: 'mock-stock-1',
+              title: 'Tech Giants Report Strong Q4 Earnings Despite Market Volatility',
+              summary: 'Major technology companies exceed analyst expectations with robust quarterly performance.',
+              content: 'Leading technology companies have reported impressive fourth-quarter earnings, demonstrating resilience despite broader market challenges. Cloud computing and AI investments continue to drive growth.',
+              category: 'stock' as const,
+              sentiment: 'positive' as const,
+              impact: 'medium' as const,
+              timestamp: new Date().toISOString(),
+              tags: ['Tech Stocks', 'Earnings', 'Q4 Results'],
+              source: 'MarketWatch',
+              trending: false,
+              url: '#'
+            }
+          ]
+        };
+        
+        if (cat === 'all') {
+          return [
+            ...mockData.crypto.slice(0, 2),
+            ...mockData.india.slice(0, 2),
+            ...mockData.global.slice(0, 2),
+            ...mockData.economy.slice(0, 1),
+            ...mockData.stock.slice(0, 1)
+          ];
         }
-      ];
+        
+        return mockData[cat as keyof typeof mockData] || mockData.global;
+      };
+      
+      const mockArticles = getCategoryMockData(category);
       setArticles(mockArticles);
       setFilteredArticles(mockArticles);
     } finally {

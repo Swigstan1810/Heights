@@ -11,6 +11,7 @@ import {
   AnalysisResult
 } from '@/types/ai-types';
 
+
 export class SimplifiedAIOrchestrator {
   private static instance: SimplifiedAIOrchestrator;
   private claude: ChatAnthropic;

@@ -43,14 +43,12 @@ import {
   Monitor,
   BookmarkCheck,
   TrendingUp,
-  CreditCard,
-  Bitcoin,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAVIGATION_ITEMS = [
-  { href: '/home', label: 'Dashboard', icon: Home },
-  { href: '/trading', label: 'Crypto Trading', icon: Bitcoin, badge: 'NEW' },
+  { href: '/crypto', label: 'Trade', icon: TrendingUp },
   { href: '/watchlist', label: 'Watchlist', icon: BookmarkCheck },
   { href: '/portfolio', label: 'Portfolio', icon: PieChart },
   { href: '/ai', label: 'AI Assistant', icon: Brain, badge: 'New' },
@@ -58,7 +56,39 @@ const NAVIGATION_ITEMS = [
 ];
 
 export function Navbar() {
-  const { user, isAuthenticated, signOut, walletBalance, profile } = useAuth();
+  let auth: ReturnType<typeof useAuth> | null = null;
+  try {
+    auth = useAuth();
+  } catch (e) {
+    // If not inside AuthProvider, render a minimal fallback Navbar
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-b">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-center gap-2">
+              <HeightsLogo size="lg" />
+              <span className="text-xl font-bold bg-gradient-to-r from-[#27391C] to-[#1F7D53] bg-clip-text text-transparent">
+                Heights
+              </span>
+            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
+                  <Monitor className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem>Light</DropdownMenuItem>
+                <DropdownMenuItem>Dark</DropdownMenuItem>
+                <DropdownMenuItem>System</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+  const { user, isAuthenticated, signOut, walletBalance, profile } = auth;
   const { theme, setTheme } = useTheme();
   const { isConnected } = useAccount();
   const router = useRouter();
@@ -155,7 +185,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link 
-            href={isAuthenticated ? "/home" : "/"} 
+            href={isAuthenticated ? "/dashboard" : "/"} 
             className="flex items-center gap-2 flex-shrink-0"
           >
             <HeightsLogo size="lg" />

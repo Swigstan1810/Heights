@@ -84,7 +84,19 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://s3.tradingview.com; media-src 'self' data:;"
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://s3.tradingview.com https://charting-library.tradingview.com https://*.tradingview.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com data:",
+              "img-src 'self' data: blob: https: http:",
+              "media-src 'self' data: blob:",
+              "connect-src 'self' https://*.supabase.co https://api.coingecko.com https://*.tradingview.com wss://*.supabase.co",
+              "frame-src 'self' https://*.tradingview.com",
+              "worker-src 'self' blob:",
+              "object-src 'none'",
+              "base-uri 'self'"
+            ].join('; ')
           }
         ]
       },
